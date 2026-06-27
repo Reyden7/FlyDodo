@@ -11,29 +11,33 @@ const GAME_WIDTH = 390;
 const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 100_000;
 const START_Y = 98_800;
+const GROUND_Y = START_Y;
 
 const PLAYER_SCREEN_Y_RATIO = 0.79;
 const CAMERA_FOLLOW_SPEED = 4.2;
 
 const GRAVITY_Y = 500;
-const FLIGHT_THRUST = 625;
+const FLAP_UPWARD_IMPULSE = 155;
+const FLAP_SIDE_IMPULSE = 20;
 const MAX_HORIZONTAL_SPEED = 300;
 const MAX_VERTICAL_SPEED = 450;
-const VELOCITY_ALIGNMENT = 1.2;
+const VELOCITY_ALIGNMENT = 0.62;
 
-const TURN_ACCELERATION = 245;
+const FLAP_TURN_IMPULSE = 112;
 const MAX_TURN_RATE = 112;
 const TURN_DAMPING = 5.2;
-const AUTO_LEVEL_SPEED = 0.72;
-const MAX_TILT = 70;
+const AUTO_LEVEL_SPEED = 0.52;
 
 const BASE_WING_BEATS_PER_SECOND = 4.8;
 const FAST_WING_MULTIPLIER = 1.85;
 const SLOW_WING_MULTIPLIER = 0.78;
+const FLAP_WING_BOOST_DURATION = 0.22;
+const FLAP_WING_BOOST_MULTIPLIER = 3.4;
 
 const FALL_LIMIT_BELOW_CAMERA = 55;
 const GAME_OVER_DELAY_MS = 5_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
+const SAFE_GROUND_TOUCH_ALTITUDE = 20;
 
 export class GameplayScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
@@ -43,16 +47,20 @@ export class GameplayScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
 
-  private touchDirection = 0;
+  private pendingFlapDirection = 0;
   private angularVelocity = 0;
   private leftWingPhase = 0;
   private rightWingPhase = Math.PI;
+  private leftWingBoostTime = 0;
+  private rightWingBoostTime = 0;
 
   private startAltitudeY = START_Y;
   private bestAltitude = 0;
   private currentAltitude = 0;
   private currentSpeed = 0;
   private watermelons = 0;
+  private maxAltitudeSinceTakeoff = 0;
+  private isGrounded = true;
 
   private gameOver = false;
   private outOfScreenSince: number | null = null;
@@ -81,7 +89,7 @@ export class GameplayScene extends Phaser.Scene {
     this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-body-front');
     this.player.setDepth(10);
     this.player.setCollideWorldBounds(true);
-    this.player.setVelocity(0, -215);
+    this.player.setVelocity(0, 0);
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
     this.player.body?.setSize(38, 58, true);
 
@@ -113,8 +121,9 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const direction = this.readTurnDirection();
+    const direction = this.consumeFlapDirection();
     this.updateFlight(direction, deltaSeconds);
+    this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
     this.updateDodoVisuals(deltaSeconds);
     this.updateCamera(deltaSeconds);
@@ -137,11 +146,15 @@ export class GameplayScene extends Phaser.Scene {
     this.lastWarningSecond = null;
     this.currentAltitude = 0;
     this.currentSpeed = 0;
+    this.maxAltitudeSinceTakeoff = 0;
+    this.isGrounded = true;
     this.lastHudSignature = '';
-    this.touchDirection = 0;
+    this.pendingFlapDirection = 0;
     this.angularVelocity = 0;
     this.leftWingPhase = 0;
     this.rightWingPhase = Math.PI;
+    this.leftWingBoostTime = 0;
+    this.rightWingBoostTime = 0;
   }
 
   private async initializeBestScore(): Promise<void> {
@@ -211,51 +224,61 @@ export class GameplayScene extends Phaser.Scene {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.gameOver) {
-      this.updateTouchDirection(pointer);
+      this.queueFlapFromPointer(pointer);
     }
   }
 
-  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (pointer.isDown && !this.gameOver) {
-      this.updateTouchDirection(pointer);
-    }
+  private handlePointerMove(): void {
+    // Maintenir ou glisser le doigt ne dirige pas le Dodo.
   }
 
   private handlePointerUp(): void {
-    this.touchDirection = 0;
+    // Le controle se fait au tap : rien a relacher.
   }
 
-  private updateTouchDirection(pointer: Phaser.Input.Pointer): void {
+  private queueFlapFromPointer(pointer: Phaser.Input.Pointer): void {
     const neutralZone = 18;
 
     if (pointer.x < GAME_WIDTH / 2 - neutralZone) {
-      this.touchDirection = -1;
+      this.pendingFlapDirection = -1;
     } else if (pointer.x > GAME_WIDTH / 2 + neutralZone) {
-      this.touchDirection = 1;
+      this.pendingFlapDirection = 1;
     } else {
-      this.touchDirection = 0;
+      this.pendingFlapDirection = 0;
     }
   }
 
-  private readTurnDirection(): number {
-    if (this.cursors.left.isDown || this.keyA.isDown) {
+  private consumeFlapDirection(): number {
+    if (this.pendingFlapDirection !== 0) {
+      const direction = this.pendingFlapDirection;
+      this.pendingFlapDirection = 0;
+      return direction;
+    }
+
+    if (
+      Phaser.Input.Keyboard.JustDown(this.cursors.left) ||
+      Phaser.Input.Keyboard.JustDown(this.keyA)
+    ) {
       return -1;
     }
 
-    if (this.cursors.right.isDown || this.keyD.isDown) {
+    if (
+      Phaser.Input.Keyboard.JustDown(this.cursors.right) ||
+      Phaser.Input.Keyboard.JustDown(this.keyD)
+    ) {
       return 1;
     }
 
-    return this.touchDirection;
+    return 0;
   }
 
   private updateFlight(direction: number, deltaSeconds: number): void {
     if (direction !== 0) {
-      this.angularVelocity += direction * TURN_ACCELERATION * deltaSeconds;
-    } else {
-      this.angularVelocity *= Math.exp(-TURN_DAMPING * deltaSeconds);
-      this.player.angle *= Math.exp(-AUTO_LEVEL_SPEED * deltaSeconds);
+      this.angularVelocity += direction * FLAP_TURN_IMPULSE;
     }
+
+    this.angularVelocity *= Math.exp(-TURN_DAMPING * deltaSeconds);
+    this.player.angle *= Math.exp(-AUTO_LEVEL_SPEED * deltaSeconds);
 
     this.angularVelocity = Phaser.Math.Clamp(
       this.angularVelocity,
@@ -263,25 +286,33 @@ export class GameplayScene extends Phaser.Scene {
       MAX_TURN_RATE,
     );
 
-    const nextAngle = this.player.angle + this.angularVelocity * deltaSeconds;
-    const clampedAngle = Phaser.Math.Clamp(nextAngle, -MAX_TILT, MAX_TILT);
-
-    if (clampedAngle !== nextAngle) {
-      this.angularVelocity *= 0.3;
-    }
-
-    this.player.angle = clampedAngle;
+    this.player.angle += this.angularVelocity * deltaSeconds;
 
     const headingX = Math.sin(this.player.rotation);
     const headingY = -Math.cos(this.player.rotation);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const speed = body.velocity.length();
 
+    if (this.isGrounded) {
+      this.player.y = GROUND_Y;
+      body.setVelocity(0, 0);
+      body.setAcceleration(0, 0);
+
+      if (direction === 0) {
+        return;
+      }
+
+      this.isGrounded = false;
+      this.maxAltitudeSinceTakeoff = 0;
+    }
+
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
-    body.setAcceleration(
-      headingX * FLIGHT_THRUST,
-      GRAVITY_Y + headingY * FLIGHT_THRUST,
-    );
+    body.setAcceleration(0, GRAVITY_Y);
+
+    if (direction !== 0) {
+      body.velocity.x += headingX * FLAP_UPWARD_IMPULSE + direction * FLAP_SIDE_IMPULSE;
+      body.velocity.y += headingY * FLAP_UPWARD_IMPULSE;
+    }
 
     // Plus il va vite, plus son inertie tend à aligner sa trajectoire sur son orientation.
     if (speed > 35) {
@@ -302,20 +333,64 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
+  private updateGroundContact(): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+
+    this.maxAltitudeSinceTakeoff = Math.max(this.maxAltitudeSinceTakeoff, altitude);
+
+    if (this.player.y < GROUND_Y || body.velocity.y < 0) {
+      return;
+    }
+
+    this.player.y = GROUND_Y;
+    body.setVelocity(0, 0);
+    body.setAcceleration(0, 0);
+
+    if (this.maxAltitudeSinceTakeoff > SAFE_GROUND_TOUCH_ALTITUDE) {
+      void this.finishGame();
+      return;
+    }
+
+    this.isGrounded = true;
+    this.maxAltitudeSinceTakeoff = 0;
+    this.angularVelocity = 0;
+  }
+
   private updateWingBeats(direction: number, deltaSeconds: number): void {
     let leftMultiplier = 1;
     let rightMultiplier = 1;
 
     // Tourner à droite = l'aile gauche bat plus vite.
     if (direction > 0) {
-      leftMultiplier = FAST_WING_MULTIPLIER;
+      this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.leftWingPhase += Math.PI * 0.34;
       rightMultiplier = SLOW_WING_MULTIPLIER;
     }
 
     // Tourner à gauche = l'aile droite bat plus vite.
     if (direction < 0) {
       leftMultiplier = SLOW_WING_MULTIPLIER;
-      rightMultiplier = FAST_WING_MULTIPLIER;
+      this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.rightWingPhase += Math.PI * 0.34;
+    }
+
+    if (this.leftWingBoostTime > 0) {
+      const boostRatio = this.leftWingBoostTime / FLAP_WING_BOOST_DURATION;
+      leftMultiplier = Math.max(
+        leftMultiplier,
+        FAST_WING_MULTIPLIER + boostRatio * FLAP_WING_BOOST_MULTIPLIER,
+      );
+      this.leftWingBoostTime = Math.max(0, this.leftWingBoostTime - deltaSeconds);
+    }
+
+    if (this.rightWingBoostTime > 0) {
+      const boostRatio = this.rightWingBoostTime / FLAP_WING_BOOST_DURATION;
+      rightMultiplier = Math.max(
+        rightMultiplier,
+        FAST_WING_MULTIPLIER + boostRatio * FLAP_WING_BOOST_MULTIPLIER,
+      );
+      this.rightWingBoostTime = Math.max(0, this.rightWingBoostTime - deltaSeconds);
     }
 
     const radiansPerSecond = BASE_WING_BEATS_PER_SECOND * Math.PI * 2;
