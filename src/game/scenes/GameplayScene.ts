@@ -12,10 +12,10 @@ const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 100_000;
 const START_Y = 98_800;
 const GROUND_Y = START_Y;
-const DODO_BODY_SCALE = 0.081;
+const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.05;
-const DODO_FLIGHT_FEET_SCALE = 0.059;
+const DODO_FLIGHT_FEET_SCALE = 0.07;
 const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.79;
@@ -48,21 +48,56 @@ const PIXELS_PER_METRE_PER_SECOND = 82;
 const SAFE_GROUND_TOUCH_ALTITUDE = 20;
 
 const LEFT_WING_FRAMES = [
-  'dodo-wing-left-high-1',
-  'dodo-wing-left-high-0',
-  'dodo-wing-left-mid-0',
-  'dodo-wing-left-mid-1',
-  'dodo-wing-left-low',
-  'dodo-wing-left-mid-2',
+  'dodo-wing-left-1',
+  'dodo-wing-left-2',
+  'dodo-wing-left-3',
+  'dodo-wing-left-4',
+  'dodo-wing-left-5',
+  'dodo-wing-left-6',
+  'dodo-wing-left-7',
+  'dodo-wing-left-8',
+  'dodo-wing-left-9',
+  'dodo-wing-left-10',
+  'dodo-wing-left-9',
+  'dodo-wing-left-8',
+  'dodo-wing-left-7',
+  'dodo-wing-left-6',
+  'dodo-wing-left-5',
+  'dodo-wing-left-4',
+  'dodo-wing-left-3',
+  'dodo-wing-left-2',
 ];
 
 const RIGHT_WING_FRAMES = [
-  'dodo-wing-right-high-1',
-  'dodo-wing-right-high-0',
-  'dodo-wing-right-mid-0',
-  'dodo-wing-right-mid-1',
-  'dodo-wing-right-low',
-  'dodo-wing-right-mid-0',
+  'dodo-wing-right-1',
+  'dodo-wing-right-2',
+  'dodo-wing-right-3',
+  'dodo-wing-right-4',
+  'dodo-wing-right-5',
+  'dodo-wing-right-6',
+  'dodo-wing-right-7',
+  'dodo-wing-right-8',
+  'dodo-wing-right-9',
+  'dodo-wing-right-10',
+  'dodo-wing-right-9',
+  'dodo-wing-right-8',
+  'dodo-wing-right-7',
+  'dodo-wing-right-6',
+  'dodo-wing-right-5',
+  'dodo-wing-right-4',
+  'dodo-wing-right-3',
+  'dodo-wing-right-2',
+];
+
+const LEG_FRAMES = [
+  'dodo-flight-legs-1',
+  'dodo-flight-legs-2',
+  'dodo-flight-legs-3',
+  'dodo-flight-legs-4',
+  'dodo-flight-legs-5',
+  'dodo-flight-legs-4',
+  'dodo-flight-legs-3',
+  'dodo-flight-legs-2',
 ];
 
 export class GameplayScene extends Phaser.Scene {
@@ -74,10 +109,11 @@ export class GameplayScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
 
-  private pendingFlapDirection = 0;
+  private pendingLeftFlap = false;
+  private pendingRightFlap = false;
   private angularVelocity = 0;
   private leftWingPhase = 0;
-  private rightWingPhase = Math.PI;
+  private rightWingPhase = 0;
   private leftWingBoostTime = 0;
   private rightWingBoostTime = 0;
 
@@ -104,21 +140,27 @@ export class GameplayScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
-    this.load.image('dodo-body-flight', '/assets/dodo/optimized/body_flight.png');
+    this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
-    this.load.image('dodo-pose-ground', '/assets/dodo/optimized/ground.png');
-    this.load.image('dodo-flight-feet', '/assets/dodo/optimized/flight_feet.png');
-    this.load.image('dodo-wing-left-high-0', '/assets/dodo/optimized/animation/wing_left_high_0.png');
-    this.load.image('dodo-wing-left-high-1', '/assets/dodo/optimized/animation/wing_left_high_1.png');
-    this.load.image('dodo-wing-left-mid-0', '/assets/dodo/optimized/animation/wing_left_mid_0.png');
-    this.load.image('dodo-wing-left-mid-1', '/assets/dodo/optimized/animation/wing_left_mid_1.png');
-    this.load.image('dodo-wing-left-mid-2', '/assets/dodo/optimized/animation/wing_left_mid_2.png');
-    this.load.image('dodo-wing-left-low', '/assets/dodo/optimized/animation/wing_left_low.png');
-    this.load.image('dodo-wing-right-high-0', '/assets/dodo/optimized/animation/wing_right_high_0.png');
-    this.load.image('dodo-wing-right-high-1', '/assets/dodo/optimized/animation/wing_right_high_1.png');
-    this.load.image('dodo-wing-right-mid-0', '/assets/dodo/optimized/animation/wing_right_mid_0.png');
-    this.load.image('dodo-wing-right-mid-1', '/assets/dodo/optimized/animation/wing_right_mid_1.png');
-    this.load.image('dodo-wing-right-low', '/assets/dodo/optimized/animation/wing_right_low.png');
+    this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
+
+    for (let index = 1; index <= 10; index += 1) {
+      this.load.image(
+        `dodo-wing-left-${index}`,
+        `/assets/dodo/optimized/flight_refined/wing_left_${index}.png`,
+      );
+      this.load.image(
+        `dodo-wing-right-${index}`,
+        `/assets/dodo/optimized/flight_refined/wing_right_${index}.png`,
+      );
+    }
+
+    for (let index = 1; index <= 5; index += 1) {
+      this.load.image(
+        `dodo-flight-legs-${index}`,
+        `/assets/dodo/optimized/flight_refined/legs_${index}.png`,
+      );
+    }
   }
 
   create(): void {
@@ -133,8 +175,8 @@ export class GameplayScene extends Phaser.Scene {
 
     this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
     this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
-    this.leftWing.setOrigin(0.5, 0.5).setScale(DODO_WING_SCALE).setDepth(8);
-    this.rightWing.setOrigin(0.5, 0.5).setScale(DODO_WING_SCALE).setDepth(8);
+    this.leftWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
+    this.rightWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
 
     this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-pose-ground');
     this.player.setOrigin(0.5, 0.92);
@@ -145,9 +187,9 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
     this.player.body?.setSize(42, 62, true);
 
-    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-flight-feet');
+    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, LEG_FRAMES[0]);
     this.flightFeet
-      .setOrigin(0.5, 0.18)
+      .setOrigin(0.5, 0.92)
       .setScale(DODO_FLIGHT_FEET_SCALE)
       .setDepth(9)
       .setVisible(false);
@@ -213,10 +255,11 @@ export class GameplayScene extends Phaser.Scene {
     this.maxAltitudeSinceTakeoff = 0;
     this.isGrounded = true;
     this.lastHudSignature = '';
-    this.pendingFlapDirection = 0;
+    this.pendingLeftFlap = false;
+    this.pendingRightFlap = false;
     this.angularVelocity = 0;
     this.leftWingPhase = 0;
-    this.rightWingPhase = Math.PI;
+    this.rightWingPhase = 0;
     this.leftWingBoostTime = 0;
     this.rightWingBoostTime = 0;
   }
@@ -365,32 +408,43 @@ export class GameplayScene extends Phaser.Scene {
     const neutralZone = 18;
 
     if (pointer.x < GAME_WIDTH / 2 - neutralZone) {
-      this.pendingFlapDirection = -1;
+      this.pendingLeftFlap = true;
     } else if (pointer.x > GAME_WIDTH / 2 + neutralZone) {
-      this.pendingFlapDirection = 1;
-    } else {
-      this.pendingFlapDirection = 0;
+      this.pendingRightFlap = true;
     }
   }
 
   private consumeFlapDirection(): number {
-    if (this.pendingFlapDirection !== 0) {
-      const direction = this.pendingFlapDirection;
-      this.pendingFlapDirection = 0;
+    if (this.pendingLeftFlap || this.pendingRightFlap) {
+      const direction = this.getDirectionFromSides(
+        this.pendingLeftFlap,
+        this.pendingRightFlap,
+      );
+      this.pendingLeftFlap = false;
+      this.pendingRightFlap = false;
       return direction;
     }
 
-    if (
+    const leftPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.left) ||
-      Phaser.Input.Keyboard.JustDown(this.keyA)
-    ) {
+      Phaser.Input.Keyboard.JustDown(this.keyA);
+    const rightPressed =
+      Phaser.Input.Keyboard.JustDown(this.cursors.right) ||
+      Phaser.Input.Keyboard.JustDown(this.keyD);
+
+    return this.getDirectionFromSides(leftPressed, rightPressed);
+  }
+
+  private getDirectionFromSides(leftPressed: boolean, rightPressed: boolean): number {
+    if (leftPressed && rightPressed) {
+      return 2;
+    }
+
+    if (leftPressed) {
       return -1;
     }
 
-    if (
-      Phaser.Input.Keyboard.JustDown(this.cursors.right) ||
-      Phaser.Input.Keyboard.JustDown(this.keyD)
-    ) {
+    if (rightPressed) {
       return 1;
     }
 
@@ -398,7 +452,10 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private updateFlight(direction: number, deltaSeconds: number): void {
-    if (direction !== 0) {
+    const hasFlap = direction !== 0;
+    const hasBalancedFlap = direction === 2;
+
+    if (direction === -1 || direction === 1) {
       this.angularVelocity += direction * FLAP_TURN_IMPULSE;
     }
 
@@ -423,7 +480,7 @@ export class GameplayScene extends Phaser.Scene {
       body.setVelocity(0, 0);
       body.setAcceleration(0, 0);
 
-      if (direction === 0) {
+      if (!hasFlap) {
         return;
       }
 
@@ -434,7 +491,10 @@ export class GameplayScene extends Phaser.Scene {
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
     body.setAcceleration(0, GRAVITY_Y);
 
-    if (direction !== 0) {
+    if (hasBalancedFlap) {
+      body.velocity.x += headingX * FLAP_UPWARD_IMPULSE;
+      body.velocity.y += headingY * FLAP_UPWARD_IMPULSE * 1.12;
+    } else if (hasFlap) {
       body.velocity.x += headingX * FLAP_UPWARD_IMPULSE + direction * FLAP_SIDE_IMPULSE;
       body.velocity.y += headingY * FLAP_UPWARD_IMPULSE;
     }
@@ -488,15 +548,22 @@ export class GameplayScene extends Phaser.Scene {
       this.leftWingBoostTime = 0;
       this.rightWingBoostTime = 0;
       this.leftWingPhase = 0;
-      this.rightWingPhase = Math.PI;
+      this.rightWingPhase = 0;
       return;
     }
 
     let leftMultiplier = 1;
     let rightMultiplier = 1;
 
+    if (direction === 2) {
+      this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.leftWingPhase += Math.PI * 0.28;
+      this.rightWingPhase = this.leftWingPhase;
+    }
+
     // Tourner à droite = l'aile gauche bat plus vite.
-    if (direction > 0) {
+    if (direction === 1) {
       this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.leftWingPhase += Math.PI * 0.34;
       rightMultiplier = SLOW_WING_MULTIPLIER;
@@ -532,7 +599,7 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingPhase += radiansPerSecond * rightMultiplier * deltaSeconds;
   }
 
-  private getWingFrame(phase: number, frames: string[]): string {
+  private getAnimationFrame(phase: number, frames: string[]): string {
     const normalizedPhase = Phaser.Math.Wrap(phase, 0, Math.PI * 2);
     const frameIndex = Math.floor((normalizedPhase / (Math.PI * 2)) * frames.length);
     return frames[Phaser.Math.Clamp(frameIndex, 0, frames.length - 1)];
@@ -571,15 +638,36 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWing.setVisible(true);
     this.flightFeet.setVisible(true);
 
-    this.leftWing.setTexture(this.getWingFrame(this.leftWingPhase, LEFT_WING_FRAMES));
-    this.rightWing.setTexture(this.getWingFrame(this.rightWingPhase, RIGHT_WING_FRAMES));
+    const leftWingFrame = this.getAnimationFrame(this.leftWingPhase, LEFT_WING_FRAMES);
+    const rightWingFrame = this.getAnimationFrame(this.rightWingPhase, RIGHT_WING_FRAMES);
 
-    const feetMotion = Math.sin((this.leftWingPhase + this.rightWingPhase) * 0.5);
-    this.flightFeet.setScale(DODO_FLIGHT_FEET_SCALE * (1 + feetMotion * 0.035));
+    this.leftWing.setTexture(leftWingFrame);
+    this.rightWing.setTexture(rightWingFrame);
+    this.flightFeet.setTexture(
+      this.getAnimationFrame((this.leftWingPhase + this.rightWingPhase) * 0.5, LEG_FRAMES),
+    );
 
-    placeSprite(this.leftWing, -19, -42);
-    placeSprite(this.rightWing, 19, -42);
-    placeSprite(this.flightFeet, 0, -8 + feetMotion * 2, Phaser.Math.DegToRad(feetMotion * 2.5));
+    const leftWingDownOffset = this.getWingDownOffset(leftWingFrame, 'dodo-wing-left');
+    const rightWingDownOffset = this.getWingDownOffset(rightWingFrame, 'dodo-wing-right');
+
+    placeSprite(this.leftWing, -22, -30 + leftWingDownOffset);
+    placeSprite(this.rightWing, 22, -30 + rightWingDownOffset);
+    placeSprite(this.flightFeet, 0, 28);
+  }
+
+  private getWingDownOffset(frame: string, prefix: string): number {
+    switch (frame) {
+      case `${prefix}-10`:
+        return 18;
+      case `${prefix}-9`:
+        return 14;
+      case `${prefix}-8`:
+        return 9;
+      case `${prefix}-7`:
+        return 5;
+      default:
+        return 0;
+    }
   }
 
   private updateCamera(deltaSeconds: number): void {
