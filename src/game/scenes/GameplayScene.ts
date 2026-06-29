@@ -12,11 +12,18 @@ const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 100_000;
 const START_Y = 98_800;
 const GROUND_Y = START_Y;
+const DODO_BODY_SCALE = 0.081;
+const DODO_GROUND_SCALE = 0.1;
+const DODO_WING_SCALE = 0.05;
+const DODO_FLIGHT_FEET_SCALE = 0.059;
+const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.79;
 const CAMERA_FOLLOW_SPEED = 4.2;
+const CAMERA_FALL_FOLLOW_SPEED = 1.15;
+const CAMERA_MAX_FALL_CATCHUP = 360;
 
-const GRAVITY_Y = 500;
+const GRAVITY_Y = 981;
 const FLAP_UPWARD_IMPULSE = 155;
 const FLAP_SIDE_IMPULSE = 20;
 const MAX_HORIZONTAL_SPEED = 300;
@@ -28,21 +35,41 @@ const MAX_TURN_RATE = 112;
 const TURN_DAMPING = 5.2;
 const AUTO_LEVEL_SPEED = 0.52;
 
-const BASE_WING_BEATS_PER_SECOND = 4.8;
-const FAST_WING_MULTIPLIER = 1.85;
+const BASE_WING_BEATS_PER_SECOND = 3.15;
+const FAST_WING_MULTIPLIER = 1.55;
 const SLOW_WING_MULTIPLIER = 0.78;
-const FLAP_WING_BOOST_DURATION = 0.22;
-const FLAP_WING_BOOST_MULTIPLIER = 3.4;
+const FLAP_WING_BOOST_DURATION = 0.28;
+const FLAP_WING_BOOST_MULTIPLIER = 2.2;
 
 const FALL_LIMIT_BELOW_CAMERA = 55;
+const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
 const GAME_OVER_DELAY_MS = 5_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
 const SAFE_GROUND_TOUCH_ALTITUDE = 20;
+
+const LEFT_WING_FRAMES = [
+  'dodo-wing-left-high-1',
+  'dodo-wing-left-high-0',
+  'dodo-wing-left-mid-0',
+  'dodo-wing-left-mid-1',
+  'dodo-wing-left-low',
+  'dodo-wing-left-mid-2',
+];
+
+const RIGHT_WING_FRAMES = [
+  'dodo-wing-right-high-1',
+  'dodo-wing-right-high-0',
+  'dodo-wing-right-mid-0',
+  'dodo-wing-right-mid-1',
+  'dodo-wing-right-low',
+  'dodo-wing-right-mid-0',
+];
 
 export class GameplayScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private leftWing!: Phaser.GameObjects.Image;
   private rightWing!: Phaser.GameObjects.Image;
+  private flightFeet!: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
@@ -65,11 +92,33 @@ export class GameplayScene extends Phaser.Scene {
   private gameOver = false;
   private outOfScreenSince: number | null = null;
   private lastWarningSecond: number | null = null;
+  private lastWarningReason: 'fall' | 'side' | null = null;
   private lastHudSignature = '';
   private backgroundClouds: Phaser.GameObjects.Arc[] = [];
+  private offscreenIndicator!: Phaser.GameObjects.Container;
+  private offscreenIndicatorBody!: Phaser.GameObjects.Image;
 
   constructor() {
     super('GameplayScene');
+  }
+
+  preload(): void {
+    this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
+    this.load.image('dodo-body-flight', '/assets/dodo/optimized/body_flight.png');
+    this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
+    this.load.image('dodo-pose-ground', '/assets/dodo/optimized/ground.png');
+    this.load.image('dodo-flight-feet', '/assets/dodo/optimized/flight_feet.png');
+    this.load.image('dodo-wing-left-high-0', '/assets/dodo/optimized/animation/wing_left_high_0.png');
+    this.load.image('dodo-wing-left-high-1', '/assets/dodo/optimized/animation/wing_left_high_1.png');
+    this.load.image('dodo-wing-left-mid-0', '/assets/dodo/optimized/animation/wing_left_mid_0.png');
+    this.load.image('dodo-wing-left-mid-1', '/assets/dodo/optimized/animation/wing_left_mid_1.png');
+    this.load.image('dodo-wing-left-mid-2', '/assets/dodo/optimized/animation/wing_left_mid_2.png');
+    this.load.image('dodo-wing-left-low', '/assets/dodo/optimized/animation/wing_left_low.png');
+    this.load.image('dodo-wing-right-high-0', '/assets/dodo/optimized/animation/wing_right_high_0.png');
+    this.load.image('dodo-wing-right-high-1', '/assets/dodo/optimized/animation/wing_right_high_1.png');
+    this.load.image('dodo-wing-right-mid-0', '/assets/dodo/optimized/animation/wing_right_mid_0.png');
+    this.load.image('dodo-wing-right-mid-1', '/assets/dodo/optimized/animation/wing_right_mid_1.png');
+    this.load.image('dodo-wing-right-low', '/assets/dodo/optimized/animation/wing_right_low.png');
   }
 
   create(): void {
@@ -80,18 +129,30 @@ export class GameplayScene extends Phaser.Scene {
 
     this.createPlaceholderTextures();
     this.createSkyDecor();
+    this.createGroundDecor();
 
-    this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-wing-left');
-    this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-wing-right');
-    this.leftWing.setOrigin(1, 0.5).setDepth(9);
-    this.rightWing.setOrigin(0, 0.5).setDepth(9);
+    this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
+    this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
+    this.leftWing.setOrigin(0.5, 0.5).setScale(DODO_WING_SCALE).setDepth(8);
+    this.rightWing.setOrigin(0.5, 0.5).setScale(DODO_WING_SCALE).setDepth(8);
 
-    this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-body-front');
+    this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-pose-ground');
+    this.player.setOrigin(0.5, 0.92);
+    this.player.setScale(DODO_GROUND_SCALE);
     this.player.setDepth(10);
-    this.player.setCollideWorldBounds(true);
+    this.player.setCollideWorldBounds(false);
     this.player.setVelocity(0, 0);
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
-    this.player.body?.setSize(38, 58, true);
+    this.player.body?.setSize(42, 62, true);
+
+    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-flight-feet');
+    this.flightFeet
+      .setOrigin(0.5, 0.18)
+      .setScale(DODO_FLIGHT_FEET_SCALE)
+      .setDepth(9)
+      .setVisible(false);
+
+    this.createOffscreenIndicator();
 
     const camera = this.cameras.main;
     camera.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
@@ -118,6 +179,7 @@ export class GameplayScene extends Phaser.Scene {
 
     if (this.gameOver) {
       this.updateDodoVisuals(deltaSeconds);
+      this.updateOffscreenIndicator();
       return;
     }
 
@@ -127,6 +189,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateWingBeats(direction, deltaSeconds);
     this.updateDodoVisuals(deltaSeconds);
     this.updateCamera(deltaSeconds);
+    this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
     this.updateCloudVisibility();
     this.updateFallState(time);
@@ -144,6 +207,7 @@ export class GameplayScene extends Phaser.Scene {
     this.gameOver = false;
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
+    this.lastWarningReason = null;
     this.currentAltitude = 0;
     this.currentSpeed = 0;
     this.maxAltitudeSinceTakeoff = 0;
@@ -163,7 +227,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createPlaceholderTextures(): void {
-    if (this.textures.exists('dodo-body-front')) {
+    if (this.textures.exists('dodo-pose-flight')) {
       return;
     }
 
@@ -220,6 +284,67 @@ export class GameplayScene extends Phaser.Scene {
       cloud.setDepth(-5);
       this.backgroundClouds.push(cloud);
     }
+  }
+
+  private createGroundDecor(): void {
+    const groundTop = GROUND_Y + 8;
+
+    const grass = this.add.rectangle(
+      GAME_WIDTH / 2,
+      groundTop,
+      GAME_WIDTH,
+      22,
+      0x58b947,
+      1,
+    );
+    grass.setOrigin(0.5, 0);
+    grass.setDepth(-3);
+
+    const dirt = this.add.rectangle(
+      GAME_WIDTH / 2,
+      groundTop + 22,
+      GAME_WIDTH,
+      170,
+      0x8b5a2b,
+      1,
+    );
+    dirt.setOrigin(0.5, 0);
+    dirt.setDepth(-4);
+
+    for (let index = 0; index < 20; index += 1) {
+      const x = index * 22 + Phaser.Math.Between(-4, 8);
+      const blade = this.add.triangle(
+        x,
+        groundTop + 3,
+        0,
+        10,
+        5,
+        -8,
+        10,
+        10,
+        0x3f9f3e,
+        0.95,
+      );
+      blade.setDepth(-2);
+    }
+  }
+
+  private createOffscreenIndicator(): void {
+    const bubble = this.add.circle(0, 0, 30, 0x163a62, 0.84);
+    bubble.setStrokeStyle(3, 0xffffff, 0.86);
+
+    this.offscreenIndicatorBody = this.add
+      .image(0, 0, 'dodo-pose-flight')
+      .setOrigin(0.5, 0.58)
+      .setScale(DODO_INDICATOR_SCALE);
+
+    this.offscreenIndicator = this.add.container(0, 0, [
+      bubble,
+      this.offscreenIndicatorBody,
+    ]);
+    this.offscreenIndicator.setDepth(30);
+    this.offscreenIndicator.setScrollFactor(0);
+    this.offscreenIndicator.setVisible(false);
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
@@ -355,9 +480,18 @@ export class GameplayScene extends Phaser.Scene {
     this.isGrounded = true;
     this.maxAltitudeSinceTakeoff = 0;
     this.angularVelocity = 0;
+    this.player.angle = 0;
   }
 
   private updateWingBeats(direction: number, deltaSeconds: number): void {
+    if (this.isGrounded) {
+      this.leftWingBoostTime = 0;
+      this.rightWingBoostTime = 0;
+      this.leftWingPhase = 0;
+      this.rightWingPhase = Math.PI;
+      return;
+    }
+
     let leftMultiplier = 1;
     let rightMultiplier = 1;
 
@@ -398,50 +532,97 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingPhase += radiansPerSecond * rightMultiplier * deltaSeconds;
   }
 
+  private getWingFrame(phase: number, frames: string[]): string {
+    const normalizedPhase = Phaser.Math.Wrap(phase, 0, Math.PI * 2);
+    const frameIndex = Math.floor((normalizedPhase / (Math.PI * 2)) * frames.length);
+    return frames[Phaser.Math.Clamp(frameIndex, 0, frames.length - 1)];
+  }
+
   private updateDodoVisuals(_deltaSeconds: number): void {
     const rotation = this.player.rotation;
     const cosine = Math.cos(rotation);
     const sine = Math.sin(rotation);
 
-    const placeWing = (
-      wing: Phaser.GameObjects.Image,
+    const placeSprite = (
+      sprite: Phaser.GameObjects.Image,
       localX: number,
       localY: number,
-      localRotation: number,
+      localRotation = 0,
     ): void => {
-      wing.setPosition(
+      sprite.setPosition(
         this.player.x + localX * cosine - localY * sine,
         this.player.y + localX * sine + localY * cosine,
       );
-      wing.setRotation(rotation + localRotation);
+      sprite.setRotation(rotation + localRotation);
     };
 
-    const leftFlap = Math.sin(this.leftWingPhase);
-    const rightFlap = Math.sin(this.rightWingPhase);
+    if (this.isGrounded) {
+      this.player.setTexture('dodo-pose-ground');
+      this.player.setScale(DODO_GROUND_SCALE);
+      this.leftWing.setVisible(false);
+      this.rightWing.setVisible(false);
+      this.flightFeet.setVisible(false);
+      return;
+    }
 
-    placeWing(
-      this.leftWing,
-      -20,
-      6,
-      Phaser.Math.DegToRad(8 + leftFlap * 28),
-    );
-    placeWing(
-      this.rightWing,
-      20,
-      6,
-      Phaser.Math.DegToRad(-8 - rightFlap * 28),
-    );
+    this.player.setTexture('dodo-body-flight');
+    this.player.setScale(DODO_BODY_SCALE);
+    this.leftWing.setVisible(true);
+    this.rightWing.setVisible(true);
+    this.flightFeet.setVisible(true);
+
+    this.leftWing.setTexture(this.getWingFrame(this.leftWingPhase, LEFT_WING_FRAMES));
+    this.rightWing.setTexture(this.getWingFrame(this.rightWingPhase, RIGHT_WING_FRAMES));
+
+    const feetMotion = Math.sin((this.leftWingPhase + this.rightWingPhase) * 0.5);
+    this.flightFeet.setScale(DODO_FLIGHT_FEET_SCALE * (1 + feetMotion * 0.035));
+
+    placeSprite(this.leftWing, -19, -42);
+    placeSprite(this.rightWing, 19, -42);
+    placeSprite(this.flightFeet, 0, -8 + feetMotion * 2, Phaser.Math.DegToRad(feetMotion * 2.5));
   }
 
   private updateCamera(deltaSeconds: number): void {
     const camera = this.cameras.main;
     const desiredScrollY = this.player.y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const lowestAllowedScrollY = Math.min(
+      GROUND_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO,
+      camera.scrollY + CAMERA_MAX_FALL_CATCHUP,
+    );
+    const clampedDesiredScrollY = Phaser.Math.Clamp(
+      desiredScrollY,
+      0,
+      lowestAllowedScrollY,
+    );
 
-    // La caméra peut monter, mais elle ne redescend jamais avec le Dodo.
-    if (desiredScrollY < camera.scrollY) {
-      const smoothing = 1 - Math.exp(-CAMERA_FOLLOW_SPEED * deltaSeconds);
-      camera.scrollY = Phaser.Math.Linear(camera.scrollY, desiredScrollY, smoothing);
+    // La camera suit vite la montee, puis redescend doucement pour laisser une recuperation.
+    const followSpeed =
+      clampedDesiredScrollY < camera.scrollY ? CAMERA_FOLLOW_SPEED : CAMERA_FALL_FOLLOW_SPEED;
+    const smoothing = 1 - Math.exp(-followSpeed * deltaSeconds);
+    camera.scrollY = Phaser.Math.Linear(camera.scrollY, clampedDesiredScrollY, smoothing);
+  }
+
+  private updateOffscreenIndicator(): void {
+    const outsideLeft = this.player.x < 0;
+    const outsideRight = this.player.x > GAME_WIDTH;
+
+    if (!outsideLeft && !outsideRight) {
+      this.offscreenIndicator.setVisible(false);
+      return;
     }
+
+    const camera = this.cameras.main;
+    const edgeX = outsideLeft ? 34 : GAME_WIDTH - 34;
+    const screenY = Phaser.Math.Clamp(
+      this.player.y - camera.scrollY,
+      86,
+      GAME_HEIGHT - 86,
+    );
+
+    this.offscreenIndicator.setPosition(edgeX, screenY);
+    this.offscreenIndicator.setVisible(true);
+
+    this.offscreenIndicatorBody.setRotation(this.player.rotation);
   }
 
   private updateAltitudeAndHud(): void {
@@ -495,11 +676,16 @@ export class GameplayScene extends Phaser.Scene {
   private updateFallState(time: number): void {
     const cameraBottom = this.cameras.main.worldView.bottom;
     const playerIsBelowScreen = this.player.y > cameraBottom + FALL_LIMIT_BELOW_CAMERA;
+    const playerIsOutsideSide =
+      this.player.x < -SIDE_LIMIT_OUTSIDE_CAMERA ||
+      this.player.x > GAME_WIDTH + SIDE_LIMIT_OUTSIDE_CAMERA;
+    const warningReason = playerIsOutsideSide ? 'side' : 'fall';
 
-    if (!playerIsBelowScreen) {
+    if (!playerIsBelowScreen && !playerIsOutsideSide) {
       if (this.outOfScreenSince !== null) {
         this.outOfScreenSince = null;
         this.lastWarningSecond = null;
+        this.lastWarningReason = null;
         emitFallWarning({ secondsRemaining: null });
       }
       return;
@@ -512,9 +698,13 @@ export class GameplayScene extends Phaser.Scene {
     const elapsed = time - this.outOfScreenSince;
     const secondsRemaining = Math.max(0, Math.ceil((GAME_OVER_DELAY_MS - elapsed) / 1000));
 
-    if (secondsRemaining !== this.lastWarningSecond) {
+    if (
+      secondsRemaining !== this.lastWarningSecond ||
+      warningReason !== this.lastWarningReason
+    ) {
       this.lastWarningSecond = secondsRemaining;
-      emitFallWarning({ secondsRemaining });
+      this.lastWarningReason = warningReason;
+      emitFallWarning({ reason: warningReason, secondsRemaining });
     }
 
     if (elapsed >= GAME_OVER_DELAY_MS) {
@@ -533,6 +723,7 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setTint(0xff7777);
     this.leftWing.setTint(0xff7777);
     this.rightWing.setTint(0xff7777);
+    this.flightFeet.setTint(0xff7777);
     emitFallWarning({ secondsRemaining: null });
     emitGameOver();
     await saveBestAltitude(this.bestAltitude);

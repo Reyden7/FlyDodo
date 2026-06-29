@@ -7,6 +7,7 @@ export interface FlightHudDetail {
 
 export interface FallWarningDetail {
   secondsRemaining: number | null;
+  reason?: 'fall' | 'side';
 }
 
 export const gameEvents = new EventTarget();

@@ -13,6 +13,7 @@ export default function App(): React.JSX.Element {
   const [speed, setSpeed] = useState(0);
   const [watermelons, setWatermelons] = useState(0);
   const [fallSeconds, setFallSeconds] = useState<number | null>(null);
+  const [warningReason, setWarningReason] = useState<'fall' | 'side'>('fall');
   const [isGameOver, setIsGameOver] = useState(false);
 
   useEffect(() => {
@@ -25,8 +26,9 @@ export default function App(): React.JSX.Element {
     };
 
     const onFallWarning = (event: Event): void => {
-      const { secondsRemaining } = (event as CustomEvent<FallWarningDetail>).detail;
+      const { reason = 'fall', secondsRemaining } = (event as CustomEvent<FallWarningDetail>).detail;
       setFallSeconds(secondsRemaining);
+      setWarningReason(reason);
     };
 
     const onGameOver = (): void => {
@@ -47,6 +49,7 @@ export default function App(): React.JSX.Element {
   const restart = (): void => {
     setIsGameOver(false);
     setFallSeconds(null);
+    setWarningReason('fall');
     setAltitude(0);
     setSpeed(0);
     requestRestart();
@@ -86,7 +89,7 @@ export default function App(): React.JSX.Element {
 
       {fallSeconds !== null && !isGameOver && (
         <div className="fall-warning">
-          Remonte ! <strong>{fallSeconds}</strong>
+          {warningReason === 'side' ? 'Reviens' : 'Remonte'} ! <strong>{fallSeconds}</strong>
         </div>
       )}
 
