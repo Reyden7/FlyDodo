@@ -23,7 +23,7 @@ const CAMERA_FOLLOW_SPEED = 4.2;
 const CAMERA_FALL_FOLLOW_SPEED = 1.15;
 const CAMERA_MAX_FALL_CATCHUP = 360;
 
-const GRAVITY_Y = 981;
+const GRAVITY_Y = 800;
 const FLAP_UPWARD_IMPULSE = 155;
 const FLAP_SIDE_IMPULSE = 20;
 const MAX_HORIZONTAL_SPEED = 300;
@@ -40,6 +40,7 @@ const FAST_WING_MULTIPLIER = 1.55;
 const SLOW_WING_MULTIPLIER = 0.78;
 const FLAP_WING_BOOST_DURATION = 0.28;
 const FLAP_WING_BOOST_MULTIPLIER = 2.2;
+const FLAP_LEG_ANIMATION_DURATION = 0.24;
 
 const FALL_LIMIT_BELOW_CAMERA = 55;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
@@ -116,6 +117,7 @@ export class GameplayScene extends Phaser.Scene {
   private rightWingPhase = 0;
   private leftWingBoostTime = 0;
   private rightWingBoostTime = 0;
+  private legAnimationTime = 0;
 
   private startAltitudeY = START_Y;
   private bestAltitude = 0;
@@ -262,6 +264,7 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingPhase = 0;
     this.leftWingBoostTime = 0;
     this.rightWingBoostTime = 0;
+    this.legAnimationTime = 0;
   }
 
   private async initializeBestScore(): Promise<void> {
@@ -547,6 +550,7 @@ export class GameplayScene extends Phaser.Scene {
     if (this.isGrounded) {
       this.leftWingBoostTime = 0;
       this.rightWingBoostTime = 0;
+      this.legAnimationTime = 0;
       this.leftWingPhase = 0;
       this.rightWingPhase = 0;
       return;
@@ -558,6 +562,7 @@ export class GameplayScene extends Phaser.Scene {
     if (direction === 2) {
       this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
       this.leftWingPhase += Math.PI * 0.28;
       this.rightWingPhase = this.leftWingPhase;
     }
@@ -565,6 +570,7 @@ export class GameplayScene extends Phaser.Scene {
     // Tourner à droite = l'aile gauche bat plus vite.
     if (direction === 1) {
       this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
       this.leftWingPhase += Math.PI * 0.34;
       rightMultiplier = SLOW_WING_MULTIPLIER;
     }
@@ -573,6 +579,7 @@ export class GameplayScene extends Phaser.Scene {
     if (direction < 0) {
       leftMultiplier = SLOW_WING_MULTIPLIER;
       this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
+      this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
       this.rightWingPhase += Math.PI * 0.34;
     }
 
@@ -597,6 +604,7 @@ export class GameplayScene extends Phaser.Scene {
     const radiansPerSecond = BASE_WING_BEATS_PER_SECOND * Math.PI * 2;
     this.leftWingPhase += radiansPerSecond * leftMultiplier * deltaSeconds;
     this.rightWingPhase += radiansPerSecond * rightMultiplier * deltaSeconds;
+    this.legAnimationTime = Math.max(0, this.legAnimationTime - deltaSeconds);
   }
 
   private getAnimationFrame(phase: number, frames: string[]): string {
@@ -643,16 +651,18 @@ export class GameplayScene extends Phaser.Scene {
 
     this.leftWing.setTexture(leftWingFrame);
     this.rightWing.setTexture(rightWingFrame);
-    this.flightFeet.setTexture(
-      this.getAnimationFrame((this.leftWingPhase + this.rightWingPhase) * 0.5, LEG_FRAMES),
-    );
+    const legFrame =
+      this.legAnimationTime > 0
+        ? this.getAnimationFrame((this.leftWingPhase + this.rightWingPhase) * 0.5, LEG_FRAMES)
+        : LEG_FRAMES[0];
+    this.flightFeet.setTexture(legFrame);
 
     const leftWingDownOffset = this.getWingDownOffset(leftWingFrame, 'dodo-wing-left');
     const rightWingDownOffset = this.getWingDownOffset(rightWingFrame, 'dodo-wing-right');
 
-    placeSprite(this.leftWing, -22, -30 + leftWingDownOffset);
-    placeSprite(this.rightWing, 22, -30 + rightWingDownOffset);
-    placeSprite(this.flightFeet, 0, 28);
+    placeSprite(this.leftWing, -22, -36 + leftWingDownOffset);
+    placeSprite(this.rightWing, 22, -36 + rightWingDownOffset);
+    placeSprite(this.flightFeet, 0, 20);
   }
 
   private getWingDownOffset(frame: string, prefix: string): number {
