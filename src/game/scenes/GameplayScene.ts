@@ -10,12 +10,13 @@ import { loadBestAltitude, saveBestAltitude } from '../../services/saveService';
 const GAME_WIDTH = 390;
 const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 100_000;
-const START_Y = 98_800;
+const START_Y = 99_800;
 const GROUND_Y = START_Y;
 const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
-const DODO_WING_SCALE = 0.05;
-const DODO_FLIGHT_FEET_SCALE = 0.07;
+const DODO_WING_SCALE = 0.14;
+const DODO_FLIGHT_FEET_SCALE_X = 0.3;
+const DODO_FLIGHT_FEET_SCALE_Y = 0.350;
 const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.79;
@@ -25,7 +26,7 @@ const CAMERA_MAX_FALL_CATCHUP = 360;
 
 const GRAVITY_Y = 800;
 const FLAP_UPWARD_IMPULSE = 155;
-const FLAP_SIDE_IMPULSE = 20;
+const FLAP_SIDE_IMPULSE = 30;
 const MAX_HORIZONTAL_SPEED = 300;
 const MAX_VERTICAL_SPEED = 450;
 const VELOCITY_ALIGNMENT = 0.62;
@@ -33,20 +34,20 @@ const VELOCITY_ALIGNMENT = 0.62;
 const FLAP_TURN_IMPULSE = 112;
 const MAX_TURN_RATE = 112;
 const TURN_DAMPING = 5.2;
-const AUTO_LEVEL_SPEED = 0.52;
+const AUTO_LEVEL_SPEED = 0;
 
-const BASE_WING_BEATS_PER_SECOND = 3.15;
-const FAST_WING_MULTIPLIER = 1.55;
-const SLOW_WING_MULTIPLIER = 0.78;
+const BASE_WING_BEATS_PER_SECOND = 2.4;
+const FAST_WING_MULTIPLIER = 0;
+const SLOW_WING_MULTIPLIER = 0;
 const FLAP_WING_BOOST_DURATION = 0.28;
-const FLAP_WING_BOOST_MULTIPLIER = 2.2;
-const FLAP_LEG_ANIMATION_DURATION = 0.24;
+const FLAP_WING_BOOST_MULTIPLIER = 1.5;
+const FLAP_LEG_ANIMATION_DURATION = 0;
 
-const FALL_LIMIT_BELOW_CAMERA = 55;
+const FALL_LIMIT_BELOW_CAMERA = 5;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
 const GAME_OVER_DELAY_MS = 5_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
-const SAFE_GROUND_TOUCH_ALTITUDE = 20;
+const SAFE_GROUND_TOUCH_ALTITUDE = 50;
 
 const LEFT_WING_FRAMES = [
   'dodo-wing-left-1',
@@ -58,6 +59,14 @@ const LEFT_WING_FRAMES = [
   'dodo-wing-left-7',
   'dodo-wing-left-8',
   'dodo-wing-left-9',
+  'dodo-wing-left-10',
+  'dodo-wing-left-11',
+  'dodo-wing-left-12',
+  'dodo-wing-left-13',
+  'dodo-wing-left-14',
+  'dodo-wing-left-13',
+  'dodo-wing-left-12',
+  'dodo-wing-left-11',
   'dodo-wing-left-10',
   'dodo-wing-left-9',
   'dodo-wing-left-8',
@@ -80,6 +89,14 @@ const RIGHT_WING_FRAMES = [
   'dodo-wing-right-8',
   'dodo-wing-right-9',
   'dodo-wing-right-10',
+  'dodo-wing-right-11',
+  'dodo-wing-right-12',
+  'dodo-wing-right-13',
+  'dodo-wing-right-14',
+  'dodo-wing-right-13',
+  'dodo-wing-right-12',
+  'dodo-wing-right-11',
+  'dodo-wing-right-10',
   'dodo-wing-right-9',
   'dodo-wing-right-8',
   'dodo-wing-right-7',
@@ -96,9 +113,35 @@ const LEG_FRAMES = [
   'dodo-flight-legs-3',
   'dodo-flight-legs-4',
   'dodo-flight-legs-5',
-  'dodo-flight-legs-4',
-  'dodo-flight-legs-3',
-  'dodo-flight-legs-2',
+  'dodo-flight-legs-6',
+  'dodo-flight-legs-7',
+  'dodo-flight-legs-8',
+  'dodo-flight-legs-9',
+  'dodo-flight-legs-10',
+  'dodo-flight-legs-11',
+  'dodo-flight-legs-12',
+  'dodo-flight-legs-13',
+  'dodo-flight-legs-14',
+  'dodo-flight-legs-15',
+  'dodo-flight-legs-16',
+  'dodo-flight-legs-17',
+  'dodo-flight-legs-18',
+  'dodo-flight-legs-19',
+  'dodo-flight-legs-20',
+  'dodo-flight-legs-21',
+  'dodo-flight-legs-22',
+  'dodo-flight-legs-23',
+  'dodo-flight-legs-24',
+  'dodo-flight-legs-25',
+  'dodo-flight-legs-26',
+  'dodo-flight-legs-27',
+  'dodo-flight-legs-28',
+  'dodo-flight-legs-29',
+  'dodo-flight-legs-30',
+  'dodo-flight-legs-31',
+  'dodo-flight-legs-32',
+  'dodo-flight-legs-33',
+  'dodo-flight-legs-34',
 ];
 
 export class GameplayScene extends Phaser.Scene {
@@ -146,7 +189,7 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
     this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
 
-    for (let index = 1; index <= 10; index += 1) {
+    for (let index = 1; index <= 14; index += 1) {
       this.load.image(
         `dodo-wing-left-${index}`,
         `/assets/dodo/optimized/flight_refined/wing_left_${index}.png`,
@@ -157,7 +200,7 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
 
-    for (let index = 1; index <= 5; index += 1) {
+    for (let index = 1; index <= 34; index += 1) {
       this.load.image(
         `dodo-flight-legs-${index}`,
         `/assets/dodo/optimized/flight_refined/legs_${index}.png`,
@@ -192,7 +235,7 @@ export class GameplayScene extends Phaser.Scene {
     this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, LEG_FRAMES[0]);
     this.flightFeet
       .setOrigin(0.5, 0.92)
-      .setScale(DODO_FLIGHT_FEET_SCALE)
+      .setScale(DODO_FLIGHT_FEET_SCALE_X, DODO_FLIGHT_FEET_SCALE_Y)
       .setDepth(9)
       .setVisible(false);
 
@@ -657,27 +700,9 @@ export class GameplayScene extends Phaser.Scene {
         : LEG_FRAMES[0];
     this.flightFeet.setTexture(legFrame);
 
-    const leftWingDownOffset = this.getWingDownOffset(leftWingFrame, 'dodo-wing-left');
-    const rightWingDownOffset = this.getWingDownOffset(rightWingFrame, 'dodo-wing-right');
-
-    placeSprite(this.leftWing, -22, -36 + leftWingDownOffset);
-    placeSprite(this.rightWing, 22, -36 + rightWingDownOffset);
-    placeSprite(this.flightFeet, 0, 20);
-  }
-
-  private getWingDownOffset(frame: string, prefix: string): number {
-    switch (frame) {
-      case `${prefix}-10`:
-        return 18;
-      case `${prefix}-9`:
-        return 14;
-      case `${prefix}-8`:
-        return 9;
-      case `${prefix}-7`:
-        return 5;
-      default:
-        return 0;
-    }
+    placeSprite(this.leftWing, 0, -35);
+    placeSprite(this.rightWing, 0, -35);
+    placeSprite(this.flightFeet, 0, -20);
   }
 
   private updateCamera(deltaSeconds: number): void {
