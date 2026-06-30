@@ -15,11 +15,13 @@ const GROUND_Y = START_Y;
 const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.14;
+const DODO_FLIGHT_ORIGIN_Y = 0.75;
+const DODO_GROUND_ORIGIN_Y = 0.58;
 const DODO_FLIGHT_FEET_SCALE_X = 0.3;
 const DODO_FLIGHT_FEET_SCALE_Y = 0.350;
 const DODO_INDICATOR_SCALE = 0.045;
 
-const PLAYER_SCREEN_Y_RATIO = 0.79;
+const PLAYER_SCREEN_Y_RATIO = 0.88;
 const CAMERA_FOLLOW_SPEED = 4.2;
 const CAMERA_FALL_FOLLOW_SPEED = 1.15;
 const CAMERA_MAX_FALL_CATCHUP = 360;
@@ -48,6 +50,15 @@ const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
 const GAME_OVER_DELAY_MS = 5_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
 const SAFE_GROUND_TOUCH_ALTITUDE = 50;
+const GROUND_DIRT_HEIGHT = 85;
+const GROUND_TEXTURE_KEY = 'ground-decor';
+const GROUND_TEXTURE_FRAME = 'ground-cropped';
+const GROUND_TEXTURE_PATH = '/assets/Decors/ground.png';
+const GROUND_TEXTURE_SOURCE_WIDTH = 2172;
+const GROUND_TEXTURE_SOURCE_HEIGHT = 724;
+const GROUND_TEXTURE_CROP_TOP = 150;
+const GROUND_TEXTURE_SURFACE_Y = 236;
+const GROUND_VISUAL_Y_OFFSET = 2;
 
 const LEFT_WING_FRAMES = [
   'dodo-wing-left-1',
@@ -184,6 +195,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
@@ -224,7 +236,7 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
 
     this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-pose-ground');
-    this.player.setOrigin(0.5, 0.92);
+    this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
     this.player.setScale(DODO_GROUND_SCALE);
     this.player.setDepth(10);
     this.player.setCollideWorldBounds(false);
@@ -376,46 +388,34 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createGroundDecor(): void {
-    const groundTop = GROUND_Y + 8;
+    const sourceHeight = GROUND_TEXTURE_SOURCE_HEIGHT - GROUND_TEXTURE_CROP_TOP;
+    const texture = this.textures.get(GROUND_TEXTURE_KEY);
 
-    const grass = this.add.rectangle(
-      GAME_WIDTH / 2,
-      groundTop,
-      GAME_WIDTH,
-      22,
-      0x58b947,
-      1,
-    );
-    grass.setOrigin(0.5, 0);
-    grass.setDepth(-3);
-
-    const dirt = this.add.rectangle(
-      GAME_WIDTH / 2,
-      groundTop + 22,
-      GAME_WIDTH,
-      170,
-      0x8b5a2b,
-      1,
-    );
-    dirt.setOrigin(0.5, 0);
-    dirt.setDepth(-4);
-
-    for (let index = 0; index < 20; index += 1) {
-      const x = index * 22 + Phaser.Math.Between(-4, 8);
-      const blade = this.add.triangle(
-        x,
-        groundTop + 3,
+    if (!texture.getFrameNames().includes(GROUND_TEXTURE_FRAME)) {
+      texture.add(
+        GROUND_TEXTURE_FRAME,
         0,
-        10,
-        5,
-        -8,
-        10,
-        10,
-        0x3f9f3e,
-        0.95,
+        0,
+        GROUND_TEXTURE_CROP_TOP,
+        GROUND_TEXTURE_SOURCE_WIDTH,
+        sourceHeight,
       );
-      blade.setDepth(-2);
     }
+
+    const groundScaleX = GAME_WIDTH / GROUND_TEXTURE_SOURCE_WIDTH;
+    const groundScaleY =
+      GROUND_DIRT_HEIGHT / (GROUND_TEXTURE_SOURCE_HEIGHT - GROUND_TEXTURE_SURFACE_Y);
+    const surfaceOffset = (GROUND_TEXTURE_SURFACE_Y - GROUND_TEXTURE_CROP_TOP) * groundScaleY;
+
+    const ground = this.add.image(
+      GAME_WIDTH / 2,
+      GROUND_Y - surfaceOffset + GROUND_VISUAL_Y_OFFSET,
+      GROUND_TEXTURE_KEY,
+      GROUND_TEXTURE_FRAME,
+    );
+    ground.setOrigin(0.5, 0);
+    ground.setScale(groundScaleX, groundScaleY);
+    ground.setDepth(-4);
   }
 
   private createOffscreenIndicator(): void {
@@ -676,6 +676,7 @@ export class GameplayScene extends Phaser.Scene {
 
     if (this.isGrounded) {
       this.player.setTexture('dodo-pose-ground');
+      this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
       this.player.setScale(DODO_GROUND_SCALE);
       this.leftWing.setVisible(false);
       this.rightWing.setVisible(false);
@@ -684,6 +685,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.player.setTexture('dodo-body-flight');
+    this.player.setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y);
     this.player.setScale(DODO_BODY_SCALE);
     this.leftWing.setVisible(true);
     this.rightWing.setVisible(true);
@@ -700,9 +702,9 @@ export class GameplayScene extends Phaser.Scene {
         : LEG_FRAMES[0];
     this.flightFeet.setTexture(legFrame);
 
-    placeSprite(this.leftWing, 0, -35);
-    placeSprite(this.rightWing, 0, -35);
-    placeSprite(this.flightFeet, 0, -20);
+    placeSprite(this.leftWing, 0, -20);
+    placeSprite(this.rightWing, 0, -20);
+    placeSprite(this.flightFeet, 0, 6);
   }
 
   private updateCamera(deltaSeconds: number): void {
