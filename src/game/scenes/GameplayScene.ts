@@ -3,20 +3,38 @@ import {
   emitFallWarning,
   emitFlightHud,
   emitGameOver,
+  emitWalletUpdated,
   gameEvents,
+  type CosmeticEquippedDetail,
 } from '../events';
-import { loadBestAltitude, saveBestAltitude } from '../../services/saveService';
+import {
+  addWatermelons,
+  loadBestAltitude,
+  loadLatestPlayerProfile,
+  saveBestAltitude,
+  type EquippedCosmetics,
+} from '../../services/saveService';
+import {
+  COSMETIC_CATEGORIES,
+  getCosmeticTransform,
+  getShopItemById,
+  getShopItemImagePath,
+  getShopItemTextureKey,
+  type CosmeticCategory,
+  type CosmeticPose,
+  type ShopItem,
+} from '../../shop/shopCatalog';
 
 const GAME_WIDTH = 390;
 const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 100_000;
-const START_Y = 99_800;
+const START_Y = 99_900;
 const GROUND_Y = START_Y;
 const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.14;
 const DODO_FLIGHT_ORIGIN_Y = 0.75;
-const DODO_GROUND_ORIGIN_Y = 0.58;
+const DODO_GROUND_ORIGIN_Y = 0.77;
 const DODO_FLIGHT_FEET_SCALE_X = 0.3;
 const DODO_FLIGHT_FEET_SCALE_Y = 0.350;
 const DODO_INDICATOR_SCALE = 0.045;
@@ -59,6 +77,33 @@ const GROUND_TEXTURE_SOURCE_HEIGHT = 724;
 const GROUND_TEXTURE_CROP_TOP = 150;
 const GROUND_TEXTURE_SURFACE_Y = 236;
 const GROUND_VISUAL_Y_OFFSET = 2;
+const GROUND_RECORD_X = GAME_WIDTH / 2;
+const GROUND_RECORD_Y = GROUND_Y + 60;
+const GROUND_RECORD_DEPTH = -3;
+
+const WATERMELON_TEXTURE_KEY = 'watermelon-collectable';
+const WATERMELON_TEXTURE_PATH = '/assets/collectable/pasteque.png';
+const WATERMELON_SOUND_KEY = 'watermelon-collect-sound';
+const WATERMELON_SOUND_PATH = '/assets/sounds/pasteque.mp3';
+const WATERMELON_SOUND_VOLUME = 0.65;
+
+const FLIGHT_SOUND_KEY = 'dodo-flight-default-sound';
+const FLIGHT_SOUND_PATH = '/assets/sounds/defaut.mp3';
+const FLIGHT_SOUND_VOLUME = 0.24;
+
+const FLAP_SOUND_KEY = 'dodo-single-flap-sound';
+const FLAP_SOUND_PATH = '/assets/sounds/1Flap.mp3';
+const FLAP_SOUND_VOLUME = 0.25;
+
+const COSMETIC_FALLBACK_TEXTURE_KEY = 'cosmetic-runtime-placeholder';
+
+const WATERMELON_SCALE = 0.075;
+const WATERMELON_DEPTH = 4;
+const WATERMELON_SIDE_MARGIN = 55;
+const WATERMELON_FIRST_OFFSET_Y = 750;
+const WATERMELON_MIN_SPACING_Y = 520;
+const WATERMELON_MAX_SPACING_Y = 860;
+const WATERMELON_TOP_MARGIN = 400;
 
 const LEFT_WING_FRAMES = [
   'dodo-wing-left-1',
@@ -163,6 +208,29 @@ export class GameplayScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
+  private watermelonCollectables!: Phaser.Physics.Arcade.StaticGroup;
+  private flightSound?: Phaser.Sound.BaseSound;
+  private cosmeticImages = new Map<
+    CosmeticCategory,
+    Phaser.GameObjects.Image
+  >();
+
+  private cosmeticFallbackTexts = new Map<
+    CosmeticCategory,
+    Phaser.GameObjects.Text
+  >();
+
+  private equippedCosmeticIds: EquippedCosmetics = {
+    hat: null,
+    glasses: null,
+    scarf: null,
+    shoes: null,
+    outfit: null,
+  };
+
+  private cosmeticImageReady = new Map<CosmeticCategory, boolean>();
+  private cosmeticLoadPromises = new Map<string, Promise<boolean>>();
+  private cosmeticRequestVersions = new Map<CosmeticCategory, number>();
 
   private pendingLeftFlap = false;
   private pendingRightFlap = false;
@@ -189,6 +257,7 @@ export class GameplayScene extends Phaser.Scene {
   private backgroundClouds: Phaser.GameObjects.Arc[] = [];
   private offscreenIndicator!: Phaser.GameObjects.Container;
   private offscreenIndicatorBody!: Phaser.GameObjects.Image;
+  private groundRecordValue!: Phaser.GameObjects.Text;
 
   constructor() {
     super('GameplayScene');
@@ -200,6 +269,10 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
     this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
+    this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
+    this.load.audio(WATERMELON_SOUND_KEY, WATERMELON_SOUND_PATH);
+    this.load.audio(FLIGHT_SOUND_KEY, FLIGHT_SOUND_PATH);
+    this.load.audio(FLAP_SOUND_KEY, FLAP_SOUND_PATH);
 
     for (let index = 1; index <= 14; index += 1) {
       this.load.image(
@@ -222,6 +295,7 @@ export class GameplayScene extends Phaser.Scene {
 
   create(): void {
     this.resetRuntimeState();
+    this.createFlightSounds();
 
     this.physics.world.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
     this.physics.world.gravity.y = 0;
@@ -229,6 +303,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createPlaceholderTextures();
     this.createSkyDecor();
     this.createGroundDecor();
+    this.createGroundRecord();
 
     this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
     this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
@@ -236,7 +311,7 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
 
     this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-pose-ground');
-    this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
+    this.player.setOrigin(0.2, DODO_GROUND_ORIGIN_Y);
     this.player.setScale(DODO_GROUND_SCALE);
     this.player.setDepth(10);
     this.player.setCollideWorldBounds(false);
@@ -250,6 +325,17 @@ export class GameplayScene extends Phaser.Scene {
       .setScale(DODO_FLIGHT_FEET_SCALE_X, DODO_FLIGHT_FEET_SCALE_Y)
       .setDepth(9)
       .setVisible(false);
+
+    this.createCosmeticDisplayObjects();
+
+    this.createWatermelonCollectables();
+    this.physics.add.overlap(
+      this.player,
+      this.watermelonCollectables,
+      this.handleWatermelonCollected,
+      undefined,
+      this,
+    );
 
     this.createOffscreenIndicator();
 
@@ -268,8 +354,13 @@ export class GameplayScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.handlePointerUp, this);
 
     gameEvents.addEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.addEventListener(
+      'flydodo:cosmetic-equipped',
+      this.handleCosmeticEquipped,
+    );
 
     void this.initializeBestScore();
+    void this.initializeEquippedCosmetics();
     this.updateDodoVisuals(0);
   }
 
@@ -295,11 +386,283 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.destroyFlightSounds();
+
     this.input.off('pointerdown', this.handlePointerDown, this);
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerup', this.handlePointerUp, this);
     this.input.off('pointerupoutside', this.handlePointerUp, this);
     gameEvents.removeEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.removeEventListener(
+      'flydodo:cosmetic-equipped',
+      this.handleCosmeticEquipped,
+    );
+  }
+
+  private createCosmeticDisplayObjects(): void {
+    if (!this.textures.exists(COSMETIC_FALLBACK_TEXTURE_KEY)) {
+      const graphics = this.add.graphics();
+      graphics.fillStyle(0xffffff, 0);
+      graphics.fillRect(0, 0, 2, 2);
+      graphics.generateTexture(COSMETIC_FALLBACK_TEXTURE_KEY, 2, 2);
+      graphics.destroy();
+    }
+
+    for (const category of COSMETIC_CATEGORIES) {
+      const image = this.add
+        .image(
+          GAME_WIDTH / 2,
+          START_Y,
+          COSMETIC_FALLBACK_TEXTURE_KEY,
+        )
+        .setOrigin(0.5)
+        .setVisible(false);
+
+      const fallbackText = this.add
+        .text(GAME_WIDTH / 2, START_Y, '', {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '40px',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setVisible(false);
+
+      this.cosmeticImages.set(category, image);
+      this.cosmeticFallbackTexts.set(category, fallbackText);
+      this.cosmeticImageReady.set(category, false);
+      this.cosmeticRequestVersions.set(category, 0);
+    }
+  }
+
+  private async initializeEquippedCosmetics(): Promise<void> {
+    const profile = await loadLatestPlayerProfile();
+
+    if (!this.scene.isActive()) {
+      return;
+    }
+
+    await Promise.all(
+      COSMETIC_CATEGORIES.map((category) =>
+        this.applyCosmetic(category, profile.equipped[category]),
+      ),
+    );
+
+    this.updateDodoVisuals(0);
+  }
+
+  private async ensureCosmeticTexture(item: ShopItem): Promise<boolean> {
+    const textureKey = getShopItemTextureKey(item);
+
+    if (this.textures.exists(textureKey)) {
+      return true;
+    }
+
+    const existingPromise = this.cosmeticLoadPromises.get(item.id);
+
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const loadPromise = new Promise<boolean>((resolve) => {
+      const image = new Image();
+
+      image.onload = (): void => {
+        if (!this.textures.exists(textureKey)) {
+          this.textures.addImage(textureKey, image);
+        }
+
+        resolve(true);
+      };
+
+      image.onerror = (): void => {
+        // Le PNG peut ne pas encore exister. L'équipement reste sauvegardé
+        // et un emoji temporaire est affiché sans bloquer le jeu.
+        resolve(false);
+      };
+
+      image.decoding = 'async';
+      image.src = getShopItemImagePath(item);
+    });
+
+    this.cosmeticLoadPromises.set(item.id, loadPromise);
+    return loadPromise;
+  }
+
+  private async applyCosmetic(
+    category: CosmeticCategory,
+    itemId: string | null,
+  ): Promise<void> {
+    this.equippedCosmeticIds[category] = itemId;
+
+    const image = this.cosmeticImages.get(category);
+    const fallbackText = this.cosmeticFallbackTexts.get(category);
+
+    image?.setVisible(false);
+    fallbackText?.setVisible(false);
+    this.cosmeticImageReady.set(category, false);
+
+    const requestVersion =
+      (this.cosmeticRequestVersions.get(category) ?? 0) + 1;
+    this.cosmeticRequestVersions.set(category, requestVersion);
+
+    if (!itemId || !image || !fallbackText) {
+      return;
+    }
+
+    const item = getShopItemById(itemId);
+
+    if (!item || item.category !== category) {
+      return;
+    }
+
+    const imageLoaded = await this.ensureCosmeticTexture(item);
+
+    if (
+      !this.scene.isActive() ||
+      this.cosmeticRequestVersions.get(category) !== requestVersion ||
+      this.equippedCosmeticIds[category] !== itemId
+    ) {
+      return;
+    }
+
+    if (imageLoaded) {
+      image
+        .setTexture(getShopItemTextureKey(item))
+        .setVisible(true);
+
+      fallbackText.setVisible(false);
+      this.cosmeticImageReady.set(category, true);
+    } else {
+      image.setVisible(false);
+      fallbackText
+        .setText(item.icon)
+        .setVisible(true);
+
+      this.cosmeticImageReady.set(category, false);
+    }
+
+    if (this.gameOver) {
+      image.setTint(0xff7777);
+      fallbackText.setTint(0xff7777);
+    } else {
+      image.clearTint();
+      fallbackText.clearTint();
+    }
+
+    this.updateDodoVisuals(0);
+  }
+
+  private handleCosmeticEquipped = (event: Event): void => {
+    const { category, itemId } = (
+      event as CustomEvent<CosmeticEquippedDetail>
+    ).detail;
+
+    void this.applyCosmetic(category, itemId);
+  };
+
+  private updateCosmeticVisuals(
+    pose: CosmeticPose,
+    placeSprite: (
+      sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Text,
+      localX: number,
+      localY: number,
+      localRotation?: number,
+    ) => void,
+  ): void {
+    for (const category of COSMETIC_CATEGORIES) {
+      const itemId = this.equippedCosmeticIds[category];
+      const image = this.cosmeticImages.get(category);
+      const fallbackText = this.cosmeticFallbackTexts.get(category);
+
+      if (!itemId || !image || !fallbackText) {
+        image?.setVisible(false);
+        fallbackText?.setVisible(false);
+        continue;
+      }
+
+      const item = getShopItemById(itemId);
+
+      if (!item) {
+        image.setVisible(false);
+        fallbackText.setVisible(false);
+        continue;
+      }
+
+      const transform = getCosmeticTransform(item, pose);
+      const localRotation = Phaser.Math.DegToRad(
+        transform.rotationDegrees,
+      );
+
+      if (this.cosmeticImageReady.get(category)) {
+        image
+          .setOrigin(transform.originX, transform.originY)
+          .setScale(transform.scaleX, transform.scaleY)
+          .setDepth(transform.depth)
+          .setVisible(true);
+
+        fallbackText.setVisible(false);
+
+        placeSprite(
+          image,
+          transform.offsetX,
+          transform.offsetY,
+          localRotation,
+        );
+      } else {
+        image.setVisible(false);
+
+        fallbackText
+          .setFontSize(transform.fallbackFontSize)
+          .setDepth(transform.depth)
+          .setVisible(true);
+
+        placeSprite(
+          fallbackText,
+          transform.offsetX,
+          transform.offsetY,
+          localRotation,
+        );
+      }
+    }
+  }
+
+  private createFlightSounds(): void {
+    this.flightSound = this.sound.add(FLIGHT_SOUND_KEY, {
+      loop: true,
+      volume: FLIGHT_SOUND_VOLUME,
+    });
+
+  }
+
+  private startFlightSound(): void {
+    if (this.flightSound && !this.flightSound.isPlaying) {
+      this.flightSound.play();
+    }
+  }
+
+  private playFlapSound(): void {
+    /*
+     * Phaser crée une nouvelle instance temporaire à chaque appel.
+     * Le son déjà en cours continue donc de jouer pendant que le nouveau démarre.
+     */
+    this.sound.play(FLAP_SOUND_KEY, {
+      volume: FLAP_SOUND_VOLUME,
+    });
+  }
+
+  private stopFlightSounds(): void {
+    if (this.flightSound?.isPlaying) {
+      this.flightSound.stop();
+    }
+
+    // Coupe toutes les copies de 1Flap éventuellement encore en cours.
+    this.sound.stopByKey(FLAP_SOUND_KEY);
+  }
+
+  private destroyFlightSounds(): void {
+    this.stopFlightSounds();
+    this.flightSound?.destroy();
+    this.flightSound = undefined;
   }
 
   private resetRuntimeState(): void {
@@ -309,6 +672,7 @@ export class GameplayScene extends Phaser.Scene {
     this.lastWarningReason = null;
     this.currentAltitude = 0;
     this.currentSpeed = 0;
+    this.watermelons = 0;
     this.maxAltitudeSinceTakeoff = 0;
     this.isGrounded = true;
     this.lastHudSignature = '';
@@ -324,6 +688,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private async initializeBestScore(): Promise<void> {
     this.bestAltitude = await loadBestAltitude();
+    this.updateGroundRecordText();
     this.emitHud();
   }
 
@@ -413,10 +778,129 @@ export class GameplayScene extends Phaser.Scene {
       GROUND_TEXTURE_KEY,
       GROUND_TEXTURE_FRAME,
     );
-    ground.setOrigin(0.5, 0);
+    ground.setOrigin(0.5, -0.13);
     ground.setScale(groundScaleX, groundScaleY);
     ground.setDepth(-4);
   }
+
+  private createGroundRecord(): void {
+    const fontFamily = 'Arial Rounded MT Bold, Arial, sans-serif';
+
+    // Un seul objet texte, totalement opaque, sans backgroundColor,
+    // sans ombre et sans stroke : aucun rectangle ne peut être dessiné.
+    this.groundRecordValue = this.add.text(
+      GROUND_RECORD_X,
+      GROUND_RECORD_Y,
+      'RECORD : 0 m',
+      {
+        fontFamily,
+        fontSize: '25px',
+        fontStyle: 'bold',
+        color: '#30170c',
+        align: 'center',
+        stroke: '#97604a',
+        strokeThickness: 1,
+        
+      },
+    );
+
+    this.groundRecordValue
+      .setOrigin(0.5)
+      .setAngle(-1)
+      .setDepth(GROUND_RECORD_DEPTH)
+      .setAlpha(1);
+
+    this.updateGroundRecordText();
+  }
+
+  private updateGroundRecordText(): void {
+    this.groundRecordValue?.setText(`RECORD : ${this.bestAltitude} m`);
+  }
+
+  private createWatermelonCollectables(): void {
+    this.watermelonCollectables = this.physics.add.staticGroup();
+
+    let y = START_Y - WATERMELON_FIRST_OFFSET_Y;
+    let previousX = GAME_WIDTH / 2;
+
+    while (y > WATERMELON_TOP_MARGIN) {
+      let x = Phaser.Math.Between(
+        WATERMELON_SIDE_MARGIN,
+        GAME_WIDTH - WATERMELON_SIDE_MARGIN,
+      );
+
+      // Evite une longue colonne toute droite : les pastèques alternent davantage
+      // entre la gauche et la droite de l'écran.
+      if (Math.abs(x - previousX) < 75) {
+        x =
+          previousX < GAME_WIDTH / 2
+            ? Phaser.Math.Between(GAME_WIDTH / 2 + 20, GAME_WIDTH - WATERMELON_SIDE_MARGIN)
+            : Phaser.Math.Between(WATERMELON_SIDE_MARGIN, GAME_WIDTH / 2 - 20);
+      }
+
+      const watermelon = this.watermelonCollectables.create(
+        x,
+        y,
+        WATERMELON_TEXTURE_KEY,
+      ) as Phaser.Physics.Arcade.Image;
+
+      watermelon
+        .setScale(WATERMELON_SCALE)
+        .setDepth(WATERMELON_DEPTH)
+        .setAngle(Phaser.Math.Between(-18, 18));
+      watermelon.refreshBody();
+
+      previousX = x;
+      y -= Phaser.Math.Between(WATERMELON_MIN_SPACING_Y, WATERMELON_MAX_SPACING_Y);
+    }
+  }
+
+  private handleWatermelonCollected: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _playerObject,
+    watermelonObject,
+  ): void => {
+    const watermelon = watermelonObject as Phaser.Physics.Arcade.Image;
+
+    if (!watermelon.active) {
+      return;
+    }
+
+    const collectedX = watermelon.x;
+    const collectedY = watermelon.y;
+    const collectedScaleX = watermelon.scaleX;
+    const collectedScaleY = watermelon.scaleY;
+
+    watermelon.disableBody(true, true);
+
+    this.sound.play(WATERMELON_SOUND_KEY, {
+      volume: WATERMELON_SOUND_VOLUME,
+    });
+
+    this.watermelons += 1;
+    this.emitHud();
+
+    // Chaque pastèque récoltée alimente immédiatement le portefeuille persistant.
+    void addWatermelons(1).then((profile) => {
+      emitWalletUpdated({ watermelons: profile.watermelons });
+    });
+
+    // Petit retour visuel au ramassage.
+    const collectedEffect = this.add
+      .image(collectedX, collectedY, WATERMELON_TEXTURE_KEY)
+      .setScale(collectedScaleX, collectedScaleY)
+      .setDepth(WATERMELON_DEPTH + 1);
+
+    this.tweens.add({
+      targets: collectedEffect,
+      y: collectedY - 35,
+      scaleX: collectedScaleX * 1.35,
+      scaleY: collectedScaleY * 1.35,
+      alpha: 0,
+      duration: 240,
+      ease: 'Quad.easeOut',
+      onComplete: () => collectedEffect.destroy(),
+    });
+  };
 
   private createOffscreenIndicator(): void {
     const bubble = this.add.circle(0, 0, 30, 0x163a62, 0.84);
@@ -532,6 +1016,11 @@ export class GameplayScene extends Phaser.Scene {
 
       this.isGrounded = false;
       this.maxAltitudeSinceTakeoff = 0;
+      this.startFlightSound();
+    }
+
+    if (hasFlap) {
+      this.playFlapSound();
     }
 
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
@@ -577,6 +1066,7 @@ export class GameplayScene extends Phaser.Scene {
     this.player.y = GROUND_Y;
     body.setVelocity(0, 0);
     body.setAcceleration(0, 0);
+    this.stopFlightSounds();
 
     if (this.maxAltitudeSinceTakeoff > SAFE_GROUND_TOUCH_ALTITUDE) {
       void this.finishGame();
@@ -662,7 +1152,7 @@ export class GameplayScene extends Phaser.Scene {
     const sine = Math.sin(rotation);
 
     const placeSprite = (
-      sprite: Phaser.GameObjects.Image,
+      sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Text,
       localX: number,
       localY: number,
       localRotation = 0,
@@ -681,6 +1171,8 @@ export class GameplayScene extends Phaser.Scene {
       this.leftWing.setVisible(false);
       this.rightWing.setVisible(false);
       this.flightFeet.setVisible(false);
+
+      this.updateCosmeticVisuals('ground', placeSprite);
       return;
     }
 
@@ -705,6 +1197,8 @@ export class GameplayScene extends Phaser.Scene {
     placeSprite(this.leftWing, 0, -20);
     placeSprite(this.rightWing, 0, -20);
     placeSprite(this.flightFeet, 0, 6);
+
+    this.updateCosmeticVisuals('flight', placeSprite);
   }
 
   private updateCamera(deltaSeconds: number): void {
@@ -763,6 +1257,7 @@ export class GameplayScene extends Phaser.Scene {
 
     if (altitude > this.bestAltitude) {
       this.bestAltitude = altitude;
+      this.updateGroundRecordText();
     }
 
     this.emitHud();
@@ -843,12 +1338,26 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.gameOver = true;
+    this.stopFlightSounds();
     this.angularVelocity = 180;
     this.player.setAcceleration(0, GRAVITY_Y * 1.4);
     this.player.setTint(0xff7777);
     this.leftWing.setTint(0xff7777);
     this.rightWing.setTint(0xff7777);
     this.flightFeet.setTint(0xff7777);
+
+    for (const image of this.cosmeticImages.values()) {
+      if (image.visible) {
+        image.setTint(0xff7777);
+      }
+    }
+
+    for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+      if (fallbackText.visible) {
+        fallbackText.setTint(0xff7777);
+      }
+    }
+
     emitFallWarning({ secondsRemaining: null });
     emitGameOver();
     await saveBestAltitude(this.bestAltitude);

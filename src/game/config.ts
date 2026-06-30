@@ -21,7 +21,15 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       },
     },
     scale: {
-      mode: Phaser.Scale.FIT,
+      /*
+       * FIT laissait des bandes lorsque le ratio du téléphone ne correspondait
+       * pas exactement au format logique 390 × 844.
+       *
+       * ENVELOP conserve les proportions du jeu mais agrandit le canvas jusqu'à
+       * couvrir entièrement l'écran. Seule une petite partie hors cadre est
+       * rognée sur les téléphones dont le ratio diffère.
+       */
+      mode: Phaser.Scale.ENVELOP,
       autoCenter: Phaser.Scale.CENTER_BOTH,
       width: GAME_WIDTH,
       height: GAME_HEIGHT,

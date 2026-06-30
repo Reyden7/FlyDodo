@@ -1,3 +1,5 @@
+import type { CosmeticCategory } from '../shop/shopCatalog';
+
 export interface FlightHudDetail {
   altitude: number;
   bestAltitude: number;
@@ -10,6 +12,15 @@ export interface FallWarningDetail {
   reason?: 'fall' | 'side';
 }
 
+export interface WalletUpdatedDetail {
+  watermelons: number;
+}
+
+export interface CosmeticEquippedDetail {
+  category: CosmeticCategory;
+  itemId: string;
+}
+
 export const gameEvents = new EventTarget();
 
 export function emitFlightHud(detail: FlightHudDetail): void {
@@ -19,6 +30,20 @@ export function emitFlightHud(detail: FlightHudDetail): void {
 export function emitFallWarning(detail: FallWarningDetail): void {
   gameEvents.dispatchEvent(
     new CustomEvent<FallWarningDetail>('flydodo:fall-warning', { detail }),
+  );
+}
+
+export function emitWalletUpdated(detail: WalletUpdatedDetail): void {
+  gameEvents.dispatchEvent(
+    new CustomEvent<WalletUpdatedDetail>('flydodo:wallet-updated', { detail }),
+  );
+}
+
+export function emitCosmeticEquipped(detail: CosmeticEquippedDetail): void {
+  gameEvents.dispatchEvent(
+    new CustomEvent<CosmeticEquippedDetail>('flydodo:cosmetic-equipped', {
+      detail,
+    }),
   );
 }
 
