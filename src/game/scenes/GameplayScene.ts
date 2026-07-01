@@ -81,6 +81,7 @@ const FOREST_BRANCH_LEFT_SOURCE_KEY = 'forest-branch-left-source';
 const FOREST_MOSQUITO_TEXTURE_PREFIX = 'forest-mosquito';
 const FOREST_MOSQUITO_ANIMATION_KEY = 'forest-mosquito-fly';
 const FOREST_MOSQUITO_FRAME_COUNT = 25;
+const LAVA_TEXTURE_KEY = 'lava-flow';
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
 const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
 const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
@@ -98,6 +99,16 @@ const OBSTACLE_DEPTH = 6;
 const OBSTACLE_ALPHA = 0.92;
 const BRANCH_EDGE_OVERHANG = 20;
 const MOSQUITO_CIRCLE_DURATION_MS = 1_800;
+const MOSQUITO_HITBOX_WIDTH_RATIO = 0.42;
+const MOSQUITO_HITBOX_HEIGHT_RATIO = 0.34;
+const PLAYER_MANUAL_HITBOX_WIDTH_RATIO = 0.46;
+const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
+const LAVA_START_DELAY_MS = 1_000;
+const LAVA_RISE_SPEED = 42;
+const LAVA_START_Y = GROUND_Y + GROUND_DIRT_HEIGHT;
+const LAVA_ALPHA = 0.88;
+const LAVA_DEPTH = 7;
+const LAVA_PLAYER_BOTTOM_CONTACT_OFFSET = 250;
 
 interface GroundForestDecor {
   textureKey: string;
@@ -154,6 +165,15 @@ interface AltitudeLevelConfig {
   spacingMin: number;
   spacingMax: number;
   sideMargin: number;
+}
+
+interface MosquitoCircleMotion {
+  sprite: Phaser.GameObjects.Sprite;
+  homeX: number;
+  homeY: number;
+  radius: number;
+  startAngle: number;
+  direction: 1 | -1;
 }
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
@@ -421,6 +441,17 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     sideMargin: 34,
   },
   {
+    id: 'forest',
+    label: 'Forest',
+    minAltitude: 200,
+    maxAltitude: 350,
+    obstacleKinds: ['flyingInsect'],
+    firstObstacleOffset: 30,
+    spacingMin: 55,
+    spacingMax: 85,
+    sideMargin: 34,
+  },
+  {
     id: 'lowSky',
     label: 'LowSky',
     minAltitude: 200,
@@ -571,6 +602,7 @@ export class GameplayScene extends Phaser.Scene {
   private keyD!: Phaser.Input.Keyboard.Key;
   private watermelonCollectables!: Phaser.Physics.Arcade.StaticGroup;
   private obstacleGroup!: Phaser.Physics.Arcade.Group;
+  private mosquitoCircleMotions: MosquitoCircleMotion[] = [];
   private flightSound?: Phaser.Sound.BaseSound;
   private cosmeticImages = new Map<
     CosmeticCategory,
@@ -622,6 +654,9 @@ export class GameplayScene extends Phaser.Scene {
   private offscreenIndicator!: Phaser.GameObjects.Container;
   private offscreenIndicatorBody!: Phaser.GameObjects.Image;
   private groundRecordValue!: Phaser.GameObjects.Text;
+  private lava!: Phaser.GameObjects.Image;
+  private lavaTopY = LAVA_START_Y;
+  private runStartTime = 0;
 
   constructor() {
     super('GameplayScene');
@@ -648,6 +683,7 @@ export class GameplayScene extends Phaser.Scene {
         `/assets/obstacles/forest/moustik/${paddedIndex}.png`,
       );
     }
+    this.load.image(LAVA_TEXTURE_KEY, '/assets/obstacles/lave/lave.png');
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
@@ -690,6 +726,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createGroundDecor();
     this.createGroundForestDecor();
     this.createGroundRecord();
+    this.createLava();
 
     this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
     this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
@@ -759,6 +796,7 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializeBestScore();
     void this.initializeEquippedCosmetics();
     this.updateDodoVisuals(0);
+    this.runStartTime = this.time.now;
   }
 
   update(time: number, delta: number): void {
@@ -777,6 +815,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     const direction = this.consumeFlapDirection(time);
+    this.updateMosquitoCircleMotions(time);
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
@@ -785,6 +824,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
     this.updateCloudVisibility();
+    this.updateLava(time, deltaSeconds);
     this.updateFallState(time);
   }
 
@@ -1159,6 +1199,9 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingBoostTime = 0;
     this.lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
     this.legAnimationTime = 0;
+    this.mosquitoCircleMotions = [];
+    this.lavaTopY = LAVA_START_Y;
+    this.runStartTime = 0;
   }
 
   private async initializeBestScore(): Promise<void> {
@@ -1246,21 +1289,20 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createObstacleAnimations(): void {
-    if (this.anims.exists(FOREST_MOSQUITO_ANIMATION_KEY)) {
-      return;
+    if (!this.anims.exists(FOREST_MOSQUITO_ANIMATION_KEY)) {
+      this.anims.create({
+        key: FOREST_MOSQUITO_ANIMATION_KEY,
+        frames: Array.from({ length: FOREST_MOSQUITO_FRAME_COUNT }, (_value, index) => {
+          const paddedIndex = (index + 1).toString().padStart(2, '0');
+          return {
+            key: `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
+          };
+        }),
+        frameRate: 18,
+        repeat: -1,
+      });
     }
 
-    this.anims.create({
-      key: FOREST_MOSQUITO_ANIMATION_KEY,
-      frames: Array.from({ length: FOREST_MOSQUITO_FRAME_COUNT }, (_value, index) => {
-        const paddedIndex = (index + 1).toString().padStart(2, '0');
-        return {
-          key: `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
-        };
-      }),
-      frameRate: 18,
-      repeat: -1,
-    });
   }
 
   private createSkyDecor(): void {
@@ -1455,6 +1497,34 @@ export class GameplayScene extends Phaser.Scene {
     this.groundRecordValue?.setText(`RECORD : ${this.bestAltitude} m`);
   }
 
+  private createLava(): void {
+    this.lavaTopY = LAVA_START_Y;
+    this.lava = this.add
+      .image(GAME_WIDTH / 2, this.lavaTopY, LAVA_TEXTURE_KEY)
+      .setOrigin(0.5, 0)
+      .setDepth(LAVA_DEPTH)
+      .setAlpha(LAVA_ALPHA);
+    this.renderLava();
+  }
+
+  private updateLava(time: number, deltaSeconds: number): void {
+    if (time - this.runStartTime < LAVA_START_DELAY_MS) {
+      this.renderLava();
+      return;
+    }
+
+    this.lavaTopY = Math.max(0, this.lavaTopY - LAVA_RISE_SPEED * deltaSeconds);
+    this.renderLava();
+
+    if (this.player.getBounds().bottom - LAVA_PLAYER_BOTTOM_CONTACT_OFFSET >= this.lavaTopY) {
+      void this.finishGame('lava');
+    }
+  }
+
+  private renderLava(): void {
+    this.lava.setPosition(GAME_WIDTH / 2, this.lavaTopY);
+  }
+
   private createAltitudeObstacles(): void {
     this.obstacleGroup = this.physics.add.group({
       allowGravity: false,
@@ -1471,6 +1541,13 @@ export class GameplayScene extends Phaser.Scene {
         const x = this.getObstacleX(obstacleKind, level, previousX);
 
         const y = this.altitudeToWorldY(altitude);
+        if (obstacleKind.id === 'flyingInsect') {
+          this.createMosquitoObstacle(obstacleKind, level, x, y, altitude);
+          previousX = x;
+          altitude += Phaser.Math.Between(level.spacingMin, level.spacingMax);
+          continue;
+        }
+
         const obstacle = this.physics.add.sprite(
           x,
           y,
@@ -1495,14 +1572,6 @@ export class GameplayScene extends Phaser.Scene {
         obstacle.body.setAllowGravity(false);
         obstacle.body.setImmovable(true);
         obstacle.body.setVelocity(0, 0);
-        if (obstacleKind.animationKey) {
-          obstacle.play(obstacleKind.animationKey);
-        }
-
-        if (obstacleKind.id === 'flyingInsect') {
-          this.startMosquitoCircle(obstacle, x, y);
-        }
-
         obstacle.body.reset(obstacle.x, obstacle.y);
 
         previousX = x;
@@ -1511,35 +1580,103 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private startMosquitoCircle(
-    mosquito: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+  private createMosquitoObstacle(
+    obstacleKind: ObstacleKind,
+    level: AltitudeLevelConfig,
+    x: number,
+    y: number,
+    altitude: number,
+  ): void {
+    const mosquito = this.add.sprite(x, y, obstacleKind.textureKey);
+    const displayWidth = obstacleKind.displayWidth ?? obstacleKind.width;
+    const displayHeight = displayWidth * (mosquito.height / mosquito.width);
+
+    mosquito
+      .setOrigin(0.5)
+      .setDisplaySize(displayWidth, displayHeight)
+      .setDepth(OBSTACLE_DEPTH)
+      .setAlpha(OBSTACLE_ALPHA)
+      .setData('level', level.id)
+      .setData('levelLabel', level.label)
+      .setData('kind', obstacleKind.id)
+      .setData('altitude', Math.round(altitude));
+
+    if (obstacleKind.animationKey) {
+      mosquito.play(obstacleKind.animationKey);
+    }
+
+    this.registerMosquitoCircleMotion(mosquito, x, y);
+  }
+
+  private registerMosquitoCircleMotion(
+    mosquito: Phaser.GameObjects.Sprite,
     homeX: number,
     homeY: number,
   ): void {
-    if (!this.scene.isActive() || !mosquito.active) {
-      return;
-    }
-
-    const radius = Math.max(mosquito.displayWidth, mosquito.displayHeight);
-    const startAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    const direction = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
-    const circleProgress = { value: 0 };
-
-    this.tweens.add({
-      targets: circleProgress,
-      value: Math.PI * 2,
-      duration: MOSQUITO_CIRCLE_DURATION_MS,
-      ease: 'Linear',
-      repeat: -1,
-      onUpdate: () => {
-        const angle = startAngle + circleProgress.value * direction;
-        mosquito.setPosition(
-          homeX + Math.cos(angle) * radius,
-          homeY + Math.sin(angle) * radius,
-        );
-        mosquito.body.reset(mosquito.x, mosquito.y);
-      },
+    this.mosquitoCircleMotions.push({
+      sprite: mosquito,
+      homeX,
+      homeY,
+      radius: Math.max(mosquito.displayWidth, mosquito.displayHeight),
+      startAngle: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      direction: Phaser.Math.Between(0, 1) === 0 ? -1 : 1,
     });
+  }
+
+  private updateMosquitoCircleMotions(time: number): void {
+    const circleProgress =
+      ((time % MOSQUITO_CIRCLE_DURATION_MS) / MOSQUITO_CIRCLE_DURATION_MS) *
+      Math.PI *
+      2;
+
+    for (const motion of this.mosquitoCircleMotions) {
+      const { sprite } = motion;
+
+      if (!sprite.active) {
+        continue;
+      }
+
+      const angle = motion.startAngle + circleProgress * motion.direction;
+      sprite.setPosition(
+        motion.homeX + Math.cos(angle) * motion.radius,
+        motion.homeY + Math.sin(angle) * motion.radius,
+      );
+
+      if (
+        !this.gameOver &&
+        Phaser.Geom.Intersects.RectangleToRectangle(
+          this.getCenteredHitbox(
+            this.player,
+            PLAYER_MANUAL_HITBOX_WIDTH_RATIO,
+            PLAYER_MANUAL_HITBOX_HEIGHT_RATIO,
+          ),
+          this.getCenteredHitbox(
+            sprite,
+            MOSQUITO_HITBOX_WIDTH_RATIO,
+            MOSQUITO_HITBOX_HEIGHT_RATIO,
+          ),
+        )
+      ) {
+        void this.finishGame();
+      }
+    }
+  }
+
+  private getCenteredHitbox(
+    sprite: Phaser.GameObjects.Components.Transform &
+      Phaser.GameObjects.Components.ComputedSize,
+    widthRatio: number,
+    heightRatio: number,
+  ): Phaser.Geom.Rectangle {
+    const width = sprite.displayWidth * widthRatio;
+    const height = sprite.displayHeight * heightRatio;
+
+    return new Phaser.Geom.Rectangle(
+      sprite.x - width / 2,
+      sprite.y - height / 2,
+      width,
+      height,
+    );
   }
 
   private getObstacleX(
@@ -2130,7 +2267,7 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private async finishGame(): Promise<void> {
+  private async finishGame(reason: 'default' | 'lava' = 'default'): Promise<void> {
     if (this.gameOver) {
       return;
     }
@@ -2139,20 +2276,21 @@ export class GameplayScene extends Phaser.Scene {
     this.stopFlightSounds();
     this.angularVelocity = 180;
     this.player.setAcceleration(0, GRAVITY_Y * 1.4);
-    this.player.setTint(0xff7777);
-    this.leftWing.setTint(0xff7777);
-    this.rightWing.setTint(0xff7777);
-    this.flightFeet.setTint(0xff7777);
+    const tintColor = reason === 'lava' ? 0x3a1a0f : 0xff7777;
+    this.player.setTint(tintColor);
+    this.leftWing.setTint(tintColor);
+    this.rightWing.setTint(tintColor);
+    this.flightFeet.setTint(tintColor);
 
     for (const image of this.cosmeticImages.values()) {
       if (image.visible) {
-        image.setTint(0xff7777);
+        image.setTint(tintColor);
       }
     }
 
     for (const fallbackText of this.cosmeticFallbackTexts.values()) {
       if (fallbackText.visible) {
-        fallbackText.setTint(0xff7777);
+        fallbackText.setTint(tintColor);
       }
     }
 
