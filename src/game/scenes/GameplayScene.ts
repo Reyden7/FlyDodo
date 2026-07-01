@@ -76,6 +76,11 @@ const FOREST_TREE_1_KEY = 'forest-tree-1';
 const FOREST_TREE_2_KEY = 'forest-tree-2';
 const FOREST_FERN_1_KEY = 'forest-fern-1';
 const FOREST_FERN_2_KEY = 'forest-fern-2';
+const FOREST_BRANCH_RIGHT_SOURCE_KEY = 'forest-branch-right-source';
+const FOREST_BRANCH_LEFT_SOURCE_KEY = 'forest-branch-left-source';
+const FOREST_MOSQUITO_TEXTURE_PREFIX = 'forest-mosquito';
+const FOREST_MOSQUITO_ANIMATION_KEY = 'forest-mosquito-fly';
+const FOREST_MOSQUITO_FRAME_COUNT = 25;
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
 const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
 const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
@@ -89,6 +94,10 @@ const GROUND_VISUAL_Y_OFFSET = 2;
 const GROUND_RECORD_X = GAME_WIDTH / 2;
 const GROUND_RECORD_Y = GROUND_Y + 60;
 const GROUND_RECORD_DEPTH = -3;
+const OBSTACLE_DEPTH = 6;
+const OBSTACLE_ALPHA = 0.92;
+const BRANCH_EDGE_OVERHANG = 20;
+const MOSQUITO_CIRCLE_DURATION_MS = 1_800;
 
 interface GroundForestDecor {
   textureKey: string;
@@ -99,6 +108,52 @@ interface GroundForestDecor {
   groundOffset: number;
   flipX?: boolean;
   alpha?: number;
+}
+
+type AltitudeLevelId =
+  | 'forest'
+  | 'lowSky'
+  | 'midSky'
+  | 'stratosphere'
+  | 'space';
+
+type ObstacleKindId =
+  | 'branchLeft'
+  | 'branchRight'
+  | 'flyingInsect'
+  | 'pterodactyl'
+  | 'bird'
+  | 'stormCloud'
+  | 'storm'
+  | 'lightning'
+  | 'strongWind'
+  | 'satellite'
+  | 'meteor'
+  | 'asteroid';
+
+interface ObstacleKind {
+  id: ObstacleKindId;
+  textureKey: string;
+  width: number;
+  height: number;
+  fillColor: number;
+  strokeColor: number;
+  sourceTextureKey?: string;
+  edge?: 'left' | 'right';
+  displayWidth?: number;
+  animationKey?: string;
+}
+
+interface AltitudeLevelConfig {
+  id: AltitudeLevelId;
+  label: string;
+  minAltitude: number;
+  maxAltitude: number | null;
+  obstacleKinds: readonly ObstacleKindId[];
+  firstObstacleOffset: number;
+  spacingMin: number;
+  spacingMax: number;
+  sideMargin: number;
 }
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
@@ -244,6 +299,172 @@ const WATERMELON_FIRST_OFFSET_Y = 750;
 const WATERMELON_MIN_SPACING_Y = 520;
 const WATERMELON_MAX_SPACING_Y = 860;
 const WATERMELON_TOP_MARGIN = 400;
+const MAX_OBSTACLE_ALTITUDE = Math.floor((START_Y - WATERMELON_TOP_MARGIN) / 10);
+
+const OBSTACLE_KINDS: readonly ObstacleKind[] = [
+  {
+    id: 'branchLeft',
+    textureKey: 'obstacle-branch-left',
+    sourceTextureKey: FOREST_BRANCH_LEFT_SOURCE_KEY,
+    edge: 'left',
+    width: 215,
+    height: 86,
+    displayWidth: 215,
+    fillColor: 0x7b4322,
+    strokeColor: 0x3c1e10,
+  },
+  {
+    id: 'branchRight',
+    textureKey: 'obstacle-branch-right',
+    sourceTextureKey: FOREST_BRANCH_RIGHT_SOURCE_KEY,
+    edge: 'right',
+    width: 215,
+    height: 86,
+    displayWidth: 215,
+    fillColor: 0x7b4322,
+    strokeColor: 0x3c1e10,
+  },
+  {
+    id: 'flyingInsect',
+    textureKey: `${FOREST_MOSQUITO_TEXTURE_PREFIX}-01`,
+    width: 80,
+    height: 80,
+    displayWidth: 80,
+    animationKey: FOREST_MOSQUITO_ANIMATION_KEY,
+    fillColor: 0xe1c542,
+    strokeColor: 0x5f4f13,
+  },
+  {
+    id: 'pterodactyl',
+    textureKey: 'obstacle-pterodactyl-placeholder',
+    width: 58,
+    height: 38,
+    fillColor: 0x8a6b5b,
+    strokeColor: 0x3a2a23,
+  },
+  {
+    id: 'bird',
+    textureKey: 'obstacle-bird-placeholder',
+    width: 38,
+    height: 38,
+    fillColor: 0xefe2bd,
+    strokeColor: 0x846d42,
+  },
+  {
+    id: 'stormCloud',
+    textureKey: 'obstacle-storm-cloud-placeholder',
+    width: 62,
+    height: 42,
+    fillColor: 0x273449,
+    strokeColor: 0x101721,
+  },
+  {
+    id: 'storm',
+    textureKey: 'obstacle-storm-placeholder',
+    width: 70,
+    height: 50,
+    fillColor: 0x4b5267,
+    strokeColor: 0x161a28,
+  },
+  {
+    id: 'lightning',
+    textureKey: 'obstacle-lightning-placeholder',
+    width: 34,
+    height: 62,
+    fillColor: 0xffda39,
+    strokeColor: 0x8f6a00,
+  },
+  {
+    id: 'strongWind',
+    textureKey: 'obstacle-strong-wind-placeholder',
+    width: 76,
+    height: 30,
+    fillColor: 0xbff8ff,
+    strokeColor: 0x4caebc,
+  },
+  {
+    id: 'satellite',
+    textureKey: 'obstacle-satellite-placeholder',
+    width: 58,
+    height: 34,
+    fillColor: 0xc2c6d2,
+    strokeColor: 0x545b6d,
+  },
+  {
+    id: 'meteor',
+    textureKey: 'obstacle-meteor-placeholder',
+    width: 42,
+    height: 42,
+    fillColor: 0xff7a24,
+    strokeColor: 0x7a2f0c,
+  },
+  {
+    id: 'asteroid',
+    textureKey: 'obstacle-asteroid-placeholder',
+    width: 52,
+    height: 52,
+    fillColor: 0x8c8178,
+    strokeColor: 0x3c3632,
+  },
+];
+
+const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
+  {
+    id: 'forest',
+    label: 'Forest',
+    minAltitude: 0,
+    maxAltitude: 200,
+    obstacleKinds: ['branchLeft', 'branchRight', 'flyingInsect'],
+    firstObstacleOffset: 75,
+    spacingMin: 45,
+    spacingMax: 70,
+    sideMargin: 34,
+  },
+  {
+    id: 'lowSky',
+    label: 'LowSky',
+    minAltitude: 200,
+    maxAltitude: 800,
+    obstacleKinds: ['pterodactyl', 'bird', 'stormCloud'],
+    firstObstacleOffset: 45,
+    spacingMin: 80,
+    spacingMax: 125,
+    sideMargin: 42,
+  },
+  {
+    id: 'midSky',
+    label: 'MidSky',
+    minAltitude: 800,
+    maxAltitude: 1800,
+    obstacleKinds: ['storm', 'lightning'],
+    firstObstacleOffset: 65,
+    spacingMin: 105,
+    spacingMax: 165,
+    sideMargin: 48,
+  },
+  {
+    id: 'stratosphere',
+    label: 'Stratosphere',
+    minAltitude: 1800,
+    maxAltitude: 3000,
+    obstacleKinds: ['strongWind'],
+    firstObstacleOffset: 80,
+    spacingMin: 135,
+    spacingMax: 210,
+    sideMargin: 34,
+  },
+  {
+    id: 'space',
+    label: 'Space',
+    minAltitude: 3000,
+    maxAltitude: null,
+    obstacleKinds: ['satellite', 'meteor', 'asteroid'],
+    firstObstacleOffset: 120,
+    spacingMin: 280,
+    spacingMax: 430,
+    sideMargin: 44,
+  },
+];
 
 const LEFT_WING_FRAMES = [
   'dodo-wing-left-1',
@@ -349,6 +570,7 @@ export class GameplayScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private watermelonCollectables!: Phaser.Physics.Arcade.StaticGroup;
+  private obstacleGroup!: Phaser.Physics.Arcade.Group;
   private flightSound?: Phaser.Sound.BaseSound;
   private cosmeticImages = new Map<
     CosmeticCategory,
@@ -411,6 +633,21 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.png');
     this.load.image(FOREST_FERN_1_KEY, '/assets/Decors/fougere1.png');
     this.load.image(FOREST_FERN_2_KEY, '/assets/Decors/fougère2.png');
+    this.load.image(
+      FOREST_BRANCH_RIGHT_SOURCE_KEY,
+      '/assets/obstacles/forest/branche-d.png',
+    );
+    this.load.image(
+      FOREST_BRANCH_LEFT_SOURCE_KEY,
+      '/assets/obstacles/forest/branche-g.png',
+    );
+    for (let index = 1; index <= FOREST_MOSQUITO_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(2, '0');
+      this.load.image(
+        `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/obstacles/forest/moustik/${paddedIndex}.png`,
+      );
+    }
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
@@ -447,6 +684,8 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.world.gravity.y = 0;
 
     this.createPlaceholderTextures();
+    this.createObstaclePlaceholderTextures();
+    this.createObstacleAnimations();
     this.createSkyDecor();
     this.createGroundDecor();
     this.createGroundForestDecor();
@@ -476,10 +715,18 @@ export class GameplayScene extends Phaser.Scene {
     this.createCosmeticDisplayObjects();
 
     this.createWatermelonCollectables();
+    this.createAltitudeObstacles();
     this.physics.add.overlap(
       this.player,
       this.watermelonCollectables,
       this.handleWatermelonCollected,
+      undefined,
+      this,
+    );
+    this.physics.add.overlap(
+      this.player,
+      this.obstacleGroup,
+      this.handleObstacleHit,
       undefined,
       this,
     );
@@ -966,6 +1213,56 @@ export class GameplayScene extends Phaser.Scene {
     graphics.destroy();
   }
 
+  private createObstaclePlaceholderTextures(): void {
+    for (const obstacleKind of OBSTACLE_KINDS) {
+      if (this.textures.exists(obstacleKind.textureKey)) {
+        continue;
+      }
+
+      if (obstacleKind.sourceTextureKey) {
+        const sourceImage = this.textures
+          .get(obstacleKind.sourceTextureKey)
+          .getSourceImage() as HTMLImageElement;
+
+        this.textures.addCanvas(
+          obstacleKind.textureKey,
+          this.createTrimmedCosmeticCanvas(sourceImage),
+        );
+        continue;
+      }
+
+      const graphics = this.make.graphics({ x: 0, y: 0 });
+      graphics.fillStyle(obstacleKind.fillColor, 1);
+      graphics.fillRect(0, 0, obstacleKind.width, obstacleKind.height);
+      graphics.lineStyle(3, obstacleKind.strokeColor, 1);
+      graphics.strokeRect(1.5, 1.5, obstacleKind.width - 3, obstacleKind.height - 3);
+      graphics.generateTexture(
+        obstacleKind.textureKey,
+        obstacleKind.width,
+        obstacleKind.height,
+      );
+      graphics.destroy();
+    }
+  }
+
+  private createObstacleAnimations(): void {
+    if (this.anims.exists(FOREST_MOSQUITO_ANIMATION_KEY)) {
+      return;
+    }
+
+    this.anims.create({
+      key: FOREST_MOSQUITO_ANIMATION_KEY,
+      frames: Array.from({ length: FOREST_MOSQUITO_FRAME_COUNT }, (_value, index) => {
+        const paddedIndex = (index + 1).toString().padStart(2, '0');
+        return {
+          key: `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
+        };
+      }),
+      frameRate: 18,
+      repeat: -1,
+    });
+  }
+
   private createSkyDecor(): void {
     this.createSkyBackground();
     this.backgroundClouds = [];
@@ -1158,6 +1455,137 @@ export class GameplayScene extends Phaser.Scene {
     this.groundRecordValue?.setText(`RECORD : ${this.bestAltitude} m`);
   }
 
+  private createAltitudeObstacles(): void {
+    this.obstacleGroup = this.physics.add.group({
+      allowGravity: false,
+      immovable: true,
+    });
+
+    for (const level of ALTITUDE_LEVELS) {
+      const maxAltitude = level.maxAltitude ?? MAX_OBSTACLE_ALTITUDE;
+      let altitude = level.minAltitude + level.firstObstacleOffset;
+      let previousX = GAME_WIDTH / 2;
+
+      while (altitude < maxAltitude) {
+        const obstacleKind = this.pickObstacleKind(level);
+        const x = this.getObstacleX(obstacleKind, level, previousX);
+
+        const y = this.altitudeToWorldY(altitude);
+        const obstacle = this.physics.add.sprite(
+          x,
+          y,
+          obstacleKind.textureKey,
+        );
+        this.obstacleGroup.add(obstacle);
+        const displayWidth = obstacleKind.displayWidth ?? obstacleKind.width;
+        const displayHeight = displayWidth * (obstacle.height / obstacle.width);
+        const originX =
+          obstacleKind.edge === 'left' ? 0 : obstacleKind.edge === 'right' ? 1 : 0.5;
+
+        obstacle
+          .setOrigin(originX, 0.5)
+          .setDisplaySize(displayWidth, displayHeight)
+          .setDepth(OBSTACLE_DEPTH)
+          .setAlpha(OBSTACLE_ALPHA)
+          .setAngle(obstacleKind.edge ? 0 : Phaser.Math.Between(-10, 10))
+          .setData('level', level.id)
+          .setData('levelLabel', level.label)
+          .setData('kind', obstacleKind.id)
+          .setData('altitude', Math.round(altitude));
+        obstacle.body.setAllowGravity(false);
+        obstacle.body.setImmovable(true);
+        obstacle.body.setVelocity(0, 0);
+        if (obstacleKind.animationKey) {
+          obstacle.play(obstacleKind.animationKey);
+        }
+
+        if (obstacleKind.id === 'flyingInsect') {
+          this.startMosquitoCircle(obstacle, x, y);
+        }
+
+        obstacle.body.reset(obstacle.x, obstacle.y);
+
+        previousX = x;
+        altitude += Phaser.Math.Between(level.spacingMin, level.spacingMax);
+      }
+    }
+  }
+
+  private startMosquitoCircle(
+    mosquito: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+    homeX: number,
+    homeY: number,
+  ): void {
+    if (!this.scene.isActive() || !mosquito.active) {
+      return;
+    }
+
+    const radius = Math.max(mosquito.displayWidth, mosquito.displayHeight);
+    const startAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const direction = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+    const circleProgress = { value: 0 };
+
+    this.tweens.add({
+      targets: circleProgress,
+      value: Math.PI * 2,
+      duration: MOSQUITO_CIRCLE_DURATION_MS,
+      ease: 'Linear',
+      repeat: -1,
+      onUpdate: () => {
+        const angle = startAngle + circleProgress.value * direction;
+        mosquito.setPosition(
+          homeX + Math.cos(angle) * radius,
+          homeY + Math.sin(angle) * radius,
+        );
+        mosquito.body.reset(mosquito.x, mosquito.y);
+      },
+    });
+  }
+
+  private getObstacleX(
+    obstacleKind: ObstacleKind,
+    level: AltitudeLevelConfig,
+    previousX: number,
+  ): number {
+    if (obstacleKind.edge === 'left') {
+      return -BRANCH_EDGE_OVERHANG;
+    }
+
+    if (obstacleKind.edge === 'right') {
+      return GAME_WIDTH + BRANCH_EDGE_OVERHANG;
+    }
+
+    const halfWidth = obstacleKind.width / 2;
+    const minX = level.sideMargin + halfWidth;
+    const maxX = GAME_WIDTH - level.sideMargin - halfWidth;
+    let x = Phaser.Math.Between(minX, maxX);
+
+    if (Math.abs(x - previousX) < 76) {
+      x =
+        previousX < GAME_WIDTH / 2
+          ? Phaser.Math.Between(GAME_WIDTH / 2 + 28, maxX)
+          : Phaser.Math.Between(minX, GAME_WIDTH / 2 - 28);
+    }
+
+    return x;
+  }
+
+  private pickObstacleKind(level: AltitudeLevelConfig): ObstacleKind {
+    const kindId =
+      level.obstacleKinds[
+        Phaser.Math.Between(0, level.obstacleKinds.length - 1)
+      ];
+
+    return (
+      OBSTACLE_KINDS.find((obstacleKind) => obstacleKind.id === kindId) ??
+      OBSTACLE_KINDS[0]
+    );
+  }
+
+  private altitudeToWorldY(altitude: number): number {
+    return START_Y - altitude * 10;
+  }
+
   private createWatermelonCollectables(): void {
     this.watermelonCollectables = this.physics.add.staticGroup();
 
@@ -1241,6 +1669,23 @@ export class GameplayScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => collectedEffect.destroy(),
     });
+  };
+
+  private handleObstacleHit: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _playerObject,
+    obstacleObject,
+  ): void => {
+    if (this.gameOver) {
+      return;
+    }
+
+    const obstacle = obstacleObject as Phaser.Physics.Arcade.Image;
+
+    if (!obstacle.active) {
+      return;
+    }
+
+    void this.finishGame();
   };
 
   private createOffscreenIndicator(): void {
@@ -1717,6 +2162,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private handleRestartRequest = (): void => {
+    this.tweens.resumeAll();
     this.physics.world.resume();
     this.scene.restart();
   };
@@ -1724,6 +2170,7 @@ export class GameplayScene extends Phaser.Scene {
   private handlePauseRequest = (): void => {
     this.gamePaused = true;
     this.physics.world.pause();
+    this.tweens.pauseAll();
     this.stopFlightSounds();
   };
 
@@ -1734,6 +2181,7 @@ export class GameplayScene extends Phaser.Scene {
 
     this.gamePaused = false;
     this.physics.world.resume();
+    this.tweens.resumeAll();
 
     if (!this.isGrounded) {
       this.startFlightSound();
