@@ -29,14 +29,6 @@ export interface CosmeticTransform {
   fallbackFontSize: number;
 }
 
-export interface CosmeticTransformOverride
-  extends Partial<CosmeticTransform> {}
-
-export interface CosmeticVisualOverride {
-  ground?: CosmeticTransformOverride;
-  flight?: CosmeticTransformOverride;
-}
-
 export interface ShopItem {
   id: string;
   title: string;
@@ -50,12 +42,6 @@ export interface ShopItem {
    * /assets/Accessoires/<dossier de catégorie>/<id>.png
    */
   imagePath?: string;
-
-  /**
-   * Facultatif. Permet de corriger la position ou la taille d'un accessoire
-   * particulier sans modifier le gestionnaire générique.
-   */
-  visual?: CosmeticVisualOverride;
 }
 
 export const COSMETIC_CATEGORIES: readonly CosmeticCategory[] = [
@@ -111,7 +97,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.082,
       scaleY: 0.082,
       offsetX: 0,
-      offsetY: -103,
+      offsetY: -90,
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -238,13 +224,7 @@ export function getCosmeticTransform(
   item: ShopItem,
   pose: CosmeticPose,
 ): CosmeticTransform {
-  const defaults = DEFAULT_COSMETIC_TRANSFORMS[item.category][pose];
-  const override = item.visual?.[pose];
-
-  return {
-    ...defaults,
-    ...override,
-  };
+  return DEFAULT_COSMETIC_TRANSFORMS[item.category][pose];
 }
 
 export const SHOP_ITEMS: readonly ShopItem[] = [
@@ -255,22 +235,6 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 15,
     icon: '👒',
     tone: 'gold',
-
-    visual: {
-    ground: {
-      scaleX: 0.07,
-      scaleY: 0.07,
-      offsetX: 0,
-      offsetY: -86,
-    },
-
-    flight: {
-      scaleX: 0.075,
-      scaleY: 0.075,
-      offsetX: 0,
-      offsetY: -86,
-    },
-  },
   },
   {
     id: 'hat-crown',

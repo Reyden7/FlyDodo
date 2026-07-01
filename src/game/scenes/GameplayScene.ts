@@ -40,12 +40,11 @@ const DODO_FLIGHT_FEET_SCALE_Y = 0.350;
 const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
-const CAMERA_FOLLOW_SPEED = 4.2;
 const CAMERA_FALL_FOLLOW_SPEED = 1.15;
 const CAMERA_MAX_FALL_CATCHUP = 360;
 
 const GRAVITY_Y = 800;
-const FLAP_UPWARD_IMPULSE = 155;
+const FLAP_UPWARD_IMPULSE = 170;
 const FLAP_SIDE_IMPULSE = 30;
 const MAX_HORIZONTAL_SPEED = 300;
 const MAX_VERTICAL_SPEED = 450;
@@ -59,6 +58,7 @@ const AUTO_LEVEL_SPEED = 0;
 const BASE_WING_BEATS_PER_SECOND = 2.4;
 const FAST_WING_MULTIPLIER = 0;
 const SLOW_WING_MULTIPLIER = 0;
+const MIN_FLAP_INTERVAL_MS = 115;
 const FLAP_WING_BOOST_DURATION = 0.28;
 const FLAP_WING_BOOST_MULTIPLIER = 1.5;
 const FLAP_LEG_ANIMATION_DURATION = 0;
@@ -72,6 +72,15 @@ const GROUND_DIRT_HEIGHT = 85;
 const GROUND_TEXTURE_KEY = 'ground-decor';
 const GROUND_TEXTURE_FRAME = 'ground-cropped';
 const GROUND_TEXTURE_PATH = '/assets/Decors/ground.png';
+const FOREST_TREE_1_KEY = 'forest-tree-1';
+const FOREST_TREE_2_KEY = 'forest-tree-2';
+const FOREST_FERN_1_KEY = 'forest-fern-1';
+const FOREST_FERN_2_KEY = 'forest-fern-2';
+const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
+const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
+const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
+const SKY_BACKGROUND_DEPTH = -10;
+const SKY_BACKGROUND_TOP_FILL_COLOR = 0x000000;
 const GROUND_TEXTURE_SOURCE_WIDTH = 2172;
 const GROUND_TEXTURE_SOURCE_HEIGHT = 724;
 const GROUND_TEXTURE_CROP_TOP = 150;
@@ -80,6 +89,90 @@ const GROUND_VISUAL_Y_OFFSET = 2;
 const GROUND_RECORD_X = GAME_WIDTH / 2;
 const GROUND_RECORD_Y = GROUND_Y + 60;
 const GROUND_RECORD_DEPTH = -3;
+
+interface GroundForestDecor {
+  textureKey: string;
+  x: number;
+  scale: number;
+  depth: number;
+  scrollFactor: number;
+  groundOffset: number;
+  flipX?: boolean;
+  alpha?: number;
+}
+
+const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
+  {
+    textureKey: FOREST_TREE_2_KEY,
+    x: -60,
+    scale: 1,
+    depth: -6.4,
+    scrollFactor: 0.9,
+    groundOffset: 8,
+  },
+  {
+    textureKey: FOREST_TREE_1_KEY,
+    x: 15,
+    scale: 1.5,
+    depth: -6.1,
+    scrollFactor: 0.94,
+    groundOffset: 7,
+    flipX: true,
+    alpha: 0.96,
+  },
+  {
+    textureKey: FOREST_TREE_2_KEY,
+    x: 340,
+    scale: 1,
+    depth: -6.2,
+    scrollFactor: 0.91,
+    groundOffset: 9,
+    flipX: true,
+    alpha: 0.94,
+  },
+  {
+    textureKey: FOREST_TREE_1_KEY,
+    x: 424,
+    scale: 0.5,
+    depth: -6.5,
+    scrollFactor: 0.88,
+    groundOffset: 8,
+  },
+  {
+    textureKey: FOREST_FERN_1_KEY,
+    x: 200,
+    scale: 0.12,
+    depth: 1,
+    scrollFactor: 0.98,
+    groundOffset: -1,
+  },
+  {
+    textureKey: FOREST_FERN_2_KEY,
+    x: 116,
+    scale: 0.11,
+    depth: -3.75,
+    scrollFactor: 0.99,
+    groundOffset: 0,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_FERN_1_KEY,
+    x: 270,
+    scale: 0.105,
+    depth: -3.82,
+    scrollFactor: 0.985,
+    groundOffset: 0,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_FERN_2_KEY,
+    x: 386,
+    scale: 0.12,
+    depth: -3.78,
+    scrollFactor: 0.98,
+    groundOffset: -1,
+  },
+];
 
 const WATERMELON_TEXTURE_KEY = 'watermelon-collectable';
 const WATERMELON_TEXTURE_PATH = '/assets/collectable/pasteque.png';
@@ -96,6 +189,7 @@ const FLAP_SOUND_PATH = '/assets/sounds/1Flap.mp3';
 const FLAP_SOUND_VOLUME = 0.25;
 
 const COSMETIC_FALLBACK_TEXTURE_KEY = 'cosmetic-runtime-placeholder';
+const COSMETIC_TRIM_ALPHA_THRESHOLD = 64;
 
 const WATERMELON_SCALE = 0.075;
 const WATERMELON_DEPTH = 4;
@@ -239,6 +333,7 @@ export class GameplayScene extends Phaser.Scene {
   private rightWingPhase = 0;
   private leftWingBoostTime = 0;
   private rightWingBoostTime = 0;
+  private lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
   private legAnimationTime = 0;
 
   private startAltitudeY = START_Y;
@@ -250,6 +345,7 @@ export class GameplayScene extends Phaser.Scene {
   private isGrounded = true;
 
   private gameOver = false;
+  private gamePaused = false;
   private outOfScreenSince: number | null = null;
   private lastWarningSecond: number | null = null;
   private lastWarningReason: 'fall' | 'side' | null = null;
@@ -265,6 +361,10 @@ export class GameplayScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
+    this.load.image(FOREST_TREE_1_KEY, '/assets/Decors/arbre1.png');
+    this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.png');
+    this.load.image(FOREST_FERN_1_KEY, '/assets/Decors/fougere1.png');
+    this.load.image(FOREST_FERN_2_KEY, '/assets/Decors/fougère2.png');
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
@@ -303,6 +403,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createPlaceholderTextures();
     this.createSkyDecor();
     this.createGroundDecor();
+    this.createGroundForestDecor();
     this.createGroundRecord();
 
     this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
@@ -340,6 +441,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createOffscreenIndicator();
 
     const camera = this.cameras.main;
+    camera.roundPixels = true;
     camera.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
     camera.setScroll(0, START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO);
     camera.setBackgroundColor('#73d8ff');
@@ -354,6 +456,8 @@ export class GameplayScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.handlePointerUp, this);
 
     gameEvents.addEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.addEventListener('flydodo:pause-request', this.handlePauseRequest);
+    gameEvents.addEventListener('flydodo:resume-request', this.handleResumeRequest);
     gameEvents.addEventListener(
       'flydodo:cosmetic-equipped',
       this.handleCosmeticEquipped,
@@ -373,7 +477,13 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const direction = this.consumeFlapDirection();
+    if (this.gamePaused) {
+      this.updateDodoVisuals(deltaSeconds);
+      this.updateOffscreenIndicator();
+      return;
+    }
+
+    const direction = this.consumeFlapDirection(time);
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
@@ -393,6 +503,8 @@ export class GameplayScene extends Phaser.Scene {
     this.input.off('pointerup', this.handlePointerUp, this);
     this.input.off('pointerupoutside', this.handlePointerUp, this);
     gameEvents.removeEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.removeEventListener('flydodo:pause-request', this.handlePauseRequest);
+    gameEvents.removeEventListener('flydodo:resume-request', this.handleResumeRequest);
     gameEvents.removeEventListener(
       'flydodo:cosmetic-equipped',
       this.handleCosmeticEquipped,
@@ -450,6 +562,71 @@ export class GameplayScene extends Phaser.Scene {
     this.updateDodoVisuals(0);
   }
 
+  private createTrimmedCosmeticCanvas(image: HTMLImageElement): HTMLCanvasElement {
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = image.naturalWidth;
+    sourceCanvas.height = image.naturalHeight;
+
+    const sourceContext = sourceCanvas.getContext('2d', {
+      willReadFrequently: true,
+    });
+
+    if (!sourceContext) {
+      return sourceCanvas;
+    }
+
+    sourceContext.drawImage(image, 0, 0);
+
+    const { data, width, height } = sourceContext.getImageData(
+      0,
+      0,
+      sourceCanvas.width,
+      sourceCanvas.height,
+    );
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = data[(y * width + x) * 4 + 3];
+
+        if (alpha <= COSMETIC_TRIM_ALPHA_THRESHOLD) {
+          continue;
+        }
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return sourceCanvas;
+    }
+
+    const trimmedCanvas = document.createElement('canvas');
+    trimmedCanvas.width = maxX - minX + 1;
+    trimmedCanvas.height = maxY - minY + 1;
+    trimmedCanvas
+      .getContext('2d')
+      ?.drawImage(
+        sourceCanvas,
+        minX,
+        minY,
+        trimmedCanvas.width,
+        trimmedCanvas.height,
+        0,
+        0,
+        trimmedCanvas.width,
+        trimmedCanvas.height,
+      );
+
+    return trimmedCanvas;
+  }
+
   private async ensureCosmeticTexture(item: ShopItem): Promise<boolean> {
     const textureKey = getShopItemTextureKey(item);
 
@@ -468,7 +645,10 @@ export class GameplayScene extends Phaser.Scene {
 
       image.onload = (): void => {
         if (!this.textures.exists(textureKey)) {
-          this.textures.addImage(textureKey, image);
+          this.textures.addCanvas(
+            textureKey,
+            this.createTrimmedCosmeticCanvas(image),
+          );
         }
 
         resolve(true);
@@ -667,6 +847,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.gameOver = false;
+    this.gamePaused = false;
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
     this.lastWarningReason = null;
@@ -683,6 +864,7 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingPhase = 0;
     this.leftWingBoostTime = 0;
     this.rightWingBoostTime = 0;
+    this.lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
     this.legAnimationTime = 0;
   }
 
@@ -739,6 +921,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createSkyDecor(): void {
+    this.createSkyBackground();
     this.backgroundClouds = [];
 
     for (let index = 0; index < 80; index += 1) {
@@ -749,6 +932,97 @@ export class GameplayScene extends Phaser.Scene {
       cloud.setScrollFactor(0.82);
       cloud.setDepth(-5);
       this.backgroundClouds.push(cloud);
+    }
+  }
+
+  private createSkyBackground(): void {
+    const image = new Image();
+
+    image.onload = (): void => {
+      if (!this.scene.isActive()) {
+        return;
+      }
+
+      const sourceWidth = image.naturalWidth;
+      const sourceHeight = image.naturalHeight;
+      const segmentCount = Math.ceil(sourceHeight / SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT);
+
+      for (let index = 0; index < segmentCount; index += 1) {
+        const textureKey = `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`;
+
+        if (this.textures.exists(textureKey)) {
+          continue;
+        }
+
+        const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
+        const sourceHeight = Math.min(
+          SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT,
+          image.naturalHeight - sourceY,
+        );
+        const canvas = document.createElement('canvas');
+        canvas.width = sourceWidth;
+        canvas.height = sourceHeight;
+        canvas
+          .getContext('2d')
+          ?.drawImage(
+            image,
+            0,
+            sourceY,
+            sourceWidth,
+            sourceHeight,
+            0,
+            0,
+            sourceWidth,
+            sourceHeight,
+          );
+
+        this.textures.addCanvas(textureKey, canvas);
+      }
+
+      this.addSkyBackgroundSegments(segmentCount, sourceWidth, sourceHeight);
+    };
+
+    image.decoding = 'async';
+    image.src = SKY_BACKGROUND_TEXTURE_PATH;
+  }
+
+  private addSkyBackgroundSegments(
+    segmentCount: number,
+    sourceWidth: number,
+    sourceHeight: number,
+  ): void {
+    const scale = GAME_WIDTH / sourceWidth;
+    const backgroundBottomY = GROUND_Y + GROUND_DIRT_HEIGHT;
+    const backgroundTopY = backgroundBottomY - sourceHeight * scale;
+
+    if (backgroundTopY > 0) {
+      this.add
+        .rectangle(
+          0,
+          0,
+          GAME_WIDTH,
+          backgroundTopY,
+          SKY_BACKGROUND_TOP_FILL_COLOR,
+          1,
+        )
+        .setOrigin(0, 0)
+        .setDepth(SKY_BACKGROUND_DEPTH);
+    }
+
+    for (let index = 0; index < segmentCount; index += 1) {
+      const textureKey = `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`;
+
+      if (!this.textures.exists(textureKey)) {
+        continue;
+      }
+
+      const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
+
+      this.add
+        .image(GAME_WIDTH / 2, backgroundTopY + sourceY * scale, textureKey)
+        .setOrigin(0.5, 0)
+        .setScale(scale)
+        .setDepth(SKY_BACKGROUND_DEPTH);
     }
   }
 
@@ -781,6 +1055,27 @@ export class GameplayScene extends Phaser.Scene {
     ground.setOrigin(0.5, -0.13);
     ground.setScale(groundScaleX, groundScaleY);
     ground.setDepth(-4);
+  }
+
+  private createGroundForestDecor(): void {
+    const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const groundScreenY = GROUND_Y - initialCameraScrollY;
+
+    for (const decor of GROUND_FOREST_DECOR) {
+      const y =
+        groundScreenY +
+        initialCameraScrollY * decor.scrollFactor +
+        decor.groundOffset;
+      const scaleX = decor.flipX ? -decor.scale : decor.scale;
+
+      this.add
+        .image(decor.x, y, decor.textureKey)
+        .setOrigin(0.5, 1)
+        .setScale(scaleX, decor.scale)
+        .setDepth(decor.depth)
+        .setScrollFactor(decor.scrollFactor)
+        .setAlpha(decor.alpha ?? 1);
+    }
   }
 
   private createGroundRecord(): void {
@@ -944,7 +1239,20 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private consumeFlapDirection(): number {
+  private consumeFlapDirection(time: number): number {
+    const acceptDirection = (direction: number): number => {
+      if (direction === 0) {
+        return 0;
+      }
+
+      if (time - this.lastAcceptedFlapTime < MIN_FLAP_INTERVAL_MS) {
+        return 0;
+      }
+
+      this.lastAcceptedFlapTime = time;
+      return direction;
+    };
+
     if (this.pendingLeftFlap || this.pendingRightFlap) {
       const direction = this.getDirectionFromSides(
         this.pendingLeftFlap,
@@ -952,7 +1260,7 @@ export class GameplayScene extends Phaser.Scene {
       );
       this.pendingLeftFlap = false;
       this.pendingRightFlap = false;
-      return direction;
+      return acceptDirection(direction);
     }
 
     const leftPressed =
@@ -962,7 +1270,7 @@ export class GameplayScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.cursors.right) ||
       Phaser.Input.Keyboard.JustDown(this.keyD);
 
-    return this.getDirectionFromSides(leftPressed, rightPressed);
+    return acceptDirection(this.getDirectionFromSides(leftPressed, rightPressed));
   }
 
   private getDirectionFromSides(leftPressed: boolean, rightPressed: boolean): number {
@@ -1096,15 +1404,12 @@ export class GameplayScene extends Phaser.Scene {
       this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
-      this.leftWingPhase += Math.PI * 0.28;
-      this.rightWingPhase = this.leftWingPhase;
     }
 
     // Tourner à droite = l'aile gauche bat plus vite.
     if (direction === 1) {
       this.leftWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
-      this.leftWingPhase += Math.PI * 0.34;
       rightMultiplier = SLOW_WING_MULTIPLIER;
     }
 
@@ -1113,7 +1418,6 @@ export class GameplayScene extends Phaser.Scene {
       leftMultiplier = SLOW_WING_MULTIPLIER;
       this.rightWingBoostTime = FLAP_WING_BOOST_DURATION;
       this.legAnimationTime = FLAP_LEG_ANIMATION_DURATION;
-      this.rightWingPhase += Math.PI * 0.34;
     }
 
     if (this.leftWingBoostTime > 0) {
@@ -1158,8 +1462,8 @@ export class GameplayScene extends Phaser.Scene {
       localRotation = 0,
     ): void => {
       sprite.setPosition(
-        this.player.x + localX * cosine - localY * sine,
-        this.player.y + localX * sine + localY * cosine,
+        Math.round(this.player.x + localX * cosine - localY * sine),
+        Math.round(this.player.y + localX * sine + localY * cosine),
       );
       sprite.setRotation(rotation + localRotation);
     };
@@ -1214,10 +1518,13 @@ export class GameplayScene extends Phaser.Scene {
       lowestAllowedScrollY,
     );
 
-    // La camera suit vite la montee, puis redescend doucement pour laisser une recuperation.
-    const followSpeed =
-      clampedDesiredScrollY < camera.scrollY ? CAMERA_FOLLOW_SPEED : CAMERA_FALL_FOLLOW_SPEED;
-    const smoothing = 1 - Math.exp(-followSpeed * deltaSeconds);
+    if (clampedDesiredScrollY < camera.scrollY) {
+      camera.scrollY = clampedDesiredScrollY;
+      return;
+    }
+
+    // La camera redescend doucement pour laisser une recuperation.
+    const smoothing = 1 - Math.exp(-CAMERA_FALL_FOLLOW_SPEED * deltaSeconds);
     camera.scrollY = Phaser.Math.Linear(camera.scrollY, clampedDesiredScrollY, smoothing);
   }
 
@@ -1364,6 +1671,26 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private handleRestartRequest = (): void => {
+    this.physics.world.resume();
     this.scene.restart();
+  };
+
+  private handlePauseRequest = (): void => {
+    this.gamePaused = true;
+    this.physics.world.pause();
+    this.stopFlightSounds();
+  };
+
+  private handleResumeRequest = (): void => {
+    if (this.gameOver) {
+      return;
+    }
+
+    this.gamePaused = false;
+    this.physics.world.resume();
+
+    if (!this.isGrounded) {
+      this.startFlightSound();
+    }
   };
 }

@@ -35,6 +35,13 @@ export interface EquipResult {
   profile: PlayerProfile;
 }
 
+export type UnequipStatus = 'unequipped' | 'already-unequipped';
+
+export interface UnequipResult {
+  status: UnequipStatus;
+  profile: PlayerProfile;
+}
+
 let profileCache: PlayerProfile | null = null;
 let profileLoadPromise: Promise<PlayerProfile> | null = null;
 let profileMutationQueue: Promise<void> = Promise.resolve();
@@ -252,6 +259,37 @@ export function equipShopItem(
 
     return {
       status: 'equipped',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function unequipShopItem(
+  itemId: string,
+  category: CosmeticCategory,
+): Promise<UnequipResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.equipped[category] !== itemId) {
+      return {
+        status: 'already-unequipped',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      equipped: {
+        ...current.equipped,
+        [category]: null,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'unequipped',
       profile: cloneProfile(next),
     };
   });

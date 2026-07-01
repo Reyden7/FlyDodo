@@ -6,7 +6,7 @@ export const GAME_HEIGHT = 844;
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
-    type: Phaser.CANVAS,
+    type: Phaser.WEBGL,
     parent,
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
@@ -14,6 +14,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     transparent: false,
     pixelArt: false,
     antialias: true,
+    roundPixels: true,
     physics: {
       default: 'arcade',
       arcade: {

@@ -18,7 +18,7 @@ export interface WalletUpdatedDetail {
 
 export interface CosmeticEquippedDetail {
   category: CosmeticCategory;
-  itemId: string;
+  itemId: string | null;
 }
 
 export const gameEvents = new EventTarget();
@@ -53,4 +53,12 @@ export function emitGameOver(): void {
 
 export function requestRestart(): void {
   gameEvents.dispatchEvent(new Event('flydodo:restart-request'));
+}
+
+export function requestGamePause(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:pause-request'));
+}
+
+export function requestGameResume(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:resume-request'));
 }

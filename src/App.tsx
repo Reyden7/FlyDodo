@@ -3,6 +3,8 @@ import { GameCanvas } from './components/GameCanvas';
 import {
   emitCosmeticEquipped,
   gameEvents,
+  requestGamePause,
+  requestGameResume,
   requestRestart,
   type FallWarningDetail,
   type FlightHudDetail,
@@ -13,6 +15,7 @@ import {
   equipShopItem,
   loadLatestPlayerProfile,
   purchaseShopItem,
+  unequipShopItem,
   type PlayerProfile,
 } from './services/saveService';
 import {
@@ -204,6 +207,7 @@ export default function App(): React.JSX.Element {
 
   const openShop = async (): Promise<void> => {
     setShopNotice(null);
+    requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
   };
@@ -211,6 +215,10 @@ export default function App(): React.JSX.Element {
   const closeShop = (): void => {
     setShopNotice(null);
     setIsShopOpen(false);
+
+    if (!isGameOver) {
+      requestGameResume();
+    }
   };
 
   const handleShopItemAction = async (item: ShopItem): Promise<void> => {
@@ -234,6 +242,23 @@ export default function App(): React.JSX.Element {
         }
 
         setShopNotice(`${item.title} acheté !`);
+        return;
+      }
+
+      const isEquipped = playerProfile.equipped[item.category] === item.id;
+
+      if (isEquipped) {
+        const result = await unequipShopItem(item.id, item.category);
+        setPlayerProfile(result.profile);
+
+        if (result.status === 'unequipped') {
+          emitCosmeticEquipped({
+            category: item.category,
+            itemId: null,
+          });
+          setShopNotice(`${item.title} déséquipé !`);
+        }
+
         return;
       }
 
@@ -330,6 +355,26 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
+      {!isGameOver && !isShopOpen && (
+        <button
+          type="button"
+          className="floating-shop-button"
+          aria-label="Ouvrir la boutique"
+          onClick={() => void openShop()}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            focusable="false"
+          >
+            <path d="M4 5h2.1l1.7 9.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 1.9-1.4l1.2-4.4H8.1" />
+            <path d="M8.7 8h11.8" />
+            <circle cx="10" cy="19" r="1.6" />
+            <circle cx="17" cy="19" r="1.6" />
+          </svg>
+        </button>
+      )}
+
       {isGameOver && !isShopOpen && (
         <section className="game-over" role="dialog" aria-modal="true">
           <div className="game-over__card">
@@ -411,7 +456,7 @@ export default function App(): React.JSX.Element {
                     !isOwned && playerProfile.watermelons < item.price;
 
                   const buttonLabel = isEquipped
-                    ? 'ÉQUIPÉ'
+                    ? 'DÉSÉQUIPER'
                     : isOwned
                       ? 'ÉQUIPER'
                       : 'ACHETER';
@@ -452,7 +497,7 @@ export default function App(): React.JSX.Element {
                         className={`shop-item__button${
                           isEquipped ? ' is-equipped' : ''
                         }${cannotAfford ? ' is-unaffordable' : ''}`}
-                        disabled={isEquipped || isPending}
+                        disabled={isPending}
                         onClick={() => void handleShopItemAction(item)}
                       >
                         {isPending ? '...' : buttonLabel}
