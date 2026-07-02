@@ -27,7 +27,7 @@ import {
 } from './shop/shopCatalog';
 
 type TutorialSide = 'left' | 'right' | null;
-type ShopTab = 'accessories' | 'talents';
+type ShopTab = 'accessories' | 'talents' | 'items';
 
 const TALENT_TREE_NODES = [
   {
@@ -59,6 +59,24 @@ const TALENT_TREE_NODES = [
     title: 'Atterrissage',
     level: '0/1',
     price: 80,
+  },
+] as const;
+
+const SHOP_OBJECT_SLOTS = [
+  {
+    id: 'extra-life',
+    title: 'Vie bonus',
+    icon: '/assets/ui/vie/1.png',
+  },
+  {
+    id: 'shield-charge',
+    title: 'Bouclier',
+    icon: '/assets/ui/bouclier/1.png',
+  },
+  {
+    id: 'coming-soon',
+    title: 'Bientot',
+    icon: '/assets/collectable/pasteque.png',
   },
 ] as const;
 
@@ -474,18 +492,7 @@ export default function App(): React.JSX.Element {
           className="floating-shop-button"
           aria-label="Ouvrir la boutique"
           onClick={() => void openShop()}
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            focusable="false"
-          >
-            <path d="M4 5h2.1l1.7 9.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 1.9-1.4l1.2-4.4H8.1" />
-            <path d="M8.7 8h11.8" />
-            <circle cx="10" cy="19" r="1.6" />
-            <circle cx="17" cy="19" r="1.6" />
-          </svg>
-        </button>
+        />
       )}
 
       {isGameOver && !isShopOpen && (
@@ -532,6 +539,15 @@ export default function App(): React.JSX.Element {
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={selectedShopTab === 'items'}
+                  className={selectedShopTab === 'items' ? 'is-active' : ''}
+                  onClick={() => setSelectedShopTab('items')}
+                >
+                  Objets
+                </button>
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={selectedShopTab === 'talents'}
                   className={selectedShopTab === 'talents' ? 'is-active' : ''}
                   onClick={() => setSelectedShopTab('talents')}
@@ -542,7 +558,7 @@ export default function App(): React.JSX.Element {
 
               <div
                 className={`shop-toolbar${
-                  selectedShopTab === 'talents' ? ' shop-toolbar--talents' : ''
+                  selectedShopTab !== 'accessories' ? ' shop-toolbar--simple' : ''
                 }`}
               >
                 {selectedShopTab === 'accessories' && (
@@ -646,6 +662,22 @@ export default function App(): React.JSX.Element {
                     </article>
                   );
                   })}
+                </div>
+              )}
+
+              {selectedShopTab === 'items' && (
+                <div className="shop-object-grid" role="tabpanel">
+                  {SHOP_OBJECT_SLOTS.map((item) => (
+                    <article className="shop-object-card" key={item.id}>
+                      <div className="shop-object-card__icon" aria-hidden="true">
+                        <img src={item.icon} alt="" />
+                      </div>
+                      <h2>{item.title}</h2>
+                      <button type="button" disabled>
+                        BIENTOT
+                      </button>
+                    </article>
+                  ))}
                 </div>
               )}
 

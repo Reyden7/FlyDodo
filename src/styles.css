@@ -364,38 +364,20 @@ button {
   right: max(15px, env(safe-area-inset-right));
   bottom: max(22px, calc(env(safe-area-inset-bottom) + 22px));
   z-index: 16;
-  display: grid;
-  width: 58px;
-  height: 58px;
-  place-items: center;
-  border: 3px solid rgb(255 255 255 / 90%);
-  border-radius: 50%;
-  color: #173a62;
-  background:
-    linear-gradient(180deg, #fff7d7, #f7cb51);
-  box-shadow:
-    0 6px 0 #d27b1d,
-    0 11px 24px rgb(35 68 84 / 24%),
-    inset 0 1px 0 rgb(255 255 255 / 70%);
+  width: 74px;
+  height: 74px;
+  padding: 0;
+  border: 0;
+  background: url("/assets/ui/bt/shop-normal.png") center / contain no-repeat;
   cursor: pointer;
-}
-
-.floating-shop-button svg {
-  width: 30px;
-  height: 30px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.35;
+  filter: drop-shadow(0 7px 7px rgb(35 68 84 / 26%));
+  -webkit-tap-highlight-color: transparent;
 }
 
 .floating-shop-button:active {
-  transform: translateY(4px);
-  box-shadow:
-    0 2px 0 #d27b1d,
-    0 7px 18px rgb(35 68 84 / 20%),
-    inset 0 1px 0 rgb(255 255 255 / 70%);
+  background-image: url("/assets/ui/bt/shop-clicked.png");
+  transform: translateY(2px);
+  filter: drop-shadow(0 4px 5px rgb(35 68 84 / 22%));
 }
 
 .game-over {
@@ -640,8 +622,8 @@ button {
 
 .shop-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
   margin-bottom: 11px;
 }
 
@@ -654,7 +636,7 @@ button {
   color: #173a62;
   background: rgb(255 255 255 / 44%);
   box-shadow: 0 5px 0 rgb(191 130 23 / 54%);
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   font-weight: 1000;
   letter-spacing: 0.04em;
 }
@@ -677,11 +659,11 @@ button {
   align-items: stretch;
 }
 
-.shop-toolbar--talents {
+.shop-toolbar--simple {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.shop-toolbar--talents .shop-wallet {
+.shop-toolbar--simple .shop-wallet {
   justify-self: end;
 }
 
@@ -788,6 +770,64 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 11px;
+}
+
+.shop-object-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shop-object-card {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding: 12px;
+  border: 3px solid white;
+  border-radius: 21px;
+  background: linear-gradient(180deg, #ffffff, #e8f4f8);
+  box-shadow:
+    0 7px 0 #bfd5df,
+    0 12px 22px rgb(32 85 111 / 16%);
+  text-align: center;
+}
+
+.shop-object-card__icon {
+  display: grid;
+  height: 88px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #d7f2ff, #74b8dc);
+  box-shadow: inset 0 -5px 0 rgb(0 0 0 / 8%);
+}
+
+.shop-object-card__icon img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 4px rgb(0 0 0 / 18%));
+}
+
+.shop-object-card h2 {
+  min-height: 32px;
+  margin: 0;
+  color: #173a62;
+  font-size: clamp(0.76rem, 3.2vw, 0.92rem);
+  line-height: 1.08;
+}
+
+.shop-object-card button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  background: #315b78;
+  box-shadow: 0 5px 0 #173a62;
+  font-size: 0.7rem;
+  font-weight: 1000;
+  letter-spacing: 0.05em;
+  opacity: 0.82;
 }
 
 .talent-tree {
@@ -1108,7 +1148,8 @@ button {
 
   .shop-tabs button {
     min-height: 36px;
-    font-size: 0.68rem;
+    padding-inline: 5px;
+    font-size: 0.58rem;
   }
 
   .shop-filter select,
@@ -1131,6 +1172,19 @@ button {
 
   .shop-item__icon span {
     font-size: 2.7rem;
+  }
+
+  .shop-object-card {
+    padding: 9px;
+  }
+
+  .shop-object-card__icon {
+    height: 72px;
+  }
+
+  .shop-object-card__icon img {
+    width: 58px;
+    height: 58px;
   }
 
   .talent-tree {
