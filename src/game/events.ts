@@ -5,6 +5,10 @@ export interface FlightHudDetail {
   bestAltitude: number;
   speed: number;
   watermelons: number;
+  lives: number;
+  maxLives: number;
+  shield: number;
+  maxShield: number;
 }
 
 export interface FallWarningDetail {
@@ -49,6 +53,10 @@ export function emitCosmeticEquipped(detail: CosmeticEquippedDetail): void {
 
 export function emitGameOver(): void {
   gameEvents.dispatchEvent(new Event('flydodo:game-over'));
+}
+
+export function emitMovementStarted(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:movement-started'));
 }
 
 export function requestRestart(): void {

@@ -3,6 +3,7 @@ import {
   emitFallWarning,
   emitFlightHud,
   emitGameOver,
+  emitMovementStarted,
   emitWalletUpdated,
   gameEvents,
   type CosmeticEquippedDetail,
@@ -44,16 +45,16 @@ const CAMERA_FALL_FOLLOW_SPEED = 1.15;
 const CAMERA_MAX_FALL_CATCHUP = 360;
 
 const GRAVITY_Y = 800;
-const FLAP_UPWARD_IMPULSE = 170;
+const FLAP_UPWARD_IMPULSE = 250; //170 
 const FLAP_SIDE_IMPULSE = 30;
 const MAX_HORIZONTAL_SPEED = 300;
 const MAX_VERTICAL_SPEED = 450;
 const VELOCITY_ALIGNMENT = 0.62;
 
-const FLAP_TURN_IMPULSE = 112;
-const MAX_TURN_RATE = 112;
-const TURN_DAMPING = 5.2;
-const AUTO_LEVEL_SPEED = 0;
+const FLAP_TURN_IMPULSE = 112; 
+const MAX_TURN_RATE = 112; 
+const TURN_DAMPING = 5.2; 
+const AUTO_LEVEL_SPEED = 1; //0
 
 const BASE_WING_BEATS_PER_SECOND = 2.4;
 const FAST_WING_MULTIPLIER = 0;
@@ -81,6 +82,9 @@ const FOREST_BRANCH_LEFT_SOURCE_KEY = 'forest-branch-left-source';
 const FOREST_MOSQUITO_TEXTURE_PREFIX = 'forest-mosquito';
 const FOREST_MOSQUITO_ANIMATION_KEY = 'forest-mosquito-fly';
 const FOREST_MOSQUITO_FRAME_COUNT = 25;
+const PTERODACTYL_TEXTURE_PREFIX = 'low-sky-pterodactyl';
+const PTERODACTYL_ANIMATION_KEY = 'low-sky-pterodactyl-fly';
+const PTERODACTYL_FRAME_COUNT = 16;
 const LAVA_TEXTURE_KEY = 'lava-flow';
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
 const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
@@ -101,10 +105,17 @@ const BRANCH_EDGE_OVERHANG = 20;
 const MOSQUITO_CIRCLE_DURATION_MS = 1_800;
 const MOSQUITO_HITBOX_WIDTH_RATIO = 0.42;
 const MOSQUITO_HITBOX_HEIGHT_RATIO = 0.34;
+const PTERODACTYL_PATROL_SPEED = 95;
+const PTERODACTYL_TURN_DELAY_MS = 180;
 const PLAYER_MANUAL_HITBOX_WIDTH_RATIO = 0.46;
 const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
+const PLAYER_BASE_LIVES = 1;
+const PLAYER_BASE_SHIELD = 0;
+const PLAYER_DAMAGE_INVULNERABILITY_MS = 900;
 const LAVA_START_DELAY_MS = 1_000;
-const LAVA_RISE_SPEED = 42;
+const LAVA_INITIAL_RISE_SPEED = 60;
+const LAVA_SPEED_GAIN_PER_100_METRES = 4;
+const LAVA_MAX_RISE_SPEED = 240;
 const LAVA_START_Y = GROUND_Y + GROUND_DIRT_HEIGHT;
 const LAVA_ALPHA = 1;
 const LAVA_DEPTH = 13;
@@ -174,6 +185,12 @@ interface MosquitoCircleMotion {
   radius: number;
   startAngle: number;
   direction: 1 | -1;
+}
+
+interface PterodactylPatrolMotion {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  direction: 1 | -1;
+  resumeAt: number;
 }
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
@@ -356,9 +373,11 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   },
   {
     id: 'pterodactyl',
-    textureKey: 'obstacle-pterodactyl-placeholder',
-    width: 58,
-    height: 38,
+    textureKey: `${PTERODACTYL_TEXTURE_PREFIX}-000`,
+    width: 96,
+    height: 70,
+    displayWidth: 96,
+    animationKey: PTERODACTYL_ANIMATION_KEY,
     fillColor: 0x8a6b5b,
     strokeColor: 0x3a2a23,
   },
@@ -603,6 +622,7 @@ export class GameplayScene extends Phaser.Scene {
   private watermelonCollectables!: Phaser.Physics.Arcade.StaticGroup;
   private obstacleGroup!: Phaser.Physics.Arcade.Group;
   private mosquitoCircleMotions: MosquitoCircleMotion[] = [];
+  private pterodactylPatrols: PterodactylPatrolMotion[] = [];
   private flightSound?: Phaser.Sound.BaseSound;
   private cosmeticImages = new Map<
     CosmeticCategory,
@@ -641,6 +661,12 @@ export class GameplayScene extends Phaser.Scene {
   private currentAltitude = 0;
   private currentSpeed = 0;
   private watermelons = 0;
+  private playerMaxLives = PLAYER_BASE_LIVES;
+  private playerLives = PLAYER_BASE_LIVES;
+  private playerMaxShield = PLAYER_BASE_SHIELD;
+  private playerShield = PLAYER_BASE_SHIELD;
+  private lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
+  private hasEmittedMovementStarted = false;
   private maxAltitudeSinceTakeoff = 0;
   private isGrounded = true;
 
@@ -681,6 +707,13 @@ export class GameplayScene extends Phaser.Scene {
       this.load.image(
         `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
         `/assets/obstacles/forest/moustik/${paddedIndex}.png`,
+      );
+    }
+    for (let index = 0; index < PTERODACTYL_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(3, '0');
+      this.load.image(
+        `${PTERODACTYL_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/obstacles/lowSky/pterodactyl/frame_${paddedIndex}.png`,
       );
     }
     this.load.image(LAVA_TEXTURE_KEY, '/assets/obstacles/lave/lave.png');
@@ -816,6 +849,7 @@ export class GameplayScene extends Phaser.Scene {
 
     const direction = this.consumeFlapDirection(time);
     this.updateMosquitoCircleMotions(time);
+    this.updatePterodactylPatrols(time);
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
@@ -1187,6 +1221,12 @@ export class GameplayScene extends Phaser.Scene {
     this.currentAltitude = 0;
     this.currentSpeed = 0;
     this.watermelons = 0;
+    this.playerMaxLives = PLAYER_BASE_LIVES;
+    this.playerLives = PLAYER_BASE_LIVES;
+    this.playerMaxShield = PLAYER_BASE_SHIELD;
+    this.playerShield = PLAYER_BASE_SHIELD;
+    this.lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
+    this.hasEmittedMovementStarted = false;
     this.maxAltitudeSinceTakeoff = 0;
     this.isGrounded = true;
     this.lastHudSignature = '';
@@ -1200,6 +1240,7 @@ export class GameplayScene extends Phaser.Scene {
     this.lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
     this.legAnimationTime = 0;
     this.mosquitoCircleMotions = [];
+    this.pterodactylPatrols = [];
     this.lavaTopY = LAVA_START_Y;
     this.runStartTime = 0;
   }
@@ -1303,6 +1344,19 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
+    if (!this.anims.exists(PTERODACTYL_ANIMATION_KEY)) {
+      this.anims.create({
+        key: PTERODACTYL_ANIMATION_KEY,
+        frames: Array.from({ length: PTERODACTYL_FRAME_COUNT }, (_value, index) => {
+          const paddedIndex = index.toString().padStart(3, '0');
+          return {
+            key: `${PTERODACTYL_TEXTURE_PREFIX}-${paddedIndex}`,
+          };
+        }),
+        frameRate: 14,
+        repeat: -1,
+      });
+    }
   }
 
   private createSkyDecor(): void {
@@ -1513,16 +1567,27 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    this.lavaTopY = Math.max(0, this.lavaTopY - LAVA_RISE_SPEED * deltaSeconds);
+    this.lavaTopY = Math.max(0, this.lavaTopY - this.getLavaRiseSpeed() * deltaSeconds);
     this.renderLava();
 
     if (this.player.getBounds().bottom - LAVA_PLAYER_BOTTOM_CONTACT_OFFSET >= this.lavaTopY) {
-      void this.finishGame('lava');
+      void this.damagePlayer(1, 'lava');
     }
   }
 
   private renderLava(): void {
     this.lava.setPosition(GAME_WIDTH / 2, this.lavaTopY);
+  }
+
+  private getLavaRiseSpeed(): number {
+    const altitudeStepCount = Math.floor(
+      Math.max(this.currentAltitude, this.maxAltitudeSinceTakeoff) / 100,
+    );
+
+    return Math.min(
+      LAVA_MAX_RISE_SPEED,
+      LAVA_INITIAL_RISE_SPEED + altitudeStepCount * LAVA_SPEED_GAIN_PER_100_METRES,
+    );
   }
 
   private createAltitudeObstacles(): void {
@@ -1569,10 +1634,17 @@ export class GameplayScene extends Phaser.Scene {
           .setData('levelLabel', level.label)
           .setData('kind', obstacleKind.id)
           .setData('altitude', Math.round(altitude));
+        if (obstacleKind.animationKey) {
+          obstacle.play(obstacleKind.animationKey);
+        }
         obstacle.body.setAllowGravity(false);
         obstacle.body.setImmovable(true);
         obstacle.body.setVelocity(0, 0);
         obstacle.body.reset(obstacle.x, obstacle.y);
+
+        if (obstacleKind.id === 'pterodactyl') {
+          this.registerPterodactylPatrol(obstacle);
+        }
 
         previousX = x;
         altitude += Phaser.Math.Between(level.spacingMin, level.spacingMax);
@@ -1657,8 +1729,63 @@ export class GameplayScene extends Phaser.Scene {
           ),
         )
       ) {
-        void this.finishGame();
+        void this.damagePlayer();
       }
+    }
+  }
+
+  private registerPterodactylPatrol(
+    pterodactyl: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+  ): void {
+    const direction: 1 | -1 = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
+    const startX =
+      direction === 1
+        ? -pterodactyl.displayWidth / 2
+        : GAME_WIDTH + pterodactyl.displayWidth / 2;
+
+    pterodactyl.setPosition(startX, pterodactyl.y);
+    pterodactyl.setFlipX(direction === -1);
+    pterodactyl.body.reset(pterodactyl.x, pterodactyl.y);
+    pterodactyl.body.setVelocityX(direction * PTERODACTYL_PATROL_SPEED);
+
+    this.pterodactylPatrols.push({
+      sprite: pterodactyl,
+      direction,
+      resumeAt: 0,
+    });
+  }
+
+  private updatePterodactylPatrols(time: number): void {
+    for (const patrol of this.pterodactylPatrols) {
+      const { sprite } = patrol;
+
+      if (!sprite.active) {
+        continue;
+      }
+
+      if (patrol.resumeAt > time) {
+        sprite.body.setVelocityX(0);
+        continue;
+      }
+
+      if (patrol.resumeAt !== 0) {
+        patrol.resumeAt = 0;
+        sprite.body.setVelocityX(patrol.direction * PTERODACTYL_PATROL_SPEED);
+      }
+
+      const halfWidth = sprite.displayWidth / 2;
+      const isOutOnRight = patrol.direction === 1 && sprite.x - halfWidth > GAME_WIDTH;
+      const isOutOnLeft = patrol.direction === -1 && sprite.x + halfWidth < 0;
+
+      if (!isOutOnRight && !isOutOnLeft) {
+        continue;
+      }
+
+      patrol.direction = patrol.direction === 1 ? -1 : 1;
+      patrol.resumeAt = time + PTERODACTYL_TURN_DELAY_MS;
+      sprite.setFlipX(patrol.direction === -1);
+      sprite.body.setVelocityX(0);
+      sprite.body.reset(sprite.x, sprite.y);
     }
   }
 
@@ -1822,7 +1949,7 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    void this.finishGame();
+    void this.damagePlayer();
   };
 
   private createOffscreenIndicator(): void {
@@ -1878,6 +2005,7 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       this.lastAcceptedFlapTime = time;
+      this.emitMovementStartedOnce();
       return direction;
     };
 
@@ -1915,6 +2043,15 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     return 0;
+  }
+
+  private emitMovementStartedOnce(): void {
+    if (this.hasEmittedMovementStarted) {
+      return;
+    }
+
+    this.hasEmittedMovementStarted = true;
+    emitMovementStarted();
   }
 
   private updateFlight(direction: number, deltaSeconds: number): void {
@@ -2204,6 +2341,10 @@ export class GameplayScene extends Phaser.Scene {
       this.bestAltitude,
       this.currentSpeed,
       this.watermelons,
+      this.playerMaxLives,
+      this.playerLives,
+      this.playerMaxShield,
+      this.playerShield,
     ].join(':');
 
     if (signature === this.lastHudSignature) {
@@ -2216,6 +2357,10 @@ export class GameplayScene extends Phaser.Scene {
       bestAltitude: this.bestAltitude,
       speed: this.currentSpeed,
       watermelons: this.watermelons,
+      lives: this.playerLives,
+      maxLives: this.playerMaxLives,
+      shield: this.playerShield,
+      maxShield: this.playerMaxShield,
     });
   }
 
@@ -2267,12 +2412,50 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
+  private async damagePlayer(
+    amount = 1,
+    reason: 'default' | 'lava' = 'default',
+  ): Promise<void> {
+    if (this.gameOver) {
+      return;
+    }
+
+    const now = this.time.now;
+
+    if (now - this.lastPlayerDamageTime < PLAYER_DAMAGE_INVULNERABILITY_MS) {
+      return;
+    }
+
+    this.lastPlayerDamageTime = now;
+    let remainingDamage = Math.max(0, Math.floor(amount));
+
+    if (remainingDamage === 0) {
+      return;
+    }
+
+    const absorbedDamage = Math.min(this.playerShield, remainingDamage);
+    this.playerShield -= absorbedDamage;
+    remainingDamage -= absorbedDamage;
+
+    if (remainingDamage > 0) {
+      this.playerLives = Math.max(0, this.playerLives - remainingDamage);
+    }
+
+    this.emitHud();
+
+    if (this.playerLives <= 0) {
+      await this.finishGame(reason);
+    }
+  }
+
   private async finishGame(reason: 'default' | 'lava' = 'default'): Promise<void> {
     if (this.gameOver) {
       return;
     }
 
     this.gameOver = true;
+    this.playerLives = 0;
+    this.emitHud();
     this.stopFlightSounds();
     this.angularVelocity = 180;
     this.player.setAcceleration(0, GRAVITY_Y * 1.4);

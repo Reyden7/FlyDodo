@@ -27,6 +27,40 @@ import {
 } from './shop/shopCatalog';
 
 type TutorialSide = 'left' | 'right' | null;
+type ShopTab = 'accessories' | 'talents';
+
+const TALENT_TREE_NODES = [
+  {
+    id: 'stronger-flap',
+    title: 'Battement',
+    level: '0/3',
+    price: 25,
+  },
+  {
+    id: 'steady-body',
+    title: 'Stabilite',
+    level: '0/3',
+    price: 35,
+  },
+  {
+    id: 'lava-delay',
+    title: 'Sang-froid',
+    level: '0/3',
+    price: 45,
+  },
+  {
+    id: 'watermelon-magnet',
+    title: 'Aimant',
+    level: '0/3',
+    price: 55,
+  },
+  {
+    id: 'soft-landing',
+    title: 'Atterrissage',
+    level: '0/1',
+    price: 80,
+  },
+] as const;
 
 function ShopItemPreview({ item }: { item: ShopItem }): React.JSX.Element {
   const [imageFailed, setImageFailed] = useState(false);
@@ -51,20 +85,65 @@ function ShopItemPreview({ item }: { item: ShopItem }): React.JSX.Element {
   );
 }
 
+function SurvivalIconRow({
+  label,
+  current,
+  max,
+  fullSrc,
+  emptySrc,
+}: {
+  label: string;
+  current: number;
+  max: number;
+  fullSrc: string;
+  emptySrc: string;
+}): React.JSX.Element | null {
+  const iconCount = Math.max(0, Math.floor(max));
+  const fullIconCount = Math.min(iconCount, Math.max(0, Math.floor(current)));
+
+  if (iconCount === 0) {
+    return null;
+  }
+
+  return (
+    <div className="survival-icons__row" aria-label={`${label} ${current}/${max}`}>
+      {Array.from({ length: iconCount }, (_value, index) => {
+        const isFull = index < fullIconCount;
+
+        return (
+          <img
+            key={`${label}-${index}`}
+            src={isFull ? fullSrc : emptySrc}
+            alt=""
+            aria-hidden="true"
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App(): React.JSX.Element {
   const [altitude, setAltitude] = useState(0);
   const [bestAltitude, setBestAltitude] = useState(0);
   const [speed, setSpeed] = useState(0);
   const [watermelons, setWatermelons] = useState(0);
+  const [lives, setLives] = useState(1);
+  const [maxLives, setMaxLives] = useState(1);
+  const [shield, setShield] = useState(0);
+  const [maxShield, setMaxShield] = useState(0);
   const [fallSeconds, setFallSeconds] = useState<number | null>(null);
   const [warningReason, setWarningReason] = useState<'fall' | 'side'>('fall');
   const [isGameOver, setIsGameOver] = useState(false);
+  const [hasMovedThisRun, setHasMovedThisRun] = useState(false);
 
   const [showControlTutorial, setShowControlTutorial] = useState(true);
   const [tutorialSide, setTutorialSide] = useState<TutorialSide>(null);
   const tutorialAcknowledgedRef = useRef(false);
 
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [selectedShopTab, setSelectedShopTab] =
+    useState<ShopTab>('accessories');
   const [selectedCategory, setSelectedCategory] =
     useState<ShopFilterCategory>('all');
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(
@@ -90,6 +169,10 @@ export default function App(): React.JSX.Element {
       setBestAltitude(hud.bestAltitude);
       setSpeed(hud.speed);
       setWatermelons(hud.watermelons);
+      setLives(hud.lives);
+      setMaxLives(hud.maxLives);
+      setShield(hud.shield);
+      setMaxShield(hud.maxShield);
     };
 
     const onWalletUpdated = (event: Event): void => {
@@ -115,16 +198,22 @@ export default function App(): React.JSX.Element {
       setIsGameOver(true);
     };
 
+    const onMovementStarted = (): void => {
+      setHasMovedThisRun(true);
+    };
+
     gameEvents.addEventListener('flydodo:hud', onHud);
     gameEvents.addEventListener('flydodo:wallet-updated', onWalletUpdated);
     gameEvents.addEventListener('flydodo:fall-warning', onFallWarning);
     gameEvents.addEventListener('flydodo:game-over', onGameOver);
+    gameEvents.addEventListener('flydodo:movement-started', onMovementStarted);
 
     return () => {
       gameEvents.removeEventListener('flydodo:hud', onHud);
       gameEvents.removeEventListener('flydodo:wallet-updated', onWalletUpdated);
       gameEvents.removeEventListener('flydodo:fall-warning', onFallWarning);
       gameEvents.removeEventListener('flydodo:game-over', onGameOver);
+      gameEvents.removeEventListener('flydodo:movement-started', onMovementStarted);
     };
   }, []);
 
@@ -202,11 +291,17 @@ export default function App(): React.JSX.Element {
     setAltitude(0);
     setSpeed(0);
     setWatermelons(0);
+    setLives(1);
+    setMaxLives(1);
+    setShield(0);
+    setMaxShield(0);
+    setHasMovedThisRun(false);
     requestRestart();
   };
 
   const openShop = async (): Promise<void> => {
     setShopNotice(null);
+    setSelectedShopTab('accessories');
     requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
@@ -292,11 +387,29 @@ export default function App(): React.JSX.Element {
             <span>ALTITUDE</span>
             <strong>{altitude} m</strong>
           </div>
+
         </div>
 
         <div className="hud-pill hud-pill--watermelons">
           <span>PASTÈQUES</span>
           <strong>{watermelons}</strong>
+        </div>
+
+        <div className="survival-icons">
+          <SurvivalIconRow
+            label="Vie"
+            current={lives}
+            max={maxLives}
+            fullSrc="/assets/ui/vie/1.png"
+            emptySrc="/assets/ui/vie/2.png"
+          />
+          <SurvivalIconRow
+            label="Bouclier"
+            current={shield}
+            max={maxShield}
+            fullSrc="/assets/ui/bouclier/1.png"
+            emptySrc="/assets/ui/bouclier/2.png"
+          />
         </div>
       </section>
 
@@ -355,7 +468,7 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
-      {!isGameOver && !isShopOpen && (
+      {!isGameOver && !isShopOpen && !hasMovedThisRun && (
         <button
           type="button"
           className="floating-shop-button"
@@ -406,8 +519,34 @@ export default function App(): React.JSX.Element {
               <p className="shop-header__eyebrow">PERSONNALISE TON DODO</p>
               <h1>BOUTIQUE</h1>
 
-              <div className="shop-toolbar">
-                <label className="shop-filter">
+              <div className="shop-tabs" role="tablist" aria-label="Sections boutique">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedShopTab === 'accessories'}
+                  className={selectedShopTab === 'accessories' ? 'is-active' : ''}
+                  onClick={() => setSelectedShopTab('accessories')}
+                >
+                  Accessoires
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedShopTab === 'talents'}
+                  className={selectedShopTab === 'talents' ? 'is-active' : ''}
+                  onClick={() => setSelectedShopTab('talents')}
+                >
+                  Arbre talents
+                </button>
+              </div>
+
+              <div
+                className={`shop-toolbar${
+                  selectedShopTab === 'talents' ? ' shop-toolbar--talents' : ''
+                }`}
+              >
+                {selectedShopTab === 'accessories' && (
+                  <label className="shop-filter">
                   <span>CATÉGORIE</span>
                   <select
                     value={selectedCategory}
@@ -423,7 +562,8 @@ export default function App(): React.JSX.Element {
                       </option>
                     ))}
                   </select>
-                </label>
+                  </label>
+                )}
 
                 <div className="shop-wallet" aria-label="Pastèques disponibles">
                   <img
@@ -446,8 +586,9 @@ export default function App(): React.JSX.Element {
             )}
 
             <div className="shop-content">
-              <div className="shop-grid">
-                {filteredShopItems.map((item) => {
+              {selectedShopTab === 'accessories' && (
+                <div className="shop-grid">
+                  {filteredShopItems.map((item) => {
                   const isOwned = playerProfile.ownedItemIds.includes(item.id);
                   const isEquipped =
                     playerProfile.equipped[item.category] === item.id;
@@ -504,8 +645,34 @@ export default function App(): React.JSX.Element {
                       </button>
                     </article>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
+
+              {selectedShopTab === 'talents' && (
+                <div className="talent-tree" role="tabpanel">
+                  {TALENT_TREE_NODES.map((talent, index) => (
+                    <article
+                      className={`talent-node talent-node--${index + 1}`}
+                      key={talent.id}
+                    >
+                      <div className="talent-node__orb" aria-hidden="true" />
+                      <div className="talent-node__body">
+                        <h2>{talent.title}</h2>
+                        <span>{talent.level}</span>
+                      </div>
+                      <button type="button" disabled>
+                        <img
+                          src="/assets/collectable/pasteque.png"
+                          alt=""
+                          aria-hidden="true"
+                        />
+                        {talent.price}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
 
             <footer className="shop-footer">
