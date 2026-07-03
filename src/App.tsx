@@ -576,7 +576,7 @@ export default function App(): React.JSX.Element {
               >
                 {selectedShopTab === 'accessories' && (
                   <div className="shop-filter" aria-label="Catégories">
-                  <span>CATÉGORIE</span>
+                  
                     <div className="shop-filter__options">
                     {SHOP_CATEGORY_OPTIONS.filter(
                       (option) => option.value !== 'outfit',

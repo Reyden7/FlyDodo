@@ -747,9 +747,9 @@ button {
 
 .shop-panel--accessories .shop-toolbar {
   position: absolute;
-  top: calc(100% + 8px);
-  right: max(16px, env(safe-area-inset-right));
-  left: max(16px, env(safe-area-inset-left));
+  top: calc(100% + 2px);
+  right: 0;
+  left: 0;
   z-index: 4;
 }
 
@@ -764,8 +764,11 @@ button {
 .shop-filter {
   display: grid;
   min-width: 0;
-  gap: 3px;
-  padding: 0;
+  margin-top: -11px;
+  min-height: 63px;
+  gap: 1px;
+  padding: 0px 16px 20px;
+  background: url("/assets/ui/bg-filter.png") center / 120% 140% no-repeat;
   text-align: center;
 }
 
@@ -780,16 +783,17 @@ button {
 .shop-filter__options {
   display: grid;
   grid-template-columns: 0.82fr repeat(4, 1fr);
-  gap: 5px;
+  gap: 6px;
   align-items: center;
-  padding: 0 2px;
+  padding: 0;
 }
 
 .shop-filter__button {
   min-width: 0;
-  min-height: 30px;
+  min-height: 35px;
   padding: 0;
   border: 0;
+  margin-bottom: -20px;
   background-color: transparent;
   background-position: center;
   background-repeat: no-repeat;
@@ -918,7 +922,7 @@ button {
 .shop-panel--accessories .shop-content {
   position: relative;
   z-index: 1;
-  padding: 82px 16px 28px;
+  padding: 94px 16px 28px;
   background: url("/assets/ui/bg-shop.png") center top / 100% 100% no-repeat;
 }
 
@@ -1348,18 +1352,21 @@ button {
     min-height: 36px;
   }
 
-  .shop-filter select {
-    height: 44px;
+  .shop-filter {
+    min-height: 55px;
+    padding: 7px 14px 8px;
+  }
+
+  .shop-filter__button {
+    min-height: 25px;
   }
 
   .shop-panel--accessories .shop-toolbar {
-    top: calc(100% + 6px);
-    right: max(14px, env(safe-area-inset-right));
-    left: max(14px, env(safe-area-inset-left));
+    top: calc(100% + 1px);
   }
 
   .shop-panel--accessories .shop-content {
-    padding-top: 74px;
+    padding-top: 82px;
   }
 
   .shop-wallet {
