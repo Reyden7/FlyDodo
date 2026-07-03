@@ -53,16 +53,19 @@ const SHOP_OBJECT_SLOTS = [
     id: 'extra-life',
     title: 'Vie bonus',
     icon: '/assets/ui/vie/1.png',
+    price: 50,
   },
   {
     id: 'shield-charge',
     title: 'Bouclier',
     icon: '/assets/ui/bouclier/1.png',
+    price: 40,
   },
   {
     id: 'coming-soon',
     title: 'Bientot',
     icon: '/assets/collectable/pasteque.png',
+    price: 25,
   },
 ] as const;
 
@@ -690,8 +693,20 @@ export default function App(): React.JSX.Element {
                         <img src={item.icon} alt="" />
                       </div>
                       <h2>{item.title}</h2>
-                      <button type="button" disabled>
-                        BIENTOT
+                      <div className="shop-object-card__price">
+                        <img
+                          src="/assets/collectable/pasteque.png"
+                          alt=""
+                          aria-hidden="true"
+                        />
+                        <strong>{item.price}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="shop-object-card__button"
+                        onClick={() => setShopNotice('Objet bientôt disponible')}
+                      >
+                        <span className="visually-hidden">Acheter</span>
                       </button>
                     </article>
                   ))}
