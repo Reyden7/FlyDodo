@@ -28,37 +28,23 @@ import {
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
+type TalentTreeTab = 'control' | 'endurance' | 'talents';
 
-const TALENT_TREE_NODES = [
+const TALENT_TREE_TABS: ReadonlyArray<{
+  id: TalentTreeTab;
+  label: string;
+}> = [
   {
-    id: 'stronger-flap',
-    title: 'Battement',
-    level: '0/3',
-    price: 25,
+    id: 'control',
+    label: 'Contrôle',
   },
   {
-    id: 'steady-body',
-    title: 'Stabilite',
-    level: '0/3',
-    price: 35,
+    id: 'endurance',
+    label: 'Endurance',
   },
   {
-    id: 'lava-delay',
-    title: 'Sang-froid',
-    level: '0/3',
-    price: 45,
-  },
-  {
-    id: 'watermelon-magnet',
-    title: 'Aimant',
-    level: '0/3',
-    price: 55,
-  },
-  {
-    id: 'soft-landing',
-    title: 'Atterrissage',
-    level: '0/1',
-    price: 80,
+    id: 'talents',
+    label: 'Talents',
   },
 ] as const;
 
@@ -162,6 +148,8 @@ export default function App(): React.JSX.Element {
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [selectedShopTab, setSelectedShopTab] =
     useState<ShopTab>('accessories');
+  const [selectedTalentTreeTab, setSelectedTalentTreeTab] =
+    useState<TalentTreeTab>('control');
   const [selectedCategory, setSelectedCategory] =
     useState<ShopFilterCategory>('all');
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(
@@ -320,6 +308,7 @@ export default function App(): React.JSX.Element {
   const openShop = async (): Promise<void> => {
     setShopNotice(null);
     setSelectedShopTab('accessories');
+    setSelectedTalentTreeTab('control');
     requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
@@ -521,38 +510,62 @@ export default function App(): React.JSX.Element {
 
       {isShopOpen && (
         <section className="shop-overlay" role="dialog" aria-modal="true">
-          <div className="shop-panel">
+          <div
+            className={`shop-panel shop-panel--${selectedShopTab}`}
+          >
+            <button
+              type="button"
+              className="shop-back-button"
+              aria-label="Retour"
+              onClick={closeShop}
+            />
+
             <header className="shop-header">
-              <p className="shop-header__eyebrow">PERSONNALISE TON DODO</p>
-              <h1>BOUTIQUE</h1>
+                <div className="shop-title" aria-label="Boutique">
+                <img src="/assets/ui/title.png" alt="" aria-hidden="true" />
+              </div>
+                <div className="shop-wallet" aria-label="PastÃ¨ques disponibles">
+                <strong>{playerProfile.watermelons}</strong>
+                <img
+                  src="/assets/collectable/pasteque.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </div>
 
               <div className="shop-tabs" role="tablist" aria-label="Sections boutique">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={selectedShopTab === 'accessories'}
-                  className={selectedShopTab === 'accessories' ? 'is-active' : ''}
+                  className={`shop-main-tab shop-main-tab--accessories${
+                    selectedShopTab === 'accessories' ? ' is-active' : ''
+                  }`}
                   onClick={() => setSelectedShopTab('accessories')}
                 >
-                  Accessoires
+                  <span className="visually-hidden">Accessoires</span>
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={selectedShopTab === 'items'}
-                  className={selectedShopTab === 'items' ? 'is-active' : ''}
+                  className={`shop-main-tab shop-main-tab--items${
+                    selectedShopTab === 'items' ? ' is-active' : ''
+                  }`}
                   onClick={() => setSelectedShopTab('items')}
                 >
-                  Objets
+                  <span className="visually-hidden">Objets</span>
                 </button>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={selectedShopTab === 'talents'}
-                  className={selectedShopTab === 'talents' ? 'is-active' : ''}
+                  className={`shop-main-tab shop-main-tab--talents${
+                    selectedShopTab === 'talents' ? ' is-active' : ''
+                  }`}
                   onClick={() => setSelectedShopTab('talents')}
                 >
-                  Arbre talents
+                  <span className="visually-hidden">Arbre talents</span>
                 </button>
               </div>
 
@@ -562,35 +575,34 @@ export default function App(): React.JSX.Element {
                 }`}
               >
                 {selectedShopTab === 'accessories' && (
-                  <label className="shop-filter">
+                  <div className="shop-filter" aria-label="Catégories">
                   <span>CATÉGORIE</span>
-                  <select
-                    value={selectedCategory}
-                    onChange={(event) =>
-                      setSelectedCategory(
-                        event.target.value as ShopFilterCategory,
-                      )
-                    }
-                  >
-                    {SHOP_CATEGORY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
+                    <div className="shop-filter__options">
+                    {SHOP_CATEGORY_OPTIONS.filter(
+                      (option) => option.value !== 'outfit',
+                    ).map((option) => (
+                      <button
+                        type="button"
+                        key={option.value}
+                        className={`shop-filter__button shop-filter__button--${option.value}${
+                          selectedCategory === option.value ? ' is-active' : ''
+                        }`}
+                        onClick={() => setSelectedCategory(option.value)}
+                      >
                         {option.label}
-                      </option>
+                      </button>
                     ))}
-                  </select>
-                  </label>
+                    </div>
+                  </div>
                 )}
 
-                <div className="shop-wallet" aria-label="Pastèques disponibles">
+                <div className="shop-wallet shop-wallet--toolbar" aria-label="Pastèques disponibles">
+                  <strong>{playerProfile.watermelons}</strong>
                   <img
                     src="/assets/collectable/pasteque.png"
                     alt=""
                     aria-hidden="true"
                   />
-                  <div>
-                    <span>MES PASTÈQUES</span>
-                    <strong>{playerProfile.watermelons}</strong>
-                  </div>
                 </div>
               </div>
             </header>
@@ -601,7 +613,11 @@ export default function App(): React.JSX.Element {
               </div>
             )}
 
-            <div className="shop-content">
+            <div
+              className={`shop-content${
+                selectedShopTab === 'talents' ? ' shop-content--talents' : ''
+              }`}
+            >
               {selectedShopTab === 'accessories' && (
                 <div className="shop-grid">
                   {filteredShopItems.map((item) => {
@@ -653,6 +669,7 @@ export default function App(): React.JSX.Element {
                         type="button"
                         className={`shop-item__button${
                           isEquipped ? ' is-equipped' : ''
+                        }${isOwned && !isEquipped ? ' is-owned' : ''
                         }${cannotAfford ? ' is-unaffordable' : ''}`}
                         disabled={isPending}
                         onClick={() => void handleShopItemAction(item)}
@@ -682,36 +699,35 @@ export default function App(): React.JSX.Element {
               )}
 
               {selectedShopTab === 'talents' && (
-                <div className="talent-tree" role="tabpanel">
-                  {TALENT_TREE_NODES.map((talent, index) => (
-                    <article
-                      className={`talent-node talent-node--${index + 1}`}
-                      key={talent.id}
-                    >
-                      <div className="talent-node__orb" aria-hidden="true" />
-                      <div className="talent-node__body">
-                        <h2>{talent.title}</h2>
-                        <span>{talent.level}</span>
-                      </div>
-                      <button type="button" disabled>
-                        <img
-                          src="/assets/collectable/pasteque.png"
-                          alt=""
-                          aria-hidden="true"
-                        />
-                        {talent.price}
+                <div className="talent-tree-panel" role="tabpanel">
+                  <div
+                    className="talent-tree-tabs"
+                    role="tablist"
+                    aria-label="Categories de talents"
+                  >
+                    {TALENT_TREE_TABS.map((tab) => (
+                      <button
+                        type="button"
+                        role="tab"
+                        key={tab.id}
+                        aria-selected={selectedTalentTreeTab === tab.id}
+                        className={`talent-tree-tab talent-tree-tab--${tab.id}${
+                          selectedTalentTreeTab === tab.id ? ' is-active' : ''
+                        }`}
+                        onClick={() => setSelectedTalentTreeTab(tab.id)}
+                      >
+                        {tab.label}
                       </button>
-                    </article>
-                  ))}
+                    ))}
+                  </div>
+                  <div
+                    className={`talent-tree-stage talent-tree-stage--${selectedTalentTreeTab}`}
+                    aria-hidden="true"
+                  />
                 </div>
               )}
             </div>
 
-            <footer className="shop-footer">
-              <button type="button" onClick={closeShop}>
-                ← RETOUR
-              </button>
-            </footer>
           </div>
         </section>
       )}
