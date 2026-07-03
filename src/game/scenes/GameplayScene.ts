@@ -16,6 +16,10 @@ import {
   type EquippedCosmetics,
 } from '../../services/saveService';
 import {
+  getControlTalentStats,
+  type ControlTalentStats,
+} from '../../talents/controlTalents';
+import {
   COSMETIC_CATEGORIES,
   getCosmeticTransform,
   getShopItemById,
@@ -45,16 +49,16 @@ const CAMERA_FALL_FOLLOW_SPEED = 1.15;
 const CAMERA_MAX_FALL_CATCHUP = 360;
 
 const GRAVITY_Y = 800;
-const FLAP_UPWARD_IMPULSE = 210; //170 
+const BASE_FLAP_UPWARD_IMPULSE = 160;
 const FLAP_SIDE_IMPULSE = 30;
 const MAX_HORIZONTAL_SPEED = 300;
 const MAX_VERTICAL_SPEED = 450;
 const VELOCITY_ALIGNMENT = 0.62;
 
-const FLAP_TURN_IMPULSE = 80; //112
+const BASE_FLAP_TURN_IMPULSE = 50;
 const MAX_TURN_RATE = 112; 
 const TURN_DAMPING = 5.2; 
-const AUTO_LEVEL_SPEED = 0; //0
+const BASE_AUTO_LEVEL_SPEED = 0;
 
 const BASE_WING_BEATS_PER_SECOND = 2.4;
 const FAST_WING_MULTIPLIER = 0;
@@ -665,6 +669,12 @@ export class GameplayScene extends Phaser.Scene {
   private playerLives = PLAYER_BASE_LIVES;
   private playerMaxShield = PLAYER_BASE_SHIELD;
   private playerShield = PLAYER_BASE_SHIELD;
+  private controlStats: ControlTalentStats = {
+    flapUpwardImpulse: BASE_FLAP_UPWARD_IMPULSE,
+    lift: 0,
+    autoLevelSpeed: BASE_AUTO_LEVEL_SPEED,
+    flapTurnImpulse: BASE_FLAP_TURN_IMPULSE,
+  };
   private lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
   private hasEmittedMovementStarted = false;
   private maxAltitudeSinceTakeoff = 0;
@@ -825,9 +835,11 @@ export class GameplayScene extends Phaser.Scene {
       'flydodo:cosmetic-equipped',
       this.handleCosmeticEquipped,
     );
+    gameEvents.addEventListener('flydodo:talents-updated', this.handleTalentsUpdated);
 
     void this.initializeBestScore();
     void this.initializeEquippedCosmetics();
+    void this.initializeControlTalents();
     this.updateDodoVisuals(0);
     this.runStartTime = this.time.now;
   }
@@ -876,6 +888,7 @@ export class GameplayScene extends Phaser.Scene {
       'flydodo:cosmetic-equipped',
       this.handleCosmeticEquipped,
     );
+    gameEvents.removeEventListener('flydodo:talents-updated', this.handleTalentsUpdated);
   }
 
   private createCosmeticDisplayObjects(): void {
@@ -927,6 +940,16 @@ export class GameplayScene extends Phaser.Scene {
     );
 
     this.updateDodoVisuals(0);
+  }
+
+  private async initializeControlTalents(): Promise<void> {
+    const profile = await loadLatestPlayerProfile();
+
+    if (!this.scene.isActive()) {
+      return;
+    }
+
+    this.controlStats = getControlTalentStats(profile.controlTalents);
   }
 
   private createTrimmedCosmeticCanvas(image: HTMLImageElement): HTMLCanvasElement {
@@ -1105,6 +1128,10 @@ export class GameplayScene extends Phaser.Scene {
     ).detail;
 
     void this.applyCosmetic(category, itemId);
+  };
+
+  private handleTalentsUpdated = (): void => {
+    void this.initializeControlTalents();
   };
 
   private updateCosmeticVisuals(
@@ -2059,11 +2086,11 @@ export class GameplayScene extends Phaser.Scene {
     const hasBalancedFlap = direction === 2;
 
     if (direction === -1 || direction === 1) {
-      this.angularVelocity += direction * FLAP_TURN_IMPULSE;
+      this.angularVelocity += direction * this.controlStats.flapTurnImpulse;
     }
 
     this.angularVelocity *= Math.exp(-TURN_DAMPING * deltaSeconds);
-    this.player.angle *= Math.exp(-AUTO_LEVEL_SPEED * deltaSeconds);
+    this.player.angle *= Math.exp(-this.controlStats.autoLevelSpeed * deltaSeconds);
 
     this.angularVelocity = Phaser.Math.Clamp(
       this.angularVelocity,
@@ -2100,11 +2127,14 @@ export class GameplayScene extends Phaser.Scene {
     body.setAcceleration(0, GRAVITY_Y);
 
     if (hasBalancedFlap) {
-      body.velocity.x += headingX * FLAP_UPWARD_IMPULSE;
-      body.velocity.y += headingY * FLAP_UPWARD_IMPULSE * 1.12;
+      body.velocity.x += headingX * this.controlStats.flapUpwardImpulse;
+      body.velocity.y += headingY * this.controlStats.flapUpwardImpulse * 1.12;
     } else if (hasFlap) {
-      body.velocity.x += headingX * FLAP_UPWARD_IMPULSE + direction * FLAP_SIDE_IMPULSE;
-      body.velocity.y += headingY * FLAP_UPWARD_IMPULSE;
+      body.velocity.x +=
+        headingX * this.controlStats.flapUpwardImpulse + direction * FLAP_SIDE_IMPULSE;
+      body.velocity.y += headingY * this.controlStats.flapUpwardImpulse;
+    } else if (body.velocity.y > 0 && this.controlStats.lift > 0) {
+      body.setAcceleration(0, Math.max(0, GRAVITY_Y - this.controlStats.lift));
     }
 
     // Plus il va vite, plus son inertie tend à aligner sa trajectoire sur son orientation.

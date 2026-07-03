@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import {
   emitCosmeticEquipped,
+  emitTalentsUpdated,
   gameEvents,
   requestGamePause,
   requestGameResume,
@@ -14,7 +15,11 @@ import {
   createEmptyPlayerProfile,
   equipShopItem,
   loadLatestPlayerProfile,
+  purchaseControlMasterTalent,
+  purchaseControlTalentLevel,
   purchaseShopItem,
+  refundControlMasterTalent,
+  refundControlTalentLevel,
   unequipShopItem,
   type PlayerProfile,
 } from './services/saveService';
@@ -25,10 +30,26 @@ import {
   type ShopFilterCategory,
   type ShopItem,
 } from './shop/shopCatalog';
+import {
+  CONTROL_MASTER_TALENT,
+  CONTROL_TALENTS,
+  CONTROL_TALENT_MAX_LEVEL,
+  getControlTalentDefinition,
+  type ControlTalentId,
+} from './talents/controlTalents';
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
 type TalentTreeTab = 'control' | 'endurance' | 'talents';
+type SelectedControlTalent =
+  | {
+      kind: 'talent';
+      id: ControlTalentId;
+      level: number;
+    }
+  | {
+      kind: 'master';
+    };
 
 const TALENT_TREE_TABS: ReadonlyArray<{
   id: TalentTreeTab;
@@ -159,6 +180,11 @@ export default function App(): React.JSX.Element {
     createEmptyPlayerProfile(),
   );
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [pendingTalentAction, setPendingTalentAction] = useState<string | null>(
+    null,
+  );
+  const [selectedControlTalent, setSelectedControlTalent] =
+    useState<SelectedControlTalent | null>(null);
   const [shopNotice, setShopNotice] = useState<string | null>(null);
 
   const filteredShopItems = useMemo(
@@ -312,6 +338,7 @@ export default function App(): React.JSX.Element {
     setShopNotice(null);
     setSelectedShopTab('accessories');
     setSelectedTalentTreeTab('control');
+    setSelectedControlTalent(null);
     requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
@@ -319,6 +346,7 @@ export default function App(): React.JSX.Element {
 
   const closeShop = (): void => {
     setShopNotice(null);
+    setSelectedControlTalent(null);
     setIsShopOpen(false);
 
     if (!isGameOver) {
@@ -381,6 +409,128 @@ export default function App(): React.JSX.Element {
       setPendingItemId(null);
     }
   };
+
+  const handleControlTalentPurchase = async (
+    target: SelectedControlTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'master' ? 'control-master' : `${target.id}-${target.level}`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'master'
+          ? await purchaseControlMasterTalent()
+          : await purchaseControlTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status === 'not-enough-watermelons') {
+        setShopNotice('Pas assez de pasteques pour cette competence.');
+        return;
+      }
+
+      if (result.status === 'locked') {
+        setShopNotice('Debloque tous les niveaux Controle avant Maitre.');
+        return;
+      }
+
+      if (result.status === 'already-maxed') {
+        setShopNotice('Cette competence est deja au maximum.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence debloquee !');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
+  const handleControlTalentRefund = async (
+    target: SelectedControlTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'master' ? 'control-master-refund' : `${target.id}-refund`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'master'
+          ? await refundControlMasterTalent()
+          : await refundControlTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status !== 'refunded') {
+        setShopNotice('Tu dois rembourser le dernier niveau achete.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence remboursee.');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
+  const controlTalentState = playerProfile.controlTalents;
+  const allControlTalentsMaxed = Object.values(controlTalentState.levels).every(
+    (level) => level >= CONTROL_TALENT_MAX_LEVEL,
+  );
+  const selectedControlTalentDetails = selectedControlTalent
+    ? (() => {
+        if (selectedControlTalent.kind === 'master') {
+          return {
+            title: CONTROL_MASTER_TALENT.title,
+            icon: CONTROL_MASTER_TALENT.icon,
+            levelLabel: controlTalentState.master ? 'Ultime debloque' : 'Ultime',
+            description: CONTROL_MASTER_TALENT.description,
+            price: CONTROL_MASTER_TALENT.cost,
+            refund: Math.floor(CONTROL_MASTER_TALENT.cost / 2),
+            isOwned: controlTalentState.master,
+            isRefundable: controlTalentState.master,
+            canBuy: !controlTalentState.master && allControlTalentsMaxed,
+          };
+        }
+
+        const definition = getControlTalentDefinition(selectedControlTalent.id);
+        const currentLevel = controlTalentState.levels[selectedControlTalent.id];
+        const targetLevel = selectedControlTalent.level;
+        const isOwned = currentLevel >= targetLevel;
+        const isRefundable =
+          !controlTalentState.master && isOwned && currentLevel === targetLevel;
+        const canBuy =
+          !controlTalentState.master &&
+          !isOwned &&
+          currentLevel + 1 === targetLevel;
+        const price = definition.costs[targetLevel - 1] ?? 0;
+
+        return {
+          title: definition.title,
+          icon: definition.icon,
+          levelLabel: `Niveau ${targetLevel}`,
+          description: `${definition.description} Valeur: ${
+            definition.levels[targetLevel - 1]
+          }.`,
+          price,
+          refund: Math.floor(price / 2),
+          isOwned,
+          isRefundable,
+          canBuy,
+        };
+      })()
+    : null;
 
   return (
     <main className="app-shell">
@@ -737,8 +887,136 @@ export default function App(): React.JSX.Element {
                   </div>
                   <div
                     className={`talent-tree-stage talent-tree-stage--${selectedTalentTreeTab}`}
-                    aria-hidden="true"
-                  />
+                  >
+                    {selectedTalentTreeTab === 'control' && (
+                      <div className="control-talent-tree">
+                        <button
+                          type="button"
+                          className={`control-talent-node control-talent-node--master${
+                            controlTalentState.master ? ' is-owned' : ''
+                          }${!allControlTalentsMaxed ? ' is-locked' : ''}`}
+                          onClick={() => setSelectedControlTalent({ kind: 'master' })}
+                        >
+                          <img src={CONTROL_MASTER_TALENT.icon} alt="" aria-hidden="true" />
+                          <span className="control-talent-node__title">
+                            {CONTROL_MASTER_TALENT.title}
+                          </span>
+                          <span className="control-talent-node__price">
+                            <img
+                              src="/assets/collectable/pasteque.png"
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            {CONTROL_MASTER_TALENT.cost}
+                          </span>
+                        </button>
+
+                        <div className="control-talent-columns">
+                          {CONTROL_TALENTS.map((talent) => {
+                            const currentLevel = controlTalentState.levels[talent.id];
+
+                            return (
+                              <div className="control-talent-column" key={talent.id}>
+                                {[4, 3, 2, 1].map((level) => {
+                                  const isOwned =
+                                    controlTalentState.master || currentLevel >= level;
+                                  const isNext =
+                                    !controlTalentState.master &&
+                                    currentLevel + 1 === level;
+                                  const isLocked =
+                                    !controlTalentState.master && !isOwned && !isNext;
+                                  const price = talent.costs[level - 1] ?? 0;
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={`${talent.id}-${level}`}
+                                      className={`control-talent-node${
+                                        isOwned ? ' is-owned' : ''
+                                      }${isNext ? ' is-next' : ''}${
+                                        isLocked ? ' is-locked' : ''
+                                      }`}
+                                      onClick={() =>
+                                        setSelectedControlTalent({
+                                          kind: 'talent',
+                                          id: talent.id,
+                                          level,
+                                        })
+                                      }
+                                    >
+                                      <img src={talent.icon} alt="" aria-hidden="true" />
+                                      <span className="control-talent-node__title">
+                                        {talent.title}
+                                      </span>
+                                      <span className="control-talent-node__level">
+                                        niv {level}
+                                      </span>
+                                      <span className="control-talent-node__price">
+                                        <img
+                                          src="/assets/collectable/pasteque.png"
+                                          alt=""
+                                          aria-hidden="true"
+                                        />
+                                        {price}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {selectedControlTalentDetails && (
+                          <aside className="talent-detail-sheet" aria-live="polite">
+                            <img
+                              className="talent-detail-sheet__icon"
+                              src={selectedControlTalentDetails.icon}
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            <div className="talent-detail-sheet__copy">
+                              <strong>{selectedControlTalentDetails.title}</strong>
+                              <span>{selectedControlTalentDetails.levelLabel}</span>
+                              <p>{selectedControlTalentDetails.description}</p>
+                            </div>
+                            {selectedControlTalentDetails.isRefundable ? (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__refund"
+                                disabled={pendingTalentAction !== null}
+                                onClick={() =>
+                                  selectedControlTalent &&
+                                  handleControlTalentRefund(selectedControlTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Rembourser {selectedControlTalentDetails.refund}
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__buy"
+                                disabled={
+                                  pendingTalentAction !== null ||
+                                  !selectedControlTalentDetails.canBuy
+                                }
+                                onClick={() =>
+                                  selectedControlTalent &&
+                                  handleControlTalentPurchase(selectedControlTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Acheter {selectedControlTalentDetails.price}
+                                </span>
+                              </button>
+                            )}
+                          </aside>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

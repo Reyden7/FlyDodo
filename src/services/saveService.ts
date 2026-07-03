@@ -1,5 +1,15 @@
 import { Preferences } from '@capacitor/preferences';
 import type { CosmeticCategory } from '../shop/shopCatalog';
+import {
+  CONTROL_MASTER_COST,
+  CONTROL_TALENT_MAX_LEVEL,
+  cloneControlTalentState,
+  createEmptyControlTalentState,
+  getControlTalentDefinition,
+  normalizeControlTalentState,
+  type ControlTalentId,
+  type ControlTalentState,
+} from '../talents/controlTalents';
 
 const BEST_ALTITUDE_KEY = 'flydodo_best_altitude';
 const PLAYER_PROFILE_KEY = 'flydodo_player_profile_v1';
@@ -16,6 +26,7 @@ export interface PlayerProfile {
   watermelons: number;
   ownedItemIds: string[];
   equipped: EquippedCosmetics;
+  controlTalents: ControlTalentState;
 }
 
 export type PurchaseStatus =
@@ -42,6 +53,24 @@ export interface UnequipResult {
   profile: PlayerProfile;
 }
 
+export type TalentPurchaseStatus =
+  | 'purchased'
+  | 'already-maxed'
+  | 'not-enough-watermelons'
+  | 'locked';
+
+export interface TalentPurchaseResult {
+  status: TalentPurchaseStatus;
+  profile: PlayerProfile;
+}
+
+export type TalentRefundStatus = 'refunded' | 'not-refundable';
+
+export interface TalentRefundResult {
+  status: TalentRefundStatus;
+  profile: PlayerProfile;
+}
+
 let profileCache: PlayerProfile | null = null;
 let profileLoadPromise: Promise<PlayerProfile> | null = null;
 let profileMutationQueue: Promise<void> = Promise.resolve();
@@ -61,6 +90,7 @@ export function createEmptyPlayerProfile(): PlayerProfile {
     watermelons: 0,
     ownedItemIds: [],
     equipped: createEmptyEquippedCosmetics(),
+    controlTalents: createEmptyControlTalentState(),
   };
 }
 
@@ -69,6 +99,7 @@ function cloneProfile(profile: PlayerProfile): PlayerProfile {
     watermelons: profile.watermelons,
     ownedItemIds: [...profile.ownedItemIds],
     equipped: { ...profile.equipped },
+    controlTalents: cloneControlTalentState(profile.controlTalents),
   };
 }
 
@@ -103,6 +134,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
       shoes: normalizeEquippedId(equippedSource.shoes),
       outfit: normalizeEquippedId(equippedSource.outfit),
     },
+    controlTalents: normalizeControlTalentState(source.controlTalents),
   };
 }
 
@@ -290,6 +322,181 @@ export function unequipShopItem(
 
     return {
       status: 'unequipped',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseControlTalentLevel(
+  talentId: ControlTalentId,
+): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.controlTalents.master) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.controlTalents.levels[talentId];
+
+    if (currentLevel >= CONTROL_TALENT_MAX_LEVEL) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const definition = getControlTalentDefinition(talentId);
+    const price = definition.costs[currentLevel] ?? 0;
+
+    if (current.watermelons < price) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - price,
+      controlTalents: {
+        ...current.controlTalents,
+        levels: {
+          ...current.controlTalents.levels,
+          [talentId]: currentLevel + 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseControlMasterTalent(): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.controlTalents.master) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const hasAllControlLevels = Object.values(current.controlTalents.levels).every(
+      (level) => level >= CONTROL_TALENT_MAX_LEVEL,
+    );
+
+    if (!hasAllControlLevels) {
+      return {
+        status: 'locked',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (current.watermelons < CONTROL_MASTER_COST) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - CONTROL_MASTER_COST,
+      controlTalents: {
+        ...current.controlTalents,
+        master: true,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundControlTalentLevel(
+  talentId: ControlTalentId,
+): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.controlTalents.master) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.controlTalents.levels[talentId];
+
+    if (currentLevel <= 0) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const definition = getControlTalentDefinition(talentId);
+    const refund = Math.floor((definition.costs[currentLevel - 1] ?? 0) / 2);
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + refund,
+      controlTalents: {
+        ...current.controlTalents,
+        levels: {
+          ...current.controlTalents.levels,
+          [talentId]: currentLevel - 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundControlMasterTalent(): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!current.controlTalents.master) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + Math.floor(CONTROL_MASTER_COST / 2),
+      controlTalents: {
+        ...current.controlTalents,
+        master: false,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
       profile: cloneProfile(next),
     };
   });

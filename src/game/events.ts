@@ -51,6 +51,10 @@ export function emitCosmeticEquipped(detail: CosmeticEquippedDetail): void {
   );
 }
 
+export function emitTalentsUpdated(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:talents-updated'));
+}
+
 export function emitGameOver(): void {
   gameEvents.dispatchEvent(new Event('flydodo:game-over'));
 }
