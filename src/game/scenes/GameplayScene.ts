@@ -20,6 +20,10 @@ import {
   type ControlTalentStats,
 } from '../../talents/controlTalents';
 import {
+  getEnduranceTalentStats,
+  type EnduranceTalentStats,
+} from '../../talents/enduranceTalents';
+import {
   COSMETIC_CATEGORIES,
   getCosmeticTransform,
   getShopItemById,
@@ -116,6 +120,8 @@ const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
 const PLAYER_BASE_LIVES = 1;
 const PLAYER_BASE_SHIELD = 0;
 const PLAYER_DAMAGE_INVULNERABILITY_MS = 900;
+const PLAYER_REGENERATION_DELAY_MS = 7_000;
+const PLAYER_SHIELD_RECHARGE_DELAY_MS = 10_000;
 const LAVA_START_DELAY_MS = 1_000;
 const LAVA_INITIAL_RISE_SPEED = 60;
 const LAVA_SPEED_GAIN_PER_100_METRES = 4;
@@ -675,7 +681,18 @@ export class GameplayScene extends Phaser.Scene {
     autoLevelSpeed: BASE_AUTO_LEVEL_SPEED,
     flapTurnImpulse: BASE_FLAP_TURN_IMPULSE,
   };
+  private enduranceStats: EnduranceTalentStats = {
+    maxLives: PLAYER_BASE_LIVES,
+    maxShield: PLAYER_BASE_SHIELD,
+    mosquitoShield: false,
+    regeneration: false,
+    shieldRecharge: false,
+    phoenix: false,
+  };
   private lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
+  private nextLifeRegenerationAt: number | null = null;
+  private nextShieldRechargeAt: number | null = null;
+  private hasUsedPhoenix = false;
   private hasEmittedMovementStarted = false;
   private maxAltitudeSinceTakeoff = 0;
   private isGrounded = true;
@@ -839,7 +856,7 @@ export class GameplayScene extends Phaser.Scene {
 
     void this.initializeBestScore();
     void this.initializeEquippedCosmetics();
-    void this.initializeControlTalents();
+    void this.initializeTalents();
     this.updateDodoVisuals(0);
     this.runStartTime = this.time.now;
   }
@@ -867,6 +884,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateWingBeats(direction, deltaSeconds);
     this.updateDodoVisuals(deltaSeconds);
     this.updateCamera(deltaSeconds);
+    this.updateEnduranceTimers(time);
     this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
     this.updateCloudVisibility();
@@ -942,7 +960,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateDodoVisuals(0);
   }
 
-  private async initializeControlTalents(): Promise<void> {
+  private async initializeTalents(): Promise<void> {
     const profile = await loadLatestPlayerProfile();
 
     if (!this.scene.isActive()) {
@@ -950,6 +968,44 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.controlStats = getControlTalentStats(profile.controlTalents);
+    this.applyEnduranceStats(getEnduranceTalentStats(profile.enduranceTalents));
+  }
+
+  private applyEnduranceStats(nextStats: EnduranceTalentStats): void {
+    const previousMaxLives = this.playerMaxLives;
+    const previousMaxShield = this.playerMaxShield;
+
+    this.enduranceStats = nextStats;
+    this.playerMaxLives = nextStats.maxLives;
+    this.playerMaxShield = nextStats.maxShield;
+
+    if (previousMaxLives <= PLAYER_BASE_LIVES && this.playerLives === PLAYER_BASE_LIVES) {
+      this.playerLives = this.playerMaxLives;
+    } else {
+      this.playerLives = Math.min(this.playerLives, this.playerMaxLives);
+    }
+
+    if (previousMaxShield <= PLAYER_BASE_SHIELD && this.playerShield === PLAYER_BASE_SHIELD) {
+      this.playerShield = this.playerMaxShield;
+    } else {
+      this.playerShield = Math.min(this.playerShield, this.playerMaxShield);
+    }
+
+    if (this.playerLives >= this.playerMaxLives || !nextStats.regeneration) {
+      this.nextLifeRegenerationAt = null;
+    } else if (this.nextLifeRegenerationAt === null) {
+      this.nextLifeRegenerationAt =
+        this.time.now + PLAYER_REGENERATION_DELAY_MS;
+    }
+
+    if (this.playerShield >= this.playerMaxShield || !nextStats.shieldRecharge) {
+      this.nextShieldRechargeAt = null;
+    } else if (this.nextShieldRechargeAt === null) {
+      this.nextShieldRechargeAt =
+        this.time.now + PLAYER_SHIELD_RECHARGE_DELAY_MS;
+    }
+
+    this.emitHud();
   }
 
   private createTrimmedCosmeticCanvas(image: HTMLImageElement): HTMLCanvasElement {
@@ -1131,7 +1187,7 @@ export class GameplayScene extends Phaser.Scene {
   };
 
   private handleTalentsUpdated = (): void => {
-    void this.initializeControlTalents();
+    void this.initializeTalents();
   };
 
   private updateCosmeticVisuals(
@@ -1252,7 +1308,18 @@ export class GameplayScene extends Phaser.Scene {
     this.playerLives = PLAYER_BASE_LIVES;
     this.playerMaxShield = PLAYER_BASE_SHIELD;
     this.playerShield = PLAYER_BASE_SHIELD;
+    this.enduranceStats = {
+      maxLives: PLAYER_BASE_LIVES,
+      maxShield: PLAYER_BASE_SHIELD,
+      mosquitoShield: false,
+      regeneration: false,
+      shieldRecharge: false,
+      phoenix: false,
+    };
     this.lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
+    this.nextLifeRegenerationAt = null;
+    this.nextShieldRechargeAt = null;
+    this.hasUsedPhoenix = false;
     this.hasEmittedMovementStarted = false;
     this.maxAltitudeSinceTakeoff = 0;
     this.isGrounded = true;
@@ -1756,7 +1823,7 @@ export class GameplayScene extends Phaser.Scene {
           ),
         )
       ) {
-        void this.damagePlayer();
+        void this.damagePlayer(1, 'mosquito');
       }
     }
   }
@@ -1976,7 +2043,11 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    void this.damagePlayer();
+    const obstacleKind = obstacle.getData('kind') as string | undefined;
+    void this.damagePlayer(
+      1,
+      obstacleKind === 'flyingInsect' ? 'mosquito' : 'default',
+    );
   };
 
   private createOffscreenIndicator(): void {
@@ -2442,9 +2513,46 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
+  private updateEnduranceTimers(time: number): void {
+    if (
+      this.enduranceStats.regeneration &&
+      this.playerLives > 0 &&
+      this.playerLives < this.playerMaxLives
+    ) {
+      if (this.nextLifeRegenerationAt === null) {
+        this.nextLifeRegenerationAt = time + PLAYER_REGENERATION_DELAY_MS;
+      } else if (time >= this.nextLifeRegenerationAt) {
+        this.playerLives = Math.min(this.playerMaxLives, this.playerLives + 1);
+        this.nextLifeRegenerationAt =
+          this.playerLives < this.playerMaxLives
+            ? time + PLAYER_REGENERATION_DELAY_MS
+            : null;
+        this.emitHud();
+      }
+    } else {
+      this.nextLifeRegenerationAt = null;
+    }
+
+    if (
+      this.enduranceStats.shieldRecharge &&
+      this.playerMaxShield > 0 &&
+      this.playerShield < this.playerMaxShield
+    ) {
+      if (this.nextShieldRechargeAt === null) {
+        this.nextShieldRechargeAt = time + PLAYER_SHIELD_RECHARGE_DELAY_MS;
+      } else if (time >= this.nextShieldRechargeAt) {
+        this.playerShield = this.playerMaxShield;
+        this.nextShieldRechargeAt = null;
+        this.emitHud();
+      }
+    } else {
+      this.nextShieldRechargeAt = null;
+    }
+  }
+
   private async damagePlayer(
     amount = 1,
-    reason: 'default' | 'lava' = 'default',
+    reason: 'default' | 'lava' | 'mosquito' = 'default',
   ): Promise<void> {
     if (this.gameOver) {
       return;
@@ -2467,19 +2575,82 @@ export class GameplayScene extends Phaser.Scene {
     this.playerShield -= absorbedDamage;
     remainingDamage -= absorbedDamage;
 
+    if (absorbedDamage > 0) {
+      if (this.enduranceStats.shieldRecharge && this.playerShield < this.playerMaxShield) {
+        this.nextShieldRechargeAt = now + PLAYER_SHIELD_RECHARGE_DELAY_MS;
+      }
+
+      if (reason === 'mosquito' && this.enduranceStats.mosquitoShield) {
+        remainingDamage = 0;
+      }
+    }
+
     if (remainingDamage > 0) {
       this.playerLives = Math.max(0, this.playerLives - remainingDamage);
+      this.nextLifeRegenerationAt =
+        this.enduranceStats.regeneration && this.playerLives > 0
+          ? now + PLAYER_REGENERATION_DELAY_MS
+          : null;
     }
 
     this.emitHud();
 
     if (this.playerLives <= 0) {
+      if (this.tryPhoenixRevival()) {
+        return;
+      }
+
       await this.finishGame(reason);
     }
   }
 
-  private async finishGame(reason: 'default' | 'lava' = 'default'): Promise<void> {
+  private tryPhoenixRevival(): boolean {
+    if (!this.enduranceStats.phoenix || this.hasUsedPhoenix) {
+      return false;
+    }
+
+    this.hasUsedPhoenix = true;
+    this.playerLives = this.playerMaxLives;
+    this.playerShield = this.playerMaxShield;
+    this.lastPlayerDamageTime = this.time.now;
+    this.nextLifeRegenerationAt = null;
+    this.nextShieldRechargeAt = null;
+    this.outOfScreenSince = null;
+    this.lastWarningSecond = null;
+    this.lastWarningReason = null;
+
+    this.player.clearTint();
+    this.leftWing.clearTint();
+    this.rightWing.clearTint();
+    this.flightFeet.clearTint();
+
+    this.tweens.add({
+      targets: [this.player, this.leftWing, this.rightWing, this.flightFeet],
+      alpha: 0.45,
+      yoyo: true,
+      repeat: 3,
+      duration: 120,
+      onComplete: () => {
+        this.player.setAlpha(1);
+        this.leftWing.setAlpha(1);
+        this.rightWing.setAlpha(1);
+        this.flightFeet.setAlpha(1);
+      },
+    });
+
+    this.emitHud();
+    emitFallWarning({ secondsRemaining: null });
+    return true;
+  }
+
+  private async finishGame(
+    reason: 'default' | 'lava' | 'mosquito' = 'default',
+  ): Promise<void> {
     if (this.gameOver) {
+      return;
+    }
+
+    if (this.tryPhoenixRevival()) {
       return;
     }
 

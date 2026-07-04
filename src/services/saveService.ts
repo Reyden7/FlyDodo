@@ -10,6 +10,19 @@ import {
   type ControlTalentId,
   type ControlTalentState,
 } from '../talents/controlTalents';
+import {
+  ENDURANCE_PHOENIX_COST,
+  ENDURANCE_TALENT_MAX_LEVEL_BY_ID,
+  areAllEnduranceTalentsMaxed,
+  canRefundEnduranceTalentLevel,
+  cloneEnduranceTalentState,
+  createEmptyEnduranceTalentState,
+  getEnduranceTalentDefinition,
+  isEnduranceTalentUnlocked,
+  normalizeEnduranceTalentState,
+  type EnduranceTalentId,
+  type EnduranceTalentState,
+} from '../talents/enduranceTalents';
 
 const BEST_ALTITUDE_KEY = 'flydodo_best_altitude';
 const PLAYER_PROFILE_KEY = 'flydodo_player_profile_v1';
@@ -27,6 +40,7 @@ export interface PlayerProfile {
   ownedItemIds: string[];
   equipped: EquippedCosmetics;
   controlTalents: ControlTalentState;
+  enduranceTalents: EnduranceTalentState;
 }
 
 export type PurchaseStatus =
@@ -91,6 +105,7 @@ export function createEmptyPlayerProfile(): PlayerProfile {
     ownedItemIds: [],
     equipped: createEmptyEquippedCosmetics(),
     controlTalents: createEmptyControlTalentState(),
+    enduranceTalents: createEmptyEnduranceTalentState(),
   };
 }
 
@@ -100,6 +115,7 @@ function cloneProfile(profile: PlayerProfile): PlayerProfile {
     ownedItemIds: [...profile.ownedItemIds],
     equipped: { ...profile.equipped },
     controlTalents: cloneControlTalentState(profile.controlTalents),
+    enduranceTalents: cloneEnduranceTalentState(profile.enduranceTalents),
   };
 }
 
@@ -135,6 +151,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
       outfit: normalizeEquippedId(equippedSource.outfit),
     },
     controlTalents: normalizeControlTalentState(source.controlTalents),
+    enduranceTalents: normalizeEnduranceTalentState(source.enduranceTalents),
   };
 }
 
@@ -490,6 +507,178 @@ export function refundControlMasterTalent(): Promise<TalentRefundResult> {
       controlTalents: {
         ...current.controlTalents,
         master: false,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseEnduranceTalentLevel(
+  talentId: EnduranceTalentId,
+): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.enduranceTalents.phoenix) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.enduranceTalents.levels[talentId];
+    const maxLevel = ENDURANCE_TALENT_MAX_LEVEL_BY_ID[talentId];
+
+    if (currentLevel >= maxLevel) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const definition = getEnduranceTalentDefinition(talentId);
+
+    if (!isEnduranceTalentUnlocked(current.enduranceTalents, definition)) {
+      return {
+        status: 'locked',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const price = definition.costs[currentLevel] ?? 0;
+
+    if (current.watermelons < price) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - price,
+      enduranceTalents: {
+        ...current.enduranceTalents,
+        levels: {
+          ...current.enduranceTalents.levels,
+          [talentId]: currentLevel + 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseEndurancePhoenixTalent(): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.enduranceTalents.phoenix) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (!areAllEnduranceTalentsMaxed(current.enduranceTalents)) {
+      return {
+        status: 'locked',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (current.watermelons < ENDURANCE_PHOENIX_COST) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - ENDURANCE_PHOENIX_COST,
+      enduranceTalents: {
+        ...current.enduranceTalents,
+        phoenix: true,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundEnduranceTalentLevel(
+  talentId: EnduranceTalentId,
+): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!canRefundEnduranceTalentLevel(current.enduranceTalents, talentId)) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.enduranceTalents.levels[talentId];
+    const definition = getEnduranceTalentDefinition(talentId);
+    const refund = Math.floor((definition.costs[currentLevel - 1] ?? 0) / 2);
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + refund,
+      enduranceTalents: {
+        ...current.enduranceTalents,
+        levels: {
+          ...current.enduranceTalents.levels,
+          [talentId]: currentLevel - 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundEndurancePhoenixTalent(): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!current.enduranceTalents.phoenix) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + Math.floor(ENDURANCE_PHOENIX_COST / 2),
+      enduranceTalents: {
+        ...current.enduranceTalents,
+        phoenix: false,
       },
     };
 

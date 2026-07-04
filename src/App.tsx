@@ -17,9 +17,13 @@ import {
   loadLatestPlayerProfile,
   purchaseControlMasterTalent,
   purchaseControlTalentLevel,
+  purchaseEndurancePhoenixTalent,
+  purchaseEnduranceTalentLevel,
   purchaseShopItem,
   refundControlMasterTalent,
   refundControlTalentLevel,
+  refundEndurancePhoenixTalent,
+  refundEnduranceTalentLevel,
   unequipShopItem,
   type PlayerProfile,
 } from './services/saveService';
@@ -37,6 +41,16 @@ import {
   getControlTalentDefinition,
   type ControlTalentId,
 } from './talents/controlTalents';
+import {
+  ENDURANCE_PHOENIX_TALENT,
+  ENDURANCE_TALENTS,
+  ENDURANCE_TALENT_MAX_LEVEL_BY_ID,
+  areAllEnduranceTalentsMaxed,
+  canRefundEnduranceTalentLevel,
+  getEnduranceTalentDefinition,
+  isEnduranceTalentUnlocked,
+  type EnduranceTalentId,
+} from './talents/enduranceTalents';
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
@@ -49,6 +63,15 @@ type SelectedControlTalent =
     }
   | {
       kind: 'master';
+    };
+type SelectedEnduranceTalent =
+  | {
+      kind: 'talent';
+      id: EnduranceTalentId;
+      level: number;
+    }
+  | {
+      kind: 'phoenix';
     };
 
 const TALENT_TREE_TABS: ReadonlyArray<{
@@ -187,8 +210,13 @@ export default function App(): React.JSX.Element {
     useState<SelectedControlTalent | null>(null);
   const [isControlTalentSheetClosing, setIsControlTalentSheetClosing] =
     useState(false);
+  const [selectedEnduranceTalent, setSelectedEnduranceTalent] =
+    useState<SelectedEnduranceTalent | null>(null);
+  const [isEnduranceTalentSheetClosing, setIsEnduranceTalentSheetClosing] =
+    useState(false);
   const [shopNotice, setShopNotice] = useState<string | null>(null);
   const controlTalentSheetCloseTimerRef = useRef<number | null>(null);
+  const enduranceTalentSheetCloseTimerRef = useRef<number | null>(null);
 
   const filteredShopItems = useMemo(
     () =>
@@ -326,6 +354,10 @@ export default function App(): React.JSX.Element {
       if (controlTalentSheetCloseTimerRef.current !== null) {
         window.clearTimeout(controlTalentSheetCloseTimerRef.current);
       }
+
+      if (enduranceTalentSheetCloseTimerRef.current !== null) {
+        window.clearTimeout(enduranceTalentSheetCloseTimerRef.current);
+      }
     },
     [],
   );
@@ -352,6 +384,8 @@ export default function App(): React.JSX.Element {
     setSelectedTalentTreeTab('control');
     setSelectedControlTalent(null);
     setIsControlTalentSheetClosing(false);
+    setSelectedEnduranceTalent(null);
+    setIsEnduranceTalentSheetClosing(false);
     requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
@@ -361,6 +395,8 @@ export default function App(): React.JSX.Element {
     setShopNotice(null);
     setSelectedControlTalent(null);
     setIsControlTalentSheetClosing(false);
+    setSelectedEnduranceTalent(null);
+    setIsEnduranceTalentSheetClosing(false);
     setIsShopOpen(false);
 
     if (!isGameOver) {
@@ -462,6 +498,44 @@ export default function App(): React.JSX.Element {
     dismissSelectedControlTalent();
   };
 
+  const selectEnduranceTalent = (target: SelectedEnduranceTalent): void => {
+    if (enduranceTalentSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(enduranceTalentSheetCloseTimerRef.current);
+      enduranceTalentSheetCloseTimerRef.current = null;
+    }
+
+    setIsEnduranceTalentSheetClosing(false);
+    setSelectedEnduranceTalent(target);
+  };
+
+  const dismissSelectedEnduranceTalent = (): void => {
+    if (!selectedEnduranceTalent || isEnduranceTalentSheetClosing) {
+      return;
+    }
+
+    setIsEnduranceTalentSheetClosing(true);
+    enduranceTalentSheetCloseTimerRef.current = window.setTimeout(() => {
+      setSelectedEnduranceTalent(null);
+      setIsEnduranceTalentSheetClosing(false);
+      enduranceTalentSheetCloseTimerRef.current = null;
+    }, 180);
+  };
+
+  const handleEnduranceTalentTreePointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ): void => {
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest('.endurance-talent-node') ||
+      target.closest('.talent-detail-sheet')
+    ) {
+      return;
+    }
+
+    dismissSelectedEnduranceTalent();
+  };
+
   const handleControlTalentPurchase = async (
     target: SelectedControlTalent,
   ): Promise<void> => {
@@ -536,6 +610,80 @@ export default function App(): React.JSX.Element {
     }
   };
 
+  const handleEnduranceTalentPurchase = async (
+    target: SelectedEnduranceTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'phoenix' ? 'endurance-phoenix' : `${target.id}-${target.level}`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'phoenix'
+          ? await purchaseEndurancePhoenixTalent()
+          : await purchaseEnduranceTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status === 'not-enough-watermelons') {
+        setShopNotice('Pas assez de pasteques pour cette competence.');
+        return;
+      }
+
+      if (result.status === 'locked') {
+        setShopNotice('Cette competence est encore verrouillee.');
+        return;
+      }
+
+      if (result.status === 'already-maxed') {
+        setShopNotice('Cette competence est deja au maximum.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence achetee !');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
+  const handleEnduranceTalentRefund = async (
+    target: SelectedEnduranceTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'phoenix' ? 'endurance-phoenix' : `${target.id}-${target.level}`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'phoenix'
+          ? await refundEndurancePhoenixTalent()
+          : await refundEnduranceTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status !== 'refunded') {
+        setShopNotice('Cette competence bloque une autre competence achetee.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence remboursee.');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
   const controlTalentState = playerProfile.controlTalents;
   const allControlTalentsMaxed = Object.values(controlTalentState.levels).every(
     (level) => level >= CONTROL_TALENT_MAX_LEVEL,
@@ -575,6 +723,68 @@ export default function App(): React.JSX.Element {
           description: `${definition.description} Valeur: ${
             definition.levels[targetLevel - 1]
           }.`,
+          price,
+          refund: Math.floor(price / 2),
+          isOwned,
+          isRefundable,
+          canBuy,
+        };
+      })()
+    : null;
+  const enduranceTalentState = playerProfile.enduranceTalents;
+  const allEnduranceTalentsMaxed =
+    areAllEnduranceTalentsMaxed(enduranceTalentState);
+  const selectedEnduranceTalentDetails = selectedEnduranceTalent
+    ? (() => {
+        if (selectedEnduranceTalent.kind === 'phoenix') {
+          return {
+            title: ENDURANCE_PHOENIX_TALENT.title,
+            icon: ENDURANCE_PHOENIX_TALENT.icon,
+            levelLabel: enduranceTalentState.phoenix
+              ? 'Ultime debloque'
+              : 'Ultime',
+            description: ENDURANCE_PHOENIX_TALENT.description,
+            price: ENDURANCE_PHOENIX_TALENT.cost,
+            refund: Math.floor(ENDURANCE_PHOENIX_TALENT.cost / 2),
+            isOwned: enduranceTalentState.phoenix,
+            isRefundable: enduranceTalentState.phoenix,
+            canBuy: !enduranceTalentState.phoenix && allEnduranceTalentsMaxed,
+          };
+        }
+
+        const definition = getEnduranceTalentDefinition(selectedEnduranceTalent.id);
+        const currentLevel = enduranceTalentState.levels[selectedEnduranceTalent.id];
+        const targetLevel = selectedEnduranceTalent.level;
+        const isOwned = enduranceTalentState.phoenix || currentLevel >= targetLevel;
+        const isRefundable =
+          !enduranceTalentState.phoenix &&
+          isOwned &&
+          currentLevel === targetLevel &&
+          canRefundEnduranceTalentLevel(
+            enduranceTalentState,
+            selectedEnduranceTalent.id,
+          );
+        const isUnlocked = isEnduranceTalentUnlocked(
+          enduranceTalentState,
+          definition,
+        );
+        const canBuy =
+          !enduranceTalentState.phoenix &&
+          isUnlocked &&
+          !isOwned &&
+          currentLevel + 1 === targetLevel;
+        const price = definition.costs[targetLevel - 1] ?? 0;
+        const lockedText = definition.requirement
+          ? ` Requis: ${definition.requirement.label}.`
+          : '';
+
+        return {
+          title: definition.title,
+          icon: definition.icon,
+          levelLabel: `Niveau ${targetLevel}`,
+          description: `${definition.description} ${definition.statLabel}: ${
+            definition.levels[targetLevel - 1]
+          }.${!isUnlocked ? lockedText : ''}`,
           price,
           refund: Math.floor(price / 2),
           isOwned,
@@ -986,7 +1196,7 @@ export default function App(): React.JSX.Element {
                                     <button
                                       type="button"
                                       key={`${talent.id}-${level}`}
-                                      className={`control-talent-node${
+                                      className={`control-talent-node control-talent-node--level-${level}${
                                         isOwned ? ' is-owned' : ''
                                       }${isNext ? ' is-next' : ''}${
                                         isLocked ? ' is-locked' : ''
@@ -1069,6 +1279,162 @@ export default function App(): React.JSX.Element {
                               >
                                 <span className="visually-hidden">
                                   Acheter {selectedControlTalentDetails.price}
+                                </span>
+                              </button>
+                            )}
+                          </aside>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedTalentTreeTab === 'endurance' && (
+                      <div
+                        className="endurance-talent-tree"
+                        onPointerDown={handleEnduranceTalentTreePointerDown}
+                      >
+                        <button
+                          type="button"
+                          className={`endurance-talent-node endurance-talent-node--phoenix${
+                            enduranceTalentState.phoenix ? ' is-owned' : ''
+                          }${!allEnduranceTalentsMaxed ? ' is-locked' : ''}`}
+                          onClick={() => selectEnduranceTalent({ kind: 'phoenix' })}
+                        >
+                          <img
+                            src={ENDURANCE_PHOENIX_TALENT.icon}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <span className="control-talent-node__title">
+                            {ENDURANCE_PHOENIX_TALENT.title}
+                          </span>
+                          <span className="control-talent-node__price">
+                            <img
+                              src="/assets/collectable/pasteque.png"
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            {ENDURANCE_PHOENIX_TALENT.cost}
+                          </span>
+                        </button>
+
+                        <div className="endurance-talent-columns">
+                          {ENDURANCE_TALENTS.map((talent) => {
+                            const currentLevel = enduranceTalentState.levels[talent.id];
+                            const maxLevel = ENDURANCE_TALENT_MAX_LEVEL_BY_ID[talent.id];
+                            const isUnlocked = isEnduranceTalentUnlocked(
+                              enduranceTalentState,
+                              talent,
+                            );
+                            const levels = Array.from(
+                              { length: maxLevel },
+                              (_value, index) => maxLevel - index,
+                            );
+
+                            return (
+                              <div
+                                className={`endurance-talent-column endurance-talent-column--${talent.id}`}
+                                key={talent.id}
+                              >
+                                {levels.map((level) => {
+                                  const isOwned =
+                                    enduranceTalentState.phoenix ||
+                                    currentLevel >= level;
+                                  const isNext =
+                                    !enduranceTalentState.phoenix &&
+                                    isUnlocked &&
+                                    currentLevel + 1 === level;
+                                  const isLocked =
+                                    !enduranceTalentState.phoenix &&
+                                    (!isUnlocked || (!isOwned && !isNext));
+                                  const price = talent.costs[level - 1] ?? 0;
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={`${talent.id}-${level}`}
+                                      className={`endurance-talent-node endurance-talent-node--level-${level}${
+                                        isOwned ? ' is-owned' : ''
+                                      }${isNext ? ' is-next' : ''}${
+                                        isLocked ? ' is-locked' : ''
+                                      }`}
+                                      onClick={() =>
+                                        selectEnduranceTalent({
+                                          kind: 'talent',
+                                          id: talent.id,
+                                          level,
+                                        })
+                                      }
+                                    >
+                                      <img src={talent.icon} alt="" aria-hidden="true" />
+                                      <span className="control-talent-node__title">
+                                        {talent.title}
+                                      </span>
+                                      <span className="control-talent-node__level">
+                                        niv {level}
+                                      </span>
+                                      <span className="control-talent-node__price">
+                                        <img
+                                          src="/assets/collectable/pasteque.png"
+                                          alt=""
+                                          aria-hidden="true"
+                                        />
+                                        {price}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {selectedEnduranceTalentDetails && (
+                          <aside
+                            className={`talent-detail-sheet${
+                              isEnduranceTalentSheetClosing ? ' is-closing' : ''
+                            }`}
+                            aria-live="polite"
+                          >
+                            <img
+                              className="talent-detail-sheet__icon"
+                              src={selectedEnduranceTalentDetails.icon}
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            <div className="talent-detail-sheet__copy">
+                              <strong>{selectedEnduranceTalentDetails.title}</strong>
+                              <span>{selectedEnduranceTalentDetails.levelLabel}</span>
+                              <p>{selectedEnduranceTalentDetails.description}</p>
+                            </div>
+                            {selectedEnduranceTalentDetails.isRefundable ? (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__refund"
+                                disabled={pendingTalentAction !== null}
+                                onClick={() =>
+                                  selectedEnduranceTalent &&
+                                  handleEnduranceTalentRefund(selectedEnduranceTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Rembourser {selectedEnduranceTalentDetails.refund}
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__buy"
+                                disabled={
+                                  pendingTalentAction !== null ||
+                                  !selectedEnduranceTalentDetails.canBuy
+                                }
+                                onClick={() =>
+                                  selectedEnduranceTalent &&
+                                  handleEnduranceTalentPurchase(selectedEnduranceTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Acheter {selectedEnduranceTalentDetails.price}
                                 </span>
                               </button>
                             )}
