@@ -185,7 +185,10 @@ export default function App(): React.JSX.Element {
   );
   const [selectedControlTalent, setSelectedControlTalent] =
     useState<SelectedControlTalent | null>(null);
+  const [isControlTalentSheetClosing, setIsControlTalentSheetClosing] =
+    useState(false);
   const [shopNotice, setShopNotice] = useState<string | null>(null);
+  const controlTalentSheetCloseTimerRef = useRef<number | null>(null);
 
   const filteredShopItems = useMemo(
     () =>
@@ -318,6 +321,15 @@ export default function App(): React.JSX.Element {
     return () => window.clearTimeout(timeout);
   }, [shopNotice]);
 
+  useEffect(
+    () => () => {
+      if (controlTalentSheetCloseTimerRef.current !== null) {
+        window.clearTimeout(controlTalentSheetCloseTimerRef.current);
+      }
+    },
+    [],
+  );
+
   const restart = (): void => {
     setIsShopOpen(false);
     setIsGameOver(false);
@@ -339,6 +351,7 @@ export default function App(): React.JSX.Element {
     setSelectedShopTab('accessories');
     setSelectedTalentTreeTab('control');
     setSelectedControlTalent(null);
+    setIsControlTalentSheetClosing(false);
     requestGamePause();
     setIsShopOpen(true);
     setPlayerProfile(await loadLatestPlayerProfile());
@@ -347,6 +360,7 @@ export default function App(): React.JSX.Element {
   const closeShop = (): void => {
     setShopNotice(null);
     setSelectedControlTalent(null);
+    setIsControlTalentSheetClosing(false);
     setIsShopOpen(false);
 
     if (!isGameOver) {
@@ -408,6 +422,44 @@ export default function App(): React.JSX.Element {
     } finally {
       setPendingItemId(null);
     }
+  };
+
+  const selectControlTalent = (target: SelectedControlTalent): void => {
+    if (controlTalentSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(controlTalentSheetCloseTimerRef.current);
+      controlTalentSheetCloseTimerRef.current = null;
+    }
+
+    setIsControlTalentSheetClosing(false);
+    setSelectedControlTalent(target);
+  };
+
+  const dismissSelectedControlTalent = (): void => {
+    if (!selectedControlTalent || isControlTalentSheetClosing) {
+      return;
+    }
+
+    setIsControlTalentSheetClosing(true);
+    controlTalentSheetCloseTimerRef.current = window.setTimeout(() => {
+      setSelectedControlTalent(null);
+      setIsControlTalentSheetClosing(false);
+      controlTalentSheetCloseTimerRef.current = null;
+    }, 180);
+  };
+
+  const handleControlTalentTreePointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ): void => {
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest('.control-talent-node') ||
+      target.closest('.talent-detail-sheet')
+    ) {
+      return;
+    }
+
+    dismissSelectedControlTalent();
   };
 
   const handleControlTalentPurchase = async (
@@ -889,13 +941,16 @@ export default function App(): React.JSX.Element {
                     className={`talent-tree-stage talent-tree-stage--${selectedTalentTreeTab}`}
                   >
                     {selectedTalentTreeTab === 'control' && (
-                      <div className="control-talent-tree">
+                      <div
+                        className="control-talent-tree"
+                        onPointerDown={handleControlTalentTreePointerDown}
+                      >
                         <button
                           type="button"
                           className={`control-talent-node control-talent-node--master${
                             controlTalentState.master ? ' is-owned' : ''
                           }${!allControlTalentsMaxed ? ' is-locked' : ''}`}
-                          onClick={() => setSelectedControlTalent({ kind: 'master' })}
+                          onClick={() => selectControlTalent({ kind: 'master' })}
                         >
                           <img src={CONTROL_MASTER_TALENT.icon} alt="" aria-hidden="true" />
                           <span className="control-talent-node__title">
@@ -937,7 +992,7 @@ export default function App(): React.JSX.Element {
                                         isLocked ? ' is-locked' : ''
                                       }`}
                                       onClick={() =>
-                                        setSelectedControlTalent({
+                                        selectControlTalent({
                                           kind: 'talent',
                                           id: talent.id,
                                           level,
@@ -968,7 +1023,12 @@ export default function App(): React.JSX.Element {
                         </div>
 
                         {selectedControlTalentDetails && (
-                          <aside className="talent-detail-sheet" aria-live="polite">
+                          <aside
+                            className={`talent-detail-sheet${
+                              isControlTalentSheetClosing ? ' is-closing' : ''
+                            }`}
+                            aria-live="polite"
+                          >
                             <img
                               className="talent-detail-sheet__icon"
                               src={selectedControlTalentDetails.icon}

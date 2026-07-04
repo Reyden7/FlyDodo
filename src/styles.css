@@ -1182,17 +1182,18 @@ button {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  touch-action: manipulation;
 }
 
 .control-talent-columns {
   display: grid;
   position: absolute;
-  top: 20%;
+  top: 12%;
   right: 7%;
-  left: 7%;
+  left: 5%;
   z-index: 2;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 5%;
+  gap: 8%;
 }
 
 .control-talent-column {
@@ -1264,6 +1265,7 @@ button {
   border-radius: 999px;
   color: #ffe8a0;
   font-size: clamp(0.48rem, 1.8vw, 0.62rem);
+  
 }
 
 .control-talent-node__price img {
@@ -1297,7 +1299,7 @@ button {
 
 .control-talent-node--master {
   position: absolute;
-  top: 4.5%;
+  top: 0%;
   left: 50%;
   z-index: 3;
   width: 96px;
@@ -1333,6 +1335,11 @@ button {
     inset 0 0 0 2px rgb(255 255 255 / 12%),
     0 9px 18px rgb(0 0 0 / 42%);
   animation: talent-sheet-rise 170ms ease-out both;
+}
+
+.talent-detail-sheet.is-closing {
+  pointer-events: none;
+  animation: talent-sheet-fall 180ms ease-in both;
 }
 
 .talent-detail-sheet__icon {
@@ -1415,6 +1422,18 @@ button {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes talent-sheet-fall {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(105%);
   }
 }
 
