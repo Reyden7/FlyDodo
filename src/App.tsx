@@ -15,11 +15,15 @@ import {
   createEmptyPlayerProfile,
   equipShopItem,
   loadLatestPlayerProfile,
+  purchaseBlueFeastTalent,
+  purchaseBlueTalentLevel,
   purchaseControlMasterTalent,
   purchaseControlTalentLevel,
   purchaseEndurancePhoenixTalent,
   purchaseEnduranceTalentLevel,
   purchaseShopItem,
+  refundBlueFeastTalent,
+  refundBlueTalentLevel,
   refundControlMasterTalent,
   refundControlTalentLevel,
   refundEndurancePhoenixTalent,
@@ -51,6 +55,16 @@ import {
   isEnduranceTalentUnlocked,
   type EnduranceTalentId,
 } from './talents/enduranceTalents';
+import {
+  BLUE_FEAST_TALENT,
+  BLUE_TALENTS,
+  BLUE_TALENT_MAX_LEVEL_BY_ID,
+  areAllBlueTalentsMaxed,
+  canRefundBlueTalentLevel,
+  getBlueTalentDefinition,
+  isBlueTalentUnlocked,
+  type BlueTalentId,
+} from './talents/blueTalents';
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
@@ -72,6 +86,15 @@ type SelectedEnduranceTalent =
     }
   | {
       kind: 'phoenix';
+    };
+type SelectedBlueTalent =
+  | {
+      kind: 'talent';
+      id: BlueTalentId;
+      level: number;
+    }
+  | {
+      kind: 'feast';
     };
 
 const TALENT_TREE_TABS: ReadonlyArray<{
@@ -214,9 +237,14 @@ export default function App(): React.JSX.Element {
     useState<SelectedEnduranceTalent | null>(null);
   const [isEnduranceTalentSheetClosing, setIsEnduranceTalentSheetClosing] =
     useState(false);
+  const [selectedBlueTalent, setSelectedBlueTalent] =
+    useState<SelectedBlueTalent | null>(null);
+  const [isBlueTalentSheetClosing, setIsBlueTalentSheetClosing] =
+    useState(false);
   const [shopNotice, setShopNotice] = useState<string | null>(null);
   const controlTalentSheetCloseTimerRef = useRef<number | null>(null);
   const enduranceTalentSheetCloseTimerRef = useRef<number | null>(null);
+  const blueTalentSheetCloseTimerRef = useRef<number | null>(null);
 
   const filteredShopItems = useMemo(
     () =>
@@ -357,6 +385,10 @@ export default function App(): React.JSX.Element {
 
       if (enduranceTalentSheetCloseTimerRef.current !== null) {
         window.clearTimeout(enduranceTalentSheetCloseTimerRef.current);
+      }
+
+      if (blueTalentSheetCloseTimerRef.current !== null) {
+        window.clearTimeout(blueTalentSheetCloseTimerRef.current);
       }
     },
     [],
@@ -536,6 +568,44 @@ export default function App(): React.JSX.Element {
     dismissSelectedEnduranceTalent();
   };
 
+  const selectBlueTalent = (target: SelectedBlueTalent): void => {
+    if (blueTalentSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(blueTalentSheetCloseTimerRef.current);
+      blueTalentSheetCloseTimerRef.current = null;
+    }
+
+    setIsBlueTalentSheetClosing(false);
+    setSelectedBlueTalent(target);
+  };
+
+  const dismissSelectedBlueTalent = (): void => {
+    if (!selectedBlueTalent || isBlueTalentSheetClosing) {
+      return;
+    }
+
+    setIsBlueTalentSheetClosing(true);
+    blueTalentSheetCloseTimerRef.current = window.setTimeout(() => {
+      setSelectedBlueTalent(null);
+      setIsBlueTalentSheetClosing(false);
+      blueTalentSheetCloseTimerRef.current = null;
+    }, 180);
+  };
+
+  const handleBlueTalentTreePointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ): void => {
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest('.blue-talent-node') ||
+      target.closest('.talent-detail-sheet')
+    ) {
+      return;
+    }
+
+    dismissSelectedBlueTalent();
+  };
+
   const handleControlTalentPurchase = async (
     target: SelectedControlTalent,
   ): Promise<void> => {
@@ -684,6 +754,82 @@ export default function App(): React.JSX.Element {
     }
   };
 
+  const handleBlueTalentPurchase = async (
+    target: SelectedBlueTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'feast' ? 'blue-feast' : `blue-${target.id}-${target.level}`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'feast'
+          ? await purchaseBlueFeastTalent()
+          : await purchaseBlueTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status === 'not-enough-watermelons') {
+        setShopNotice('Pas assez de pasteques pour cette competence.');
+        return;
+      }
+
+      if (result.status === 'locked') {
+        setShopNotice('Cette competence est encore verrouillee.');
+        return;
+      }
+
+      if (result.status === 'already-maxed') {
+        setShopNotice('Cette competence est deja au maximum.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence achetee !');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
+  const handleBlueTalentRefund = async (
+    target: SelectedBlueTalent,
+  ): Promise<void> => {
+    if (pendingTalentAction) {
+      return;
+    }
+
+    const actionId =
+      target.kind === 'feast'
+        ? 'blue-feast-refund'
+        : `blue-${target.id}-${target.level}-refund`;
+    setPendingTalentAction(actionId);
+    setShopNotice(null);
+
+    try {
+      const result =
+        target.kind === 'feast'
+          ? await refundBlueFeastTalent()
+          : await refundBlueTalentLevel(target.id);
+
+      setPlayerProfile(result.profile);
+
+      if (result.status !== 'refunded') {
+        setShopNotice('Cette competence bloque une autre competence achetee.');
+        return;
+      }
+
+      emitTalentsUpdated();
+      setShopNotice('Competence remboursee.');
+    } finally {
+      setPendingTalentAction(null);
+    }
+  };
+
   const controlTalentState = playerProfile.controlTalents;
   const allControlTalentsMaxed = Object.values(controlTalentState.levels).every(
     (level) => level >= CONTROL_TALENT_MAX_LEVEL,
@@ -785,6 +931,60 @@ export default function App(): React.JSX.Element {
           description: `${definition.description} ${definition.statLabel}: ${
             definition.levels[targetLevel - 1]
           }.${!isUnlocked ? lockedText : ''}`,
+          price,
+          refund: Math.floor(price / 2),
+          isOwned,
+          isRefundable,
+          canBuy,
+        };
+      })()
+    : null;
+  const blueTalentState = playerProfile.blueTalents;
+  const allBlueTalentsMaxed = areAllBlueTalentsMaxed(blueTalentState);
+  const selectedBlueTalentDetails = selectedBlueTalent
+    ? (() => {
+        if (selectedBlueTalent.kind === 'feast') {
+          return {
+            title: BLUE_FEAST_TALENT.title,
+            icon: BLUE_FEAST_TALENT.icon,
+            levelLabel: blueTalentState.feast ? 'Ultime debloque' : 'Ultime',
+            description: BLUE_FEAST_TALENT.description,
+            price: BLUE_FEAST_TALENT.cost,
+            refund: Math.floor(BLUE_FEAST_TALENT.cost / 2),
+            isOwned: blueTalentState.feast,
+            isRefundable: blueTalentState.feast,
+            canBuy: !blueTalentState.feast && allBlueTalentsMaxed,
+          };
+        }
+
+        const definition = getBlueTalentDefinition(selectedBlueTalent.id);
+        const currentLevel = blueTalentState.levels[selectedBlueTalent.id];
+        const targetLevel = selectedBlueTalent.level;
+        const isUnlocked = isBlueTalentUnlocked(blueTalentState, definition);
+        const isOwned = blueTalentState.feast || currentLevel >= targetLevel;
+        const isRefundable =
+          !blueTalentState.feast &&
+          isOwned &&
+          currentLevel === targetLevel &&
+          canRefundBlueTalentLevel(blueTalentState, selectedBlueTalent.id);
+        const canBuy =
+          !blueTalentState.feast &&
+          isUnlocked &&
+          !isOwned &&
+          currentLevel + 1 === targetLevel;
+        const price = definition.costs[targetLevel - 1] ?? 0;
+        const lockText =
+          !isUnlocked && definition.requirement
+            ? ` ${definition.requirement.label}.`
+            : '';
+
+        return {
+          title: definition.title,
+          icon: definition.icon,
+          levelLabel: `Niveau ${targetLevel}`,
+          description: `${definition.description} ${definition.statLabel}: ${
+            definition.levels[targetLevel - 1]
+          }.${lockText}`,
           price,
           refund: Math.floor(price / 2),
           isOwned,
@@ -1435,6 +1635,152 @@ export default function App(): React.JSX.Element {
                               >
                                 <span className="visually-hidden">
                                   Acheter {selectedEnduranceTalentDetails.price}
+                                </span>
+                              </button>
+                            )}
+                          </aside>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedTalentTreeTab === 'talents' && (
+                      <div
+                        className="blue-talent-tree"
+                        onPointerDown={handleBlueTalentTreePointerDown}
+                      >
+                        <button
+                          type="button"
+                          className={`blue-talent-node blue-talent-node--feast${
+                            blueTalentState.feast ? ' is-owned' : ''
+                          }${!allBlueTalentsMaxed ? ' is-locked' : ''}`}
+                          onClick={() => selectBlueTalent({ kind: 'feast' })}
+                        >
+                          <img
+                            src={BLUE_FEAST_TALENT.icon}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <span className="control-talent-node__title">
+                            {BLUE_FEAST_TALENT.title}
+                          </span>
+                          <span className="control-talent-node__price">
+                            <img
+                              src="/assets/collectable/pasteque.png"
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            {BLUE_FEAST_TALENT.cost}
+                          </span>
+                        </button>
+
+                        {BLUE_TALENTS.flatMap((talent) => {
+                          const currentLevel = blueTalentState.levels[talent.id];
+                          const maxLevel = BLUE_TALENT_MAX_LEVEL_BY_ID[talent.id];
+                          const isUnlocked = isBlueTalentUnlocked(
+                            blueTalentState,
+                            talent,
+                          );
+                          const levels = Array.from(
+                            { length: maxLevel },
+                            (_value, index) => maxLevel - index,
+                          );
+
+                          return levels.map((level) => {
+                            const isOwned =
+                              blueTalentState.feast || currentLevel >= level;
+                            const isNext =
+                              !blueTalentState.feast &&
+                              isUnlocked &&
+                              currentLevel + 1 === level;
+                            const isLocked =
+                              !blueTalentState.feast &&
+                              (!isUnlocked || (!isOwned && !isNext));
+                            const price = talent.costs[level - 1] ?? 0;
+
+                            return (
+                              <button
+                                type="button"
+                                key={`${talent.id}-${level}`}
+                                className={`blue-talent-node blue-talent-node--${talent.id} blue-talent-node--level-${level}${
+                                  isOwned ? ' is-owned' : ''
+                                }${isNext ? ' is-next' : ''}${
+                                  isLocked ? ' is-locked' : ''
+                                }`}
+                                onClick={() =>
+                                  selectBlueTalent({
+                                    kind: 'talent',
+                                    id: talent.id,
+                                    level,
+                                  })
+                                }
+                              >
+                                <img src={talent.icon} alt="" aria-hidden="true" />
+                                <span className="control-talent-node__title">
+                                  {talent.title}
+                                </span>
+                                <span className="control-talent-node__level">
+                                  niv {level}
+                                </span>
+                                <span className="control-talent-node__price">
+                                  <img
+                                    src="/assets/collectable/pasteque.png"
+                                    alt=""
+                                    aria-hidden="true"
+                                  />
+                                  {price}
+                                </span>
+                              </button>
+                            );
+                          });
+                        })}
+
+                        {selectedBlueTalentDetails && (
+                          <aside
+                            className={`talent-detail-sheet${
+                              isBlueTalentSheetClosing ? ' is-closing' : ''
+                            }`}
+                            aria-live="polite"
+                          >
+                            <img
+                              className="talent-detail-sheet__icon"
+                              src={selectedBlueTalentDetails.icon}
+                              alt=""
+                              aria-hidden="true"
+                            />
+                            <div className="talent-detail-sheet__copy">
+                              <strong>{selectedBlueTalentDetails.title}</strong>
+                              <span>{selectedBlueTalentDetails.levelLabel}</span>
+                              <p>{selectedBlueTalentDetails.description}</p>
+                            </div>
+                            {selectedBlueTalentDetails.isRefundable ? (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__refund"
+                                disabled={pendingTalentAction !== null}
+                                onClick={() =>
+                                  selectedBlueTalent &&
+                                  handleBlueTalentRefund(selectedBlueTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Rembourser {selectedBlueTalentDetails.refund}
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="talent-detail-sheet__buy"
+                                disabled={
+                                  pendingTalentAction !== null ||
+                                  !selectedBlueTalentDetails.canBuy
+                                }
+                                onClick={() =>
+                                  selectedBlueTalent &&
+                                  handleBlueTalentPurchase(selectedBlueTalent)
+                                }
+                              >
+                                <span className="visually-hidden">
+                                  Acheter {selectedBlueTalentDetails.price}
                                 </span>
                               </button>
                             )}

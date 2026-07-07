@@ -1443,6 +1443,122 @@ button {
   top: 50%;
 }
 
+.blue-talent-tree {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+.blue-talent-node {
+  display: grid;
+  position: absolute;
+  z-index: 2;
+  width: 78px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  color: #fff6c7;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 6px 5px rgb(0 0 0 / 38%));
+  transform: translateX(-50%);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.blue-talent-node img {
+  width: min(100%, 66px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  transition:
+    filter 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.blue-talent-node.is-owned img {
+  filter:
+    drop-shadow(0 0 8px rgb(255 238 142 / 80%))
+    saturate(1.1)
+    brightness(1.05);
+}
+
+.blue-talent-node.is-next img {
+  filter:
+    drop-shadow(0 0 8px rgb(74 190 255 / 84%))
+    saturate(1.1)
+    brightness(1.04);
+}
+
+.blue-talent-node.is-locked img {
+  opacity: 0.52;
+  filter: grayscale(0.72) brightness(0.62);
+}
+
+.blue-talent-node:active img {
+  transform: translateY(2px) scale(0.96);
+}
+
+.blue-talent-node--feast {
+  top: 4%;
+  left: 50%;
+  z-index: 3;
+  width: 96px;
+}
+
+.blue-talent-node--feast img {
+  width: 76px;
+}
+
+.blue-talent-node--feast .control-talent-node__title {
+  width: 96px;
+  font-size: clamp(0.56rem, 2.2vw, 0.72rem);
+}
+
+.blue-talent-node--watermelonMagnet.blue-talent-node--level-3,
+.blue-talent-node--fruitMultiplier.blue-talent-node--level-3 {
+  top: 28%;
+}
+
+.blue-talent-node--watermelonMagnet.blue-talent-node--level-2,
+.blue-talent-node--fruitMultiplier.blue-talent-node--level-2 {
+  top: 50%;
+}
+
+.blue-talent-node--watermelonMagnet.blue-talent-node--level-1,
+.blue-talent-node--fruitMultiplier.blue-talent-node--level-1 {
+  top: 72%;
+}
+
+.blue-talent-node--watermelonMagnet {
+  left: 15%;
+}
+
+.blue-talent-node--fruitMultiplier {
+  left: 50%;
+}
+
+.blue-talent-node--powerTakeoff {
+  top: 24%;
+  left: 86%;
+}
+
+.blue-talent-node--chainReaction {
+  top: 40%;
+  left: 86%;
+}
+
+.blue-talent-node--fruitDetector {
+  top: 56%;
+  left: 86%;
+}
+
+.blue-talent-node--perch {
+  top: 72%;
+  left: 86%;
+}
+
 .talent-detail-sheet {
   display: grid;
   position: absolute;

@@ -23,6 +23,19 @@ import {
   type EnduranceTalentId,
   type EnduranceTalentState,
 } from '../talents/enduranceTalents';
+import {
+  BLUE_FEAST_COST,
+  BLUE_TALENT_MAX_LEVEL_BY_ID,
+  areAllBlueTalentsMaxed,
+  canRefundBlueTalentLevel,
+  cloneBlueTalentState,
+  createEmptyBlueTalentState,
+  getBlueTalentDefinition,
+  isBlueTalentUnlocked,
+  normalizeBlueTalentState,
+  type BlueTalentId,
+  type BlueTalentState,
+} from '../talents/blueTalents';
 
 const BEST_ALTITUDE_KEY = 'flydodo_best_altitude';
 const PLAYER_PROFILE_KEY = 'flydodo_player_profile_v1';
@@ -41,6 +54,7 @@ export interface PlayerProfile {
   equipped: EquippedCosmetics;
   controlTalents: ControlTalentState;
   enduranceTalents: EnduranceTalentState;
+  blueTalents: BlueTalentState;
 }
 
 export type PurchaseStatus =
@@ -106,6 +120,7 @@ export function createEmptyPlayerProfile(): PlayerProfile {
     equipped: createEmptyEquippedCosmetics(),
     controlTalents: createEmptyControlTalentState(),
     enduranceTalents: createEmptyEnduranceTalentState(),
+    blueTalents: createEmptyBlueTalentState(),
   };
 }
 
@@ -116,6 +131,7 @@ function cloneProfile(profile: PlayerProfile): PlayerProfile {
     equipped: { ...profile.equipped },
     controlTalents: cloneControlTalentState(profile.controlTalents),
     enduranceTalents: cloneEnduranceTalentState(profile.enduranceTalents),
+    blueTalents: cloneBlueTalentState(profile.blueTalents),
   };
 }
 
@@ -152,6 +168,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
     },
     controlTalents: normalizeControlTalentState(source.controlTalents),
     enduranceTalents: normalizeEnduranceTalentState(source.enduranceTalents),
+    blueTalents: normalizeBlueTalentState(source.blueTalents),
   };
 }
 
@@ -679,6 +696,178 @@ export function refundEndurancePhoenixTalent(): Promise<TalentRefundResult> {
       enduranceTalents: {
         ...current.enduranceTalents,
         phoenix: false,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseBlueTalentLevel(
+  talentId: BlueTalentId,
+): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.blueTalents.feast) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.blueTalents.levels[talentId];
+    const maxLevel = BLUE_TALENT_MAX_LEVEL_BY_ID[talentId];
+
+    if (currentLevel >= maxLevel) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const definition = getBlueTalentDefinition(talentId);
+
+    if (!isBlueTalentUnlocked(current.blueTalents, definition)) {
+      return {
+        status: 'locked',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const price = definition.costs[currentLevel] ?? 0;
+
+    if (current.watermelons < price) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - price,
+      blueTalents: {
+        ...current.blueTalents,
+        levels: {
+          ...current.blueTalents.levels,
+          [talentId]: currentLevel + 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function purchaseBlueFeastTalent(): Promise<TalentPurchaseResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.blueTalents.feast) {
+      return {
+        status: 'already-maxed',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (!areAllBlueTalentsMaxed(current.blueTalents)) {
+      return {
+        status: 'locked',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (current.watermelons < BLUE_FEAST_COST) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - BLUE_FEAST_COST,
+      blueTalents: {
+        ...current.blueTalents,
+        feast: true,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundBlueTalentLevel(
+  talentId: BlueTalentId,
+): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!canRefundBlueTalentLevel(current.blueTalents, talentId)) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const currentLevel = current.blueTalents.levels[talentId];
+    const definition = getBlueTalentDefinition(talentId);
+    const refund = Math.floor((definition.costs[currentLevel - 1] ?? 0) / 2);
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + refund,
+      blueTalents: {
+        ...current.blueTalents,
+        levels: {
+          ...current.blueTalents.levels,
+          [talentId]: currentLevel - 1,
+        },
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'refunded',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function refundBlueFeastTalent(): Promise<TalentRefundResult> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!current.blueTalents.feast) {
+      return {
+        status: 'not-refundable',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons + Math.floor(BLUE_FEAST_COST / 2),
+      blueTalents: {
+        ...current.blueTalents,
+        feast: false,
       },
     };
 

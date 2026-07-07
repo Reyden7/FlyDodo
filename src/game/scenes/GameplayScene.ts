@@ -24,6 +24,10 @@ import {
   type EnduranceTalentStats,
 } from '../../talents/enduranceTalents';
 import {
+  getBlueTalentStats,
+  type BlueTalentStats,
+} from '../../talents/blueTalents';
+import {
   COSMETIC_CATEGORIES,
   getCosmeticTransform,
   getShopItemById,
@@ -324,6 +328,7 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
 
 const WATERMELON_TEXTURE_KEY = 'watermelon-collectable';
 const WATERMELON_TEXTURE_PATH = '/assets/collectable/pasteque.png';
+const FRUIT_DETECTOR_TEXTURE_KEY = 'fruit-detector-talent-button';
 const WATERMELON_SOUND_KEY = 'watermelon-collect-sound';
 const WATERMELON_SOUND_PATH = '/assets/sounds/pasteque.mp3';
 const WATERMELON_SOUND_VOLUME = 0.65;
@@ -689,6 +694,21 @@ export class GameplayScene extends Phaser.Scene {
     shieldRecharge: false,
     phoenix: false,
   };
+  private blueTalentStats: BlueTalentStats = {
+    watermelonMagnetLevel: 0,
+    watermelonBonus: 0,
+    branchPerch: false,
+    fruitDetector: false,
+    chainReaction: false,
+    powerTakeoff: false,
+    feast: false,
+  };
+  private watermelonCollectStreak = 0;
+  private fruitDetectorButton?: Phaser.GameObjects.Image;
+  private fruitDetectorArrow?: Phaser.GameObjects.Graphics;
+  private fruitDetectorActive = false;
+  private perchedBranch: Phaser.Physics.Arcade.Image | null = null;
+  private pendingPowerTakeoff = false;
   private lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
   private nextLifeRegenerationAt: number | null = null;
   private nextShieldRechargeAt: number | null = null;
@@ -744,6 +764,10 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
     this.load.image(LAVA_TEXTURE_KEY, '/assets/obstacles/lave/lave.png');
+    this.load.image(
+      FRUIT_DETECTOR_TEXTURE_KEY,
+      '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
+    );
     this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
@@ -884,6 +908,9 @@ export class GameplayScene extends Phaser.Scene {
     this.updateWingBeats(direction, deltaSeconds);
     this.updateDodoVisuals(deltaSeconds);
     this.updateCamera(deltaSeconds);
+    this.updateWatermelonMisses();
+    this.updateFeastAttraction(deltaSeconds);
+    this.updateFruitDetectorArrow();
     this.updateEnduranceTimers(time);
     this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
@@ -894,6 +921,7 @@ export class GameplayScene extends Phaser.Scene {
 
   shutdown(): void {
     this.destroyFlightSounds();
+    this.destroyFruitDetectorButton();
 
     this.input.off('pointerdown', this.handlePointerDown, this);
     this.input.off('pointermove', this.handlePointerMove, this);
@@ -969,6 +997,17 @@ export class GameplayScene extends Phaser.Scene {
 
     this.controlStats = getControlTalentStats(profile.controlTalents);
     this.applyEnduranceStats(getEnduranceTalentStats(profile.enduranceTalents));
+    this.applyBlueTalentStats(getBlueTalentStats(profile.blueTalents));
+  }
+
+  private applyBlueTalentStats(nextStats: BlueTalentStats): void {
+    this.blueTalentStats = nextStats;
+
+    if (nextStats.fruitDetector) {
+      this.createFruitDetectorButton();
+    } else {
+      this.destroyFruitDetectorButton();
+    }
   }
 
   private applyEnduranceStats(nextStats: EnduranceTalentStats): void {
@@ -1316,6 +1355,20 @@ export class GameplayScene extends Phaser.Scene {
       shieldRecharge: false,
       phoenix: false,
     };
+    this.blueTalentStats = {
+      watermelonMagnetLevel: 0,
+      watermelonBonus: 0,
+      branchPerch: false,
+      fruitDetector: false,
+      chainReaction: false,
+      powerTakeoff: false,
+      feast: false,
+    };
+    this.watermelonCollectStreak = 0;
+    this.fruitDetectorActive = false;
+    this.perchedBranch = null;
+    this.pendingPowerTakeoff = false;
+    this.fruitDetectorArrow?.clear();
     this.lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
     this.nextLifeRegenerationAt = null;
     this.nextShieldRechargeAt = null;
@@ -2003,11 +2056,19 @@ export class GameplayScene extends Phaser.Scene {
       volume: WATERMELON_SOUND_VOLUME,
     });
 
-    this.watermelons += 1;
+    const baseAmount = 1 + this.blueTalentStats.watermelonBonus;
+    const chainMultiplier =
+      this.blueTalentStats.chainReaction && this.watermelonCollectStreak >= 2
+        ? 2
+        : 1;
+    const collectedAmount = baseAmount * chainMultiplier;
+
+    this.watermelonCollectStreak += 1;
+    this.watermelons += collectedAmount;
     this.emitHud();
 
     // Chaque pastèque récoltée alimente immédiatement le portefeuille persistant.
-    void addWatermelons(1).then((profile) => {
+    void addWatermelons(collectedAmount).then((profile) => {
       emitWalletUpdated({ watermelons: profile.watermelons });
     });
 
@@ -2043,12 +2104,242 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const obstacleKind = obstacle.getData('kind') as string | undefined;
+    const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
+
+    if (this.canPerchOnBranch(obstacle, obstacleKind)) {
+      this.perchOnBranch(obstacle);
+      return;
+    }
+
     void this.damagePlayer(
       1,
       obstacleKind === 'flyingInsect' ? 'mosquito' : 'default',
     );
   };
+
+  private canPerchOnBranch(
+    obstacle: Phaser.Physics.Arcade.Image,
+    obstacleKind: ObstacleKindId | undefined,
+  ): boolean {
+    if (
+      !this.blueTalentStats.branchPerch ||
+      (obstacleKind !== 'branchLeft' && obstacleKind !== 'branchRight')
+    ) {
+      return false;
+    }
+
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const obstacleBody = obstacle.body as Phaser.Physics.Arcade.Body;
+
+    return (
+      playerBody.velocity.y >= 0 &&
+      playerBody.bottom <= obstacleBody.top + 24 &&
+      this.player.y < obstacle.y
+    );
+  }
+
+  private perchOnBranch(branch: Phaser.Physics.Arcade.Image): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const branchBody = branch.body as Phaser.Physics.Arcade.Body;
+
+    this.perchedBranch = branch;
+    this.pendingPowerTakeoff = this.blueTalentStats.powerTakeoff;
+    this.isGrounded = true;
+    this.angularVelocity = 0;
+    this.player.setAngle(0);
+    this.player.setPosition(this.player.x, branchBody.top - 2);
+    body.reset(this.player.x, this.player.y);
+    body.setVelocity(0, 0);
+    body.setAcceleration(0, 0);
+    this.stopFlightSounds();
+    this.updateDodoVisuals(0);
+  }
+
+  private updateWatermelonMisses(): void {
+    const cameraBottom = this.cameras.main.worldView.bottom;
+
+    for (const child of this.watermelonCollectables.getChildren()) {
+      const watermelon = child as Phaser.Physics.Arcade.Image;
+
+      if (
+        watermelon.active &&
+        !watermelon.getData('missed') &&
+        watermelon.y > cameraBottom + 20
+      ) {
+        watermelon.setData('missed', true);
+        this.watermelonCollectStreak = 0;
+      }
+    }
+  }
+
+  private updateFeastAttraction(deltaSeconds: number): void {
+    if (!this.blueTalentStats.feast) {
+      return;
+    }
+
+    const view = this.cameras.main.worldView;
+    const attractionSpeed = 430 * deltaSeconds;
+
+    for (const child of this.watermelonCollectables.getChildren()) {
+      const watermelon = child as Phaser.Physics.Arcade.Image;
+
+      if (!watermelon.active) {
+        continue;
+      }
+
+      if (
+        watermelon.x < view.left - 30 ||
+        watermelon.x > view.right + 30 ||
+        watermelon.y < view.top - 30 ||
+        watermelon.y > view.bottom + 30
+      ) {
+        continue;
+      }
+
+      const distance = Phaser.Math.Distance.Between(
+        watermelon.x,
+        watermelon.y,
+        this.player.x,
+        this.player.y,
+      );
+
+      if (distance <= 24) {
+        this.handleWatermelonCollected(
+          this.player as Phaser.Types.Physics.Arcade.GameObjectWithBody,
+          watermelon as Phaser.Types.Physics.Arcade.GameObjectWithBody,
+        );
+        continue;
+      }
+
+      const step = Math.min(attractionSpeed, distance);
+      const angle = Phaser.Math.Angle.Between(
+        watermelon.x,
+        watermelon.y,
+        this.player.x,
+        this.player.y,
+      );
+
+      watermelon.setPosition(
+        watermelon.x + Math.cos(angle) * step,
+        watermelon.y + Math.sin(angle) * step,
+      );
+      watermelon.refreshBody();
+    }
+  }
+
+  private createFruitDetectorButton(): void {
+    if (this.fruitDetectorButton) {
+      return;
+    }
+
+    this.fruitDetectorButton = this.add
+      .image(GAME_WIDTH - 43, GAME_HEIGHT - 150, FRUIT_DETECTOR_TEXTURE_KEY)
+      .setOrigin(0.5)
+      .setScale(0.046)
+      .setDepth(70)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    this.fruitDetectorButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.activateFruitDetector();
+      },
+    );
+  }
+
+  private destroyFruitDetectorButton(): void {
+    this.fruitDetectorButton?.destroy();
+    this.fruitDetectorArrow?.destroy();
+    this.fruitDetectorButton = undefined;
+    this.fruitDetectorArrow = undefined;
+    this.fruitDetectorActive = false;
+  }
+
+  private activateFruitDetector(): void {
+    if (!this.blueTalentStats.fruitDetector) {
+      return;
+    }
+
+    this.fruitDetectorActive = true;
+
+    if (!this.fruitDetectorArrow) {
+      this.fruitDetectorArrow = this.add
+        .graphics()
+        .setDepth(69)
+        .setScrollFactor(0);
+    }
+
+    this.updateFruitDetectorArrow();
+  }
+
+  private findNextWatermelon(): Phaser.Physics.Arcade.Image | null {
+    let selected: Phaser.Physics.Arcade.Image | null = null;
+    let selectedDistance = Number.POSITIVE_INFINITY;
+
+    for (const child of this.watermelonCollectables.getChildren()) {
+      const watermelon = child as Phaser.Physics.Arcade.Image;
+
+      if (!watermelon.active) {
+        continue;
+      }
+
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        watermelon.x,
+        watermelon.y,
+      );
+
+      if (distance < selectedDistance) {
+        selected = watermelon;
+        selectedDistance = distance;
+      }
+    }
+
+    return selected;
+  }
+
+  private updateFruitDetectorArrow(): void {
+    if (!this.fruitDetectorActive || !this.fruitDetectorArrow) {
+      return;
+    }
+
+    const target = this.findNextWatermelon();
+    this.fruitDetectorArrow.clear();
+
+    if (!target) {
+      return;
+    }
+
+    const camera = this.cameras.main;
+    const startX = this.fruitDetectorButton?.x ?? GAME_WIDTH - 43;
+    const startY = this.fruitDetectorButton?.y ?? GAME_HEIGHT - 150;
+    const targetX = Phaser.Math.Clamp(target.x - camera.scrollX, 24, GAME_WIDTH - 24);
+    const targetY = Phaser.Math.Clamp(target.y - camera.scrollY, 88, GAME_HEIGHT - 88);
+    const angle = Phaser.Math.Angle.Between(startX, startY, targetX, targetY);
+    const arrowLength = 34;
+    const endX = startX + Math.cos(angle) * arrowLength;
+    const endY = startY + Math.sin(angle) * arrowLength;
+
+    this.fruitDetectorArrow.lineStyle(4, 0xfff18a, 0.95);
+    this.fruitDetectorArrow.strokeLineShape(new Phaser.Geom.Line(startX, startY, endX, endY));
+    this.fruitDetectorArrow.fillStyle(0xfff18a, 0.95);
+    this.fruitDetectorArrow.fillTriangle(
+      endX,
+      endY,
+      endX - Math.cos(angle - 0.55) * 11,
+      endY - Math.sin(angle - 0.55) * 11,
+      endX - Math.cos(angle + 0.55) * 11,
+      endY - Math.sin(angle + 0.55) * 11,
+    );
+  }
 
   private createOffscreenIndicator(): void {
     const bubble = this.add.circle(0, 0, 30, 0x163a62, 0.84);
@@ -2155,6 +2446,7 @@ export class GameplayScene extends Phaser.Scene {
   private updateFlight(direction: number, deltaSeconds: number): void {
     const hasFlap = direction !== 0;
     const hasBalancedFlap = direction === 2;
+    let flapImpulseMultiplier = 1;
 
     if (direction === -1 || direction === 1) {
       this.angularVelocity += direction * this.controlStats.flapTurnImpulse;
@@ -2177,7 +2469,15 @@ export class GameplayScene extends Phaser.Scene {
     const speed = body.velocity.length();
 
     if (this.isGrounded) {
-      this.player.y = GROUND_Y;
+      if (this.perchedBranch?.active) {
+        const branchBody = this.perchedBranch.body as Phaser.Physics.Arcade.Body;
+        this.player.y = branchBody.top - 2;
+      } else {
+        this.perchedBranch = null;
+        this.pendingPowerTakeoff = false;
+        this.player.y = GROUND_Y;
+      }
+
       body.setVelocity(0, 0);
       body.setAcceleration(0, 0);
 
@@ -2185,6 +2485,9 @@ export class GameplayScene extends Phaser.Scene {
         return;
       }
 
+      flapImpulseMultiplier = this.pendingPowerTakeoff ? 2 : 1;
+      this.pendingPowerTakeoff = false;
+      this.perchedBranch = null;
       this.isGrounded = false;
       this.maxAltitudeSinceTakeoff = 0;
       this.startFlightSound();
@@ -2196,14 +2499,15 @@ export class GameplayScene extends Phaser.Scene {
 
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
     body.setAcceleration(0, GRAVITY_Y);
+    const flapImpulse = this.controlStats.flapUpwardImpulse * flapImpulseMultiplier;
 
     if (hasBalancedFlap) {
-      body.velocity.x += headingX * this.controlStats.flapUpwardImpulse;
-      body.velocity.y += headingY * this.controlStats.flapUpwardImpulse * 1.12;
+      body.velocity.x += headingX * flapImpulse;
+      body.velocity.y += headingY * flapImpulse * 1.12;
     } else if (hasFlap) {
       body.velocity.x +=
-        headingX * this.controlStats.flapUpwardImpulse + direction * FLAP_SIDE_IMPULSE;
-      body.velocity.y += headingY * this.controlStats.flapUpwardImpulse;
+        headingX * flapImpulse + direction * FLAP_SIDE_IMPULSE;
+      body.velocity.y += headingY * flapImpulse;
     } else if (body.velocity.y > 0 && this.controlStats.lift > 0) {
       body.setAcceleration(0, Math.max(0, GRAVITY_Y - this.controlStats.lift));
     }
@@ -2248,6 +2552,8 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.isGrounded = true;
+    this.perchedBranch = null;
+    this.pendingPowerTakeoff = false;
     this.maxAltitudeSinceTakeoff = 0;
     this.angularVelocity = 0;
     this.player.angle = 0;

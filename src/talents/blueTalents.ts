@@ -41,7 +41,7 @@ export interface BlueTalentDefinition {
 }
 
 export const BLUE_TALENT_MAX_LEVEL_BY_ID = {
-  watermelonMagnet: 1,
+  watermelonMagnet: 3,
   fruitMultiplier: 3,
   perch: 1,
   fruitDetector: 1,
@@ -58,8 +58,8 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     icon: '/assets/competences/Talents/aimantPasteque.png',
     description:
       "Renforce le futur objet aimant a pasteque. L'objet n'est pas encore disponible.",
-    levels: [1],
-    costs: [55],
+    levels: [1, 2, 3],
+    costs: [35, 55, 80],
     statLabel: 'Aimant',
   },
   {
