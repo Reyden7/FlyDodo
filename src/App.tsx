@@ -71,6 +71,14 @@ import {
   getBlueTalentNodePosition,
   type TalentNodePosition,
 } from './talents/blueTalentNodePositions';
+import {
+  CONTROL_MASTER_NODE_POSITION,
+  getControlTalentNodePosition,
+} from './talents/controlTalentNodePositions';
+import {
+  ENDURANCE_PHOENIX_NODE_POSITION,
+  getEnduranceTalentNodePosition,
+} from './talents/enduranceTalentNodePositions';
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
@@ -1391,6 +1399,9 @@ export default function App(): React.JSX.Element {
                           className={`control-talent-node control-talent-node--master${
                             controlTalentState.master ? ' is-owned' : ''
                           }${!allControlTalentsMaxed ? ' is-locked' : ''}`}
+                          style={getTalentNodePositionStyle(
+                            CONTROL_MASTER_NODE_POSITION,
+                          )}
                           onClick={() => selectControlTalent({ kind: 'master' })}
                         >
                           <img src={CONTROL_MASTER_TALENT.icon} alt="" aria-hidden="true" />
@@ -1422,6 +1433,10 @@ export default function App(): React.JSX.Element {
                                   const isLocked =
                                     !controlTalentState.master && !isOwned && !isNext;
                                   const price = talent.costs[level - 1] ?? 0;
+                                  const position = getControlTalentNodePosition(
+                                    talent.id,
+                                    level,
+                                  );
 
                                   return (
                                     <button
@@ -1432,6 +1447,7 @@ export default function App(): React.JSX.Element {
                                       }${isNext ? ' is-next' : ''}${
                                         isLocked ? ' is-locked' : ''
                                       }`}
+                                      style={getTalentNodePositionStyle(position)}
                                       onClick={() =>
                                         selectControlTalent({
                                           kind: 'talent',
@@ -1528,6 +1544,9 @@ export default function App(): React.JSX.Element {
                           className={`endurance-talent-node endurance-talent-node--phoenix${
                             enduranceTalentState.phoenix ? ' is-owned' : ''
                           }${!allEnduranceTalentsMaxed ? ' is-locked' : ''}`}
+                          style={getTalentNodePositionStyle(
+                            ENDURANCE_PHOENIX_NODE_POSITION,
+                          )}
                           onClick={() => selectEnduranceTalent({ kind: 'phoenix' })}
                         >
                           <img
@@ -1578,6 +1597,10 @@ export default function App(): React.JSX.Element {
                                     !enduranceTalentState.phoenix &&
                                     (!isUnlocked || (!isOwned && !isNext));
                                   const price = talent.costs[level - 1] ?? 0;
+                                  const position = getEnduranceTalentNodePosition(
+                                    talent.id,
+                                    level,
+                                  );
 
                                   return (
                                     <button
@@ -1588,6 +1611,7 @@ export default function App(): React.JSX.Element {
                                       }${isNext ? ' is-next' : ''}${
                                         isLocked ? ' is-locked' : ''
                                       }`}
+                                      style={getTalentNodePositionStyle(position)}
                                       onClick={() =>
                                         selectEnduranceTalent({
                                           kind: 'talent',

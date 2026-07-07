@@ -1208,33 +1208,23 @@ button {
 .control-talent-tree {
   position: absolute;
   inset: 0;
-  --control-talent-level-2-offset-y: 10px;
-  --control-talent-level-3-offset-y: 18px;
-  --control-talent-level-4-offset-y: 30px;
   overflow: hidden;
   touch-action: manipulation;
 }
 
 .control-talent-columns {
-  display: grid;
-  position: absolute;
-  top: 12%;
-  right: 7%;
-  left: 5%;
-  z-index: 2;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8%;
+  display: contents;
 }
 
 .control-talent-column {
-  display: grid;
-  gap: clamp(16px, 3.1vh, 30px);
+  display: contents;
 }
 
 .control-talent-node {
   display: grid;
-  position: relative;
-  --control-talent-node-offset-y: 0px;
+  position: absolute;
+  z-index: 2;
+  width: 78px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1243,20 +1233,8 @@ button {
   background: transparent;
   cursor: pointer;
   filter: drop-shadow(0 6px 5px rgb(0 0 0 / 38%));
-  transform: translateY(var(--control-talent-node-offset-y));
+  transform: translateX(-50%);
   -webkit-tap-highlight-color: transparent;
-}
-
-.control-talent-node--level-2 {
-  --control-talent-node-offset-y: var(--control-talent-level-2-offset-y);
-}
-
-.control-talent-node--level-3 {
-  --control-talent-node-offset-y: var(--control-talent-level-3-offset-y);
-}
-
-.control-talent-node--level-4 {
-  --control-talent-node-offset-y: var(--control-talent-level-4-offset-y);
 }
 
 .control-talent-node img {
@@ -1342,12 +1320,8 @@ button {
 }
 
 .control-talent-node--master {
-  position: absolute;
-  top: 0%;
-  left: 50%;
   z-index: 3;
   width: 96px;
-  transform: translateX(-50%);
 }
 
 .control-talent-node--master img {
@@ -1367,26 +1341,18 @@ button {
 }
 
 .endurance-talent-columns {
-  display: grid;
-  position: absolute;
-  top: 18%;
-  right: 7%;
-  bottom: 12%;
-  left: 5%;
-  z-index: 2;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8%;
+  display: contents;
 }
 
 .endurance-talent-column {
-  position: relative;
-  min-width: 0;
+  display: contents;
 }
 
 .endurance-talent-node {
   display: grid;
   position: absolute;
-  left: 50%;
+  z-index: 2;
+  width: 78px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1432,7 +1398,6 @@ button {
 }
 
 .endurance-talent-node--phoenix {
-  top: 4%;
   z-index: 3;
   width: 96px;
 }
@@ -1444,30 +1409,6 @@ button {
 .endurance-talent-node--phoenix .control-talent-node__title {
   width: 96px;
   font-size: clamp(0.56rem, 2.2vw, 0.72rem);
-}
-
-.endurance-talent-column--heart .endurance-talent-node--level-3 {
-  top: 11%;
-}
-
-.endurance-talent-column--heart .endurance-talent-node--level-2 {
-  top: 45%;
-}
-
-.endurance-talent-column--heart .endurance-talent-node--level-1 {
-  top: 78%;
-}
-
-.endurance-talent-column--regeneration .endurance-talent-node--level-1 {
-  top: 50%;
-}
-
-.endurance-talent-column--shield .endurance-talent-node--level-1 {
-  top: 36%;
-}
-
-.endurance-talent-column--recharge .endurance-talent-node--level-1 {
-  top: 50%;
 }
 
 .blue-talent-tree {

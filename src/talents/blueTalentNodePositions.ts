@@ -1,10 +1,7 @@
 import type { BlueTalentId } from './blueTalents';
+import type { TalentNodePosition } from './talentNodePositions';
 
-export interface TalentNodePosition {
-  // Percentages inside the blue talent tree area.
-  x: number;
-  y: number;
-}
+export type { TalentNodePosition } from './talentNodePositions';
 
 export const BLUE_FEAST_NODE_POSITION: TalentNodePosition = {
   x: 49,
