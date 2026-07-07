@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import {
   emitCosmeticEquipped,
@@ -12,6 +12,7 @@ import {
   type WalletUpdatedDetail,
 } from './game/events';
 import {
+  addWatermelons,
   createEmptyPlayerProfile,
   equipShopItem,
   loadLatestPlayerProfile,
@@ -65,6 +66,11 @@ import {
   isBlueTalentUnlocked,
   type BlueTalentId,
 } from './talents/blueTalents';
+import {
+  BLUE_FEAST_NODE_POSITION,
+  getBlueTalentNodePosition,
+  type TalentNodePosition,
+} from './talents/blueTalentNodePositions';
 
 type TutorialSide = 'left' | 'right' | null;
 type ShopTab = 'accessories' | 'talents' | 'items';
@@ -96,6 +102,16 @@ type SelectedBlueTalent =
   | {
       kind: 'feast';
     };
+
+const getTalentNodePositionStyle = ({
+  x,
+  y,
+}: TalentNodePosition): CSSProperties => ({
+  left: `${x}%`,
+  top: `${y}%`,
+});
+
+const IS_DEV = import.meta.env.DEV;
 
 const TALENT_TREE_TABS: ReadonlyArray<{
   id: TalentTreeTab;
@@ -434,6 +450,12 @@ export default function App(): React.JSX.Element {
     if (!isGameOver) {
       requestGameResume();
     }
+  };
+
+  const handleDevAddWatermelons = async (): Promise<void> => {
+    const profile = await addWatermelons(5);
+    setPlayerProfile(profile);
+    setShopNotice('+5 pasteques');
   };
 
   const handleShopItemAction = async (item: ShopItem): Promise<void> => {
@@ -1146,6 +1168,15 @@ export default function App(): React.JSX.Element {
                   alt=""
                   aria-hidden="true"
                 />
+                {IS_DEV && (
+                  <button
+                    type="button"
+                    className="shop-dev-watermelon-button"
+                    onClick={() => void handleDevAddWatermelons()}
+                  >
+                    +5
+                  </button>
+                )}
               </div>
 
               <div className="shop-tabs" role="tablist" aria-label="Sections boutique">
@@ -1653,6 +1684,9 @@ export default function App(): React.JSX.Element {
                           className={`blue-talent-node blue-talent-node--feast${
                             blueTalentState.feast ? ' is-owned' : ''
                           }${!allBlueTalentsMaxed ? ' is-locked' : ''}`}
+                          style={getTalentNodePositionStyle(
+                            BLUE_FEAST_NODE_POSITION,
+                          )}
                           onClick={() => selectBlueTalent({ kind: 'feast' })}
                         >
                           <img
@@ -1686,6 +1720,10 @@ export default function App(): React.JSX.Element {
                           );
 
                           return levels.map((level) => {
+                            const position = getBlueTalentNodePosition(
+                              talent.id,
+                              level,
+                            );
                             const isOwned =
                               blueTalentState.feast || currentLevel >= level;
                             const isNext =
@@ -1706,6 +1744,7 @@ export default function App(): React.JSX.Element {
                                 }${isNext ? ' is-next' : ''}${
                                   isLocked ? ' is-locked' : ''
                                 }`}
+                                style={getTalentNodePositionStyle(position)}
                                 onClick={() =>
                                   selectBlueTalent({
                                     kind: 'talent',

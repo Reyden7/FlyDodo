@@ -889,6 +889,33 @@ button {
   line-height: 1;
 }
 
+.shop-dev-watermelon-button {
+  position: absolute;
+  right: 5px;
+  bottom: -15px;
+  z-index: 4;
+  width: 34px;
+  height: 20px;
+  border: 2px solid #fff2b8;
+  border-radius: 999px;
+  color: #fff2b8;
+  background: #1c5b86;
+  box-shadow:
+    0 2px 0 #0d3049,
+    0 4px 8px rgb(0 0 0 / 25%);
+  font-size: 0.68rem;
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shop-dev-watermelon-button:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 #0d3049,
+    0 2px 5px rgb(0 0 0 / 22%);
+}
+
 .shop-notice {
   position: absolute;
   top: 166px;
@@ -1501,8 +1528,6 @@ button {
 }
 
 .blue-talent-node--feast {
-  top: 4%;
-  left: 50%;
   z-index: 3;
   width: 96px;
 }
@@ -1514,49 +1539,6 @@ button {
 .blue-talent-node--feast .control-talent-node__title {
   width: 96px;
   font-size: clamp(0.56rem, 2.2vw, 0.72rem);
-}
-
-.blue-talent-node--watermelonMagnet.blue-talent-node--level-3,
-.blue-talent-node--fruitMultiplier.blue-talent-node--level-3 {
-  top: 28%;
-}
-
-.blue-talent-node--watermelonMagnet.blue-talent-node--level-2,
-.blue-talent-node--fruitMultiplier.blue-talent-node--level-2 {
-  top: 50%;
-}
-
-.blue-talent-node--watermelonMagnet.blue-talent-node--level-1,
-.blue-talent-node--fruitMultiplier.blue-talent-node--level-1 {
-  top: 72%;
-}
-
-.blue-talent-node--watermelonMagnet {
-  left: 15%;
-}
-
-.blue-talent-node--fruitMultiplier {
-  left: 50%;
-}
-
-.blue-talent-node--powerTakeoff {
-  top: 24%;
-  left: 86%;
-}
-
-.blue-talent-node--chainReaction {
-  top: 40%;
-  left: 86%;
-}
-
-.blue-talent-node--fruitDetector {
-  top: 56%;
-  left: 86%;
-}
-
-.blue-talent-node--perch {
-  top: 72%;
-  left: 86%;
 }
 
 .talent-detail-sheet {
