@@ -1057,7 +1057,7 @@ button {
 
 .shop-object-card__button {
   width: 100%;
-  min-height: 40px;
+  min-height: 55px;
   padding: 0;
   border: 0;
   color: transparent;
@@ -1739,7 +1739,7 @@ button {
 
 .shop-item__button {
   width: 100%;
-  min-height: 40px;
+  min-height: 55px;
   padding: 0;
   border: 0;
   color: transparent;
