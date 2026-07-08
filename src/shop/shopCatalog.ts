@@ -9,6 +9,8 @@ export type ShopFilterCategory = 'all' | CosmeticCategory;
 
 export type CosmeticPose = 'ground' | 'flight';
 
+export type CosmeticOffsetSpace = 'dodo' | 'world';
+
 export type ShopItemTone =
   | 'gold'
   | 'berry'
@@ -22,6 +24,7 @@ export interface CosmeticTransform {
   scaleY: number;
   offsetX: number;
   offsetY: number;
+  offsetSpace?: CosmeticOffsetSpace;
   rotationDegrees: number;
   originX: number;
   originY: number;
@@ -42,6 +45,7 @@ export interface ShopItem {
    * /assets/Accessoires/<dossier de catégorie>/<id>.png
    */
   imagePath?: string;
+  imagePaths?: Partial<Record<CosmeticPose, string>>;
 }
 
 export const COSMETIC_CATEGORIES: readonly CosmeticCategory[] = [
@@ -86,7 +90,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.078,
       scaleY: 0.078,
       offsetX: 0,
-      offsetY: -88,
+      offsetY: -70,
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -97,7 +101,8 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.082,
       scaleY: 0.082,
       offsetX: 0,
-      offsetY: -90,
+      offsetY: -75,
+      offsetSpace: 'dodo',
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -114,18 +119,19 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
-      depth: 14,
+      depth: 16,
       fallbackFontSize: 38,
     },
     flight: {
-      scaleX: 0.064,
-      scaleY: 0.064,
+      scaleX: 0.061,
+      scaleY: 0.061,
       offsetX: 0,
-      offsetY: -0,
+      offsetY: -72,
+      offsetSpace: 'dodo',
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
-      depth: 14,
+      depth: 16,
       fallbackFontSize: 38,
     },
   },
@@ -146,6 +152,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleY: 0.071,
       offsetX: 0,
       offsetY: -56,
+      offsetSpace: 'world',
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -162,18 +169,19 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
-      depth: 14,
+      depth: 1,
       fallbackFontSize: 34,
     },
     flight: {
       scaleX: 0.073,
       scaleY: 0.073,
       offsetX: 0,
-      offsetY: 7,
+      offsetY: -10,
+      offsetSpace: 'world',
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
-      depth: 14,
+      depth: 1,
       fallbackFontSize: 34,
     },
   },
@@ -182,7 +190,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.118,
       scaleY: 0.118,
       offsetX: 0,
-      offsetY: -45,
+      offsetY: -30,
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -193,7 +201,8 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.122,
       scaleY: 0.122,
       offsetX: 0,
-      offsetY: -50,
+      offsetY: -30,
+      offsetSpace: 'dodo',
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -203,7 +212,16 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
   },
 };
 
-export function getShopItemImagePath(item: ShopItem): string {
+export function getShopItemImagePath(
+  item: ShopItem,
+  pose: CosmeticPose = 'ground',
+): string {
+  const poseImagePath = item.imagePaths?.[pose];
+
+  if (poseImagePath) {
+    return poseImagePath;
+  }
+
   if (item.imagePath) {
     return item.imagePath;
   }
@@ -212,8 +230,11 @@ export function getShopItemImagePath(item: ShopItem): string {
   return `/assets/Accessoires/${folder}/${item.id}.png`;
 }
 
-export function getShopItemTextureKey(item: ShopItem): string {
-  return `cosmetic-${item.category}-${item.id}`;
+export function getShopItemTextureKey(
+  item: ShopItem,
+  pose: CosmeticPose = 'ground',
+): string {
+  return `cosmetic-${item.category}-${item.id}-${pose}`;
 }
 
 export function getShopItemById(itemId: string): ShopItem | undefined {
@@ -261,6 +282,15 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     tone: 'violet',
   },
   {
+    id: 'glasses-super-hero',
+    title: 'Lunettes super-heros',
+    category: 'glasses',
+    price: 10,
+    icon: 'glasses',
+    tone: 'ocean',
+    imagePath: '/assets/Accessoires/Lunettes/GlassesSuperHero.png',
+  },
+  {
     id: 'scarf-red',
     title: 'Écharpe rouge',
     category: 'scarf',
@@ -291,6 +321,18 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 50,
     icon: '👟',
     tone: 'ocean',
+  },
+  {
+    id: 'shoes-space',
+    title: 'Bottes spatiales',
+    category: 'shoes',
+    price: 10,
+    icon: 'shoes',
+    tone: 'ocean',
+    imagePaths: {
+      ground: '/assets/Accessoires/Chaussures/shoes-space-sol.png',
+      flight: '/assets/Accessoires/Chaussures/shoes-space-vole.png',
+    },
   },
   {
     id: 'outfit-pilot',

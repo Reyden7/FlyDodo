@@ -49,8 +49,8 @@ const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.14;
 const DODO_FLIGHT_ORIGIN_Y = 0.75;
 const DODO_GROUND_ORIGIN_Y = 0.77;
-const DODO_FLIGHT_FEET_SCALE_X = 0.3;
-const DODO_FLIGHT_FEET_SCALE_Y = 0.350;
+const DODO_FLIGHT_FEET_SCALE_X = 0;//0.3;
+const DODO_FLIGHT_FEET_SCALE_Y = 0;//0.350;
 const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
@@ -658,7 +658,7 @@ export class GameplayScene extends Phaser.Scene {
     outfit: null,
   };
 
-  private cosmeticImageReady = new Map<CosmeticCategory, boolean>();
+  private cosmeticImageReady = new Map<string, boolean>();
   private cosmeticLoadPromises = new Map<string, Promise<boolean>>();
   private cosmeticRequestVersions = new Map<CosmeticCategory, number>();
 
@@ -878,6 +878,11 @@ export class GameplayScene extends Phaser.Scene {
       this.handleCosmeticEquipped,
     );
     gameEvents.addEventListener('flydodo:talents-updated', this.handleTalentsUpdated);
+    this.events.on(
+      Phaser.Scenes.Events.POST_UPDATE,
+      this.syncDodoVisualsBeforeRender,
+      this,
+    );
 
     void this.initializeBestScore();
     void this.initializeEquippedCosmetics();
@@ -907,7 +912,6 @@ export class GameplayScene extends Phaser.Scene {
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
-    this.updateDodoVisuals(deltaSeconds);
     this.updateCamera(deltaSeconds);
     this.updateWatermelonMisses();
     this.updateFeastAttraction(deltaSeconds);
@@ -923,6 +927,11 @@ export class GameplayScene extends Phaser.Scene {
   shutdown(): void {
     this.destroyFlightSounds();
     this.destroyFruitDetectorButton();
+    this.events.off(
+      Phaser.Scenes.Events.POST_UPDATE,
+      this.syncDodoVisualsBeforeRender,
+      this,
+    );
 
     this.input.off('pointerdown', this.handlePointerDown, this);
     this.input.off('pointermove', this.handlePointerMove, this);
@@ -968,7 +977,14 @@ export class GameplayScene extends Phaser.Scene {
 
       this.cosmeticImages.set(category, image);
       this.cosmeticFallbackTexts.set(category, fallbackText);
-      this.cosmeticImageReady.set(category, false);
+      this.cosmeticImageReady.set(
+        this.getCosmeticPoseKey(category, 'ground'),
+        false,
+      );
+      this.cosmeticImageReady.set(
+        this.getCosmeticPoseKey(category, 'flight'),
+        false,
+      );
       this.cosmeticRequestVersions.set(category, 0);
     }
   }
@@ -1113,14 +1129,24 @@ export class GameplayScene extends Phaser.Scene {
     return trimmedCanvas;
   }
 
-  private async ensureCosmeticTexture(item: ShopItem): Promise<boolean> {
-    const textureKey = getShopItemTextureKey(item);
+  private getCosmeticPoseKey(
+    category: CosmeticCategory,
+    pose: CosmeticPose,
+  ): string {
+    return `${category}-${pose}`;
+  }
+
+  private async ensureCosmeticTexture(
+    item: ShopItem,
+    pose: CosmeticPose,
+  ): Promise<boolean> {
+    const textureKey = getShopItemTextureKey(item, pose);
 
     if (this.textures.exists(textureKey)) {
       return true;
     }
 
-    const existingPromise = this.cosmeticLoadPromises.get(item.id);
+    const existingPromise = this.cosmeticLoadPromises.get(textureKey);
 
     if (existingPromise) {
       return existingPromise;
@@ -1147,10 +1173,10 @@ export class GameplayScene extends Phaser.Scene {
       };
 
       image.decoding = 'async';
-      image.src = getShopItemImagePath(item);
+      image.src = getShopItemImagePath(item, pose);
     });
 
-    this.cosmeticLoadPromises.set(item.id, loadPromise);
+    this.cosmeticLoadPromises.set(textureKey, loadPromise);
     return loadPromise;
   }
 
@@ -1165,7 +1191,14 @@ export class GameplayScene extends Phaser.Scene {
 
     image?.setVisible(false);
     fallbackText?.setVisible(false);
-    this.cosmeticImageReady.set(category, false);
+    this.cosmeticImageReady.set(
+      this.getCosmeticPoseKey(category, 'ground'),
+      false,
+    );
+    this.cosmeticImageReady.set(
+      this.getCosmeticPoseKey(category, 'flight'),
+      false,
+    );
 
     const requestVersion =
       (this.cosmeticRequestVersions.get(category) ?? 0) + 1;
@@ -1181,7 +1214,10 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const imageLoaded = await this.ensureCosmeticTexture(item);
+    const [groundImageLoaded, flightImageLoaded] = await Promise.all([
+      this.ensureCosmeticTexture(item, 'ground'),
+      this.ensureCosmeticTexture(item, 'flight'),
+    ]);
 
     if (
       !this.scene.isActive() ||
@@ -1191,20 +1227,23 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    if (imageLoaded) {
-      image
-        .setTexture(getShopItemTextureKey(item))
-        .setVisible(true);
+    this.cosmeticImageReady.set(
+      this.getCosmeticPoseKey(category, 'ground'),
+      groundImageLoaded,
+    );
+    this.cosmeticImageReady.set(
+      this.getCosmeticPoseKey(category, 'flight'),
+      flightImageLoaded,
+    );
 
+    if (groundImageLoaded || flightImageLoaded) {
+      image.setVisible(true);
       fallbackText.setVisible(false);
-      this.cosmeticImageReady.set(category, true);
     } else {
       image.setVisible(false);
       fallbackText
         .setText(item.icon)
         .setVisible(true);
-
-      this.cosmeticImageReady.set(category, false);
     }
 
     if (this.gameOver) {
@@ -1228,6 +1267,10 @@ export class GameplayScene extends Phaser.Scene {
 
   private handleTalentsUpdated = (): void => {
     void this.initializeTalents();
+  };
+
+  private syncDodoVisualsBeforeRender = (): void => {
+    this.updateDodoVisuals(0);
   };
 
   private updateCosmeticVisuals(
@@ -1263,9 +1306,13 @@ export class GameplayScene extends Phaser.Scene {
       const localRotation = Phaser.Math.DegToRad(
         transform.rotationDegrees,
       );
+      const poseImageReady = Boolean(
+        this.cosmeticImageReady.get(this.getCosmeticPoseKey(category, pose)),
+      );
 
-      if (this.cosmeticImageReady.get(category)) {
+      if (poseImageReady) {
         image
+          .setTexture(getShopItemTextureKey(item, pose))
           .setOrigin(transform.originX, transform.originY)
           .setScale(transform.scaleX, transform.scaleY)
           .setDepth(transform.depth)
@@ -2640,13 +2687,13 @@ export class GameplayScene extends Phaser.Scene {
     ): void => {
       if (offsetSpace === 'world') {
         sprite.setPosition(
-          Math.round(this.player.x + localX),
-          Math.round(this.player.y + localY),
+          this.player.x + localX,
+          this.player.y + localY,
         );
       } else {
         sprite.setPosition(
-          Math.round(this.player.x + localX * cosine - localY * sine),
-          Math.round(this.player.y + localX * sine + localY * cosine),
+          this.player.x + localX * cosine - localY * sine,
+          this.player.y + localX * sine + localY * cosine,
         );
       }
       sprite.setRotation(rotation + localRotation);
