@@ -121,7 +121,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       scaleX: 0.064,
       scaleY: 0.064,
       offsetX: 0,
-      offsetY: -78,
+      offsetY: -0,
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,

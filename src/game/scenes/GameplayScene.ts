@@ -34,6 +34,7 @@ import {
   getShopItemImagePath,
   getShopItemTextureKey,
   type CosmeticCategory,
+  type CosmeticOffsetSpace,
   type CosmeticPose,
   type ShopItem,
 } from '../../shop/shopCatalog';
@@ -1236,6 +1237,7 @@ export class GameplayScene extends Phaser.Scene {
       localX: number,
       localY: number,
       localRotation?: number,
+      offsetSpace?: CosmeticOffsetSpace,
     ) => void,
   ): void {
     for (const category of COSMETIC_CATEGORIES) {
@@ -1276,6 +1278,7 @@ export class GameplayScene extends Phaser.Scene {
           transform.offsetX,
           transform.offsetY,
           localRotation,
+          transform.offsetSpace,
         );
       } else {
         image.setVisible(false);
@@ -1290,6 +1293,7 @@ export class GameplayScene extends Phaser.Scene {
           transform.offsetX,
           transform.offsetY,
           localRotation,
+          transform.offsetSpace,
         );
       }
     }
@@ -2632,11 +2636,19 @@ export class GameplayScene extends Phaser.Scene {
       localX: number,
       localY: number,
       localRotation = 0,
+      offsetSpace: CosmeticOffsetSpace = 'dodo',
     ): void => {
-      sprite.setPosition(
-        Math.round(this.player.x + localX * cosine - localY * sine),
-        Math.round(this.player.y + localX * sine + localY * cosine),
-      );
+      if (offsetSpace === 'world') {
+        sprite.setPosition(
+          Math.round(this.player.x + localX),
+          Math.round(this.player.y + localY),
+        );
+      } else {
+        sprite.setPosition(
+          Math.round(this.player.x + localX * cosine - localY * sine),
+          Math.round(this.player.y + localX * sine + localY * cosine),
+        );
+      }
       sprite.setRotation(rotation + localRotation);
     };
 
