@@ -187,8 +187,8 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
   },
   outfit: {
     ground: {
-      scaleX: 0.08,
-      scaleY: 0.08,
+      scaleX: 0.06,
+      scaleY: 0.06,
       offsetX: 0,
       offsetY: -30,
       rotationDegrees: 0,
@@ -198,8 +198,8 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
       fallbackFontSize: 48,
     },
     flight: {
-      scaleX: 0.09,
-      scaleY: 0.09,
+      scaleX: 0.06,
+      scaleY: 0.06,
       offsetX: -1,
       offsetY: -35,
       offsetSpace: 'dodo',
@@ -457,7 +457,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-corsaire.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-corsaire.png',
   },
   {
     id: 'outfit-explorateur',
@@ -466,7 +466,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-explorateur.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur.png',
   },
   {
     id: 'outfit-paladin',
@@ -475,7 +475,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-paladin.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-paladin.png',
   },
   {
     id: 'outfit-magicien',
@@ -484,7 +484,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-magicien.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-magicien.png',
   },
   {
     id: 'outfit-pretre',
@@ -493,7 +493,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-pretre.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-pretre.png',
   },
   {
     id: 'outfit-pirate',
@@ -502,7 +502,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-pirate.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-pirate.png',
   },
   {
     id: 'outfit-explo2',
@@ -511,7 +511,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/body-explorateur2.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur2.png',
   },
   
 ];
