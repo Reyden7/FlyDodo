@@ -1232,9 +1232,7 @@ export default function App(): React.JSX.Element {
                   <div className="shop-filter" aria-label="Catégories">
                   
                     <div className="shop-filter__options">
-                    {SHOP_CATEGORY_OPTIONS.filter(
-                      (option) => option.value !== 'outfit',
-                    ).map((option) => (
+                    {SHOP_CATEGORY_OPTIONS.map((option) => (
                       <button
                         type="button"
                         key={option.value}
