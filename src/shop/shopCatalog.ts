@@ -137,10 +137,10 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
   },
   scarf: {
     ground: {
-      scaleX: 0.058,
-      scaleY: 0.058,
-      offsetX: 5,
-      offsetY: -38,
+      scaleX: 0.055,
+      scaleY: 0.055,
+      offsetX: 0,
+      offsetY: -34,
       rotationDegrees: 0,
       originX: 0.5,
       originY: 0.5,
@@ -150,7 +150,7 @@ const DEFAULT_COSMETIC_TRANSFORMS: Readonly<
     flight: {
       scaleX: 0.058,
       scaleY: 0.058,
-      offsetX: 5,
+      offsetX: 0,
       offsetY: -39,
       offsetSpace: 'dodo',
       rotationDegrees: 0,
