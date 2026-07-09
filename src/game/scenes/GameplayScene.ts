@@ -49,8 +49,13 @@ const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.14;
 const DODO_FLIGHT_ORIGIN_Y = 0.75;
 const DODO_GROUND_ORIGIN_Y = 0.77;
-const DODO_FLIGHT_FEET_SCALE_X = 0;//0.3;
-const DODO_FLIGHT_FEET_SCALE_Y = 0;//0.350;
+const DODO_GROUND_FEET_SCALE = DODO_GROUND_SCALE;
+const DODO_GROUND_FEET_OFFSET_X = 0;
+const DODO_GROUND_FEET_OFFSET_Y = 0;
+const DODO_FLIGHT_FEET_SCALE_X = DODO_BODY_SCALE;
+const DODO_FLIGHT_FEET_SCALE_Y = DODO_BODY_SCALE;
+const DODO_FLIGHT_FEET_OFFSET_X = 0;
+const DODO_FLIGHT_FEET_OFFSET_Y = 0;
 const DODO_INDICATOR_SCALE = 0.045;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
@@ -631,6 +636,7 @@ export class GameplayScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private leftWing!: Phaser.GameObjects.Image;
   private rightWing!: Phaser.GameObjects.Image;
+  private groundFeet!: Phaser.GameObjects.Image;
   private flightFeet!: Phaser.GameObjects.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
@@ -773,6 +779,11 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
     this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
+    this.load.image('dodo-ground-feet', '/assets/dodo/optimized/foot-ground.png');
+    this.load.image(
+      'dodo-flight-feet-default',
+      '/assets/dodo/optimized/animation/flight_feet.png',
+    );
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
     this.load.audio(WATERMELON_SOUND_KEY, WATERMELON_SOUND_PATH);
     this.load.audio(FLIGHT_SOUND_KEY, FLIGHT_SOUND_PATH);
@@ -791,7 +802,7 @@ export class GameplayScene extends Phaser.Scene {
 
     for (let index = 1; index <= 34; index += 1) {
       this.load.image(
-        `dodo-flight-legs-${index}`,
+        LEG_FRAMES[index - 1],
         `/assets/dodo/optimized/flight_refined/legs_${index}.png`,
       );
     }
@@ -827,9 +838,16 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
     this.player.body?.setSize(42, 62, true);
 
-    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, LEG_FRAMES[0]);
+    this.groundFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-ground-feet');
+    this.groundFeet
+      .setOrigin(0.5, DODO_GROUND_ORIGIN_Y)
+      .setScale(DODO_GROUND_FEET_SCALE)
+      .setDepth(9)
+      .setVisible(true);
+
+    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-flight-feet-default');
     this.flightFeet
-      .setOrigin(0.5, 0.92)
+      .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
       .setScale(DODO_FLIGHT_FEET_SCALE_X, DODO_FLIGHT_FEET_SCALE_Y)
       .setDepth(9)
       .setVisible(false);
@@ -2677,6 +2695,7 @@ export class GameplayScene extends Phaser.Scene {
     const rotation = this.player.rotation;
     const cosine = Math.cos(rotation);
     const sine = Math.sin(rotation);
+    const hasEquippedShoes = Boolean(this.equippedCosmeticIds.shoes);
 
     const placeSprite = (
       sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Text,
@@ -2705,7 +2724,13 @@ export class GameplayScene extends Phaser.Scene {
       this.player.setScale(DODO_GROUND_SCALE);
       this.leftWing.setVisible(false);
       this.rightWing.setVisible(false);
+      this.groundFeet.setVisible(!hasEquippedShoes);
       this.flightFeet.setVisible(false);
+      placeSprite(
+        this.groundFeet,
+        DODO_GROUND_FEET_OFFSET_X,
+        DODO_GROUND_FEET_OFFSET_Y,
+      );
 
       this.updateCosmeticVisuals('ground', placeSprite);
       return;
@@ -2716,22 +2741,22 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setScale(DODO_BODY_SCALE);
     this.leftWing.setVisible(true);
     this.rightWing.setVisible(true);
-    this.flightFeet.setVisible(true);
+    this.groundFeet.setVisible(false);
+    this.flightFeet.setVisible(!hasEquippedShoes);
 
     const leftWingFrame = this.getAnimationFrame(this.leftWingPhase, LEFT_WING_FRAMES);
     const rightWingFrame = this.getAnimationFrame(this.rightWingPhase, RIGHT_WING_FRAMES);
 
     this.leftWing.setTexture(leftWingFrame);
     this.rightWing.setTexture(rightWingFrame);
-    const legFrame =
-      this.legAnimationTime > 0
-        ? this.getAnimationFrame((this.leftWingPhase + this.rightWingPhase) * 0.5, LEG_FRAMES)
-        : LEG_FRAMES[0];
-    this.flightFeet.setTexture(legFrame);
 
     placeSprite(this.leftWing, 0, -20);
     placeSprite(this.rightWing, 0, -20);
-    placeSprite(this.flightFeet, 0, 6);
+    placeSprite(
+      this.flightFeet,
+      DODO_FLIGHT_FEET_OFFSET_X,
+      DODO_FLIGHT_FEET_OFFSET_Y,
+    );
 
     this.updateCosmeticVisuals('flight', placeSprite);
   }
@@ -2987,10 +3012,17 @@ export class GameplayScene extends Phaser.Scene {
     this.player.clearTint();
     this.leftWing.clearTint();
     this.rightWing.clearTint();
+    this.groundFeet.clearTint();
     this.flightFeet.clearTint();
 
     this.tweens.add({
-      targets: [this.player, this.leftWing, this.rightWing, this.flightFeet],
+      targets: [
+        this.player,
+        this.leftWing,
+        this.rightWing,
+        this.groundFeet,
+        this.flightFeet,
+      ],
       alpha: 0.45,
       yoyo: true,
       repeat: 3,
@@ -2999,6 +3031,7 @@ export class GameplayScene extends Phaser.Scene {
         this.player.setAlpha(1);
         this.leftWing.setAlpha(1);
         this.rightWing.setAlpha(1);
+        this.groundFeet.setAlpha(1);
         this.flightFeet.setAlpha(1);
       },
     });
@@ -3029,6 +3062,7 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setTint(tintColor);
     this.leftWing.setTint(tintColor);
     this.rightWing.setTint(tintColor);
+    this.groundFeet.setTint(tintColor);
     this.flightFeet.setTint(tintColor);
 
     for (const image of this.cosmeticImages.values()) {
