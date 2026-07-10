@@ -48,10 +48,18 @@ export interface EquippedCosmetics {
   outfit: string | null;
 }
 
+export type ShopObjectId = 'life-vial' | 'watermelon-magnet';
+
+export interface ShopObjectInventory {
+  lifeVial: boolean;
+  watermelonMagnet: boolean;
+}
+
 export interface PlayerProfile {
   watermelons: number;
   ownedItemIds: string[];
   equipped: EquippedCosmetics;
+  shopObjects: ShopObjectInventory;
   controlTalents: ControlTalentState;
   enduranceTalents: EnduranceTalentState;
   blueTalents: BlueTalentState;
@@ -113,11 +121,19 @@ function createEmptyEquippedCosmetics(): EquippedCosmetics {
   };
 }
 
+export function createEmptyShopObjectInventory(): ShopObjectInventory {
+  return {
+    lifeVial: false,
+    watermelonMagnet: false,
+  };
+}
+
 export function createEmptyPlayerProfile(): PlayerProfile {
   return {
     watermelons: 0,
     ownedItemIds: [],
     equipped: createEmptyEquippedCosmetics(),
+    shopObjects: createEmptyShopObjectInventory(),
     controlTalents: createEmptyControlTalentState(),
     enduranceTalents: createEmptyEnduranceTalentState(),
     blueTalents: createEmptyBlueTalentState(),
@@ -129,6 +145,7 @@ function cloneProfile(profile: PlayerProfile): PlayerProfile {
     watermelons: profile.watermelons,
     ownedItemIds: [...profile.ownedItemIds],
     equipped: { ...profile.equipped },
+    shopObjects: { ...profile.shopObjects },
     controlTalents: cloneControlTalentState(profile.controlTalents),
     enduranceTalents: cloneEnduranceTalentState(profile.enduranceTalents),
     blueTalents: cloneBlueTalentState(profile.blueTalents),
@@ -145,6 +162,10 @@ function normalizeProfile(value: unknown): PlayerProfile {
     source.equipped && typeof source.equipped === 'object'
       ? source.equipped
       : createEmptyEquippedCosmetics();
+  const shopObjectsSource =
+    source.shopObjects && typeof source.shopObjects === 'object'
+      ? source.shopObjects
+      : createEmptyShopObjectInventory();
 
   const normalizeEquippedId = (itemId: unknown): string | null =>
     typeof itemId === 'string' && itemId.length > 0 ? itemId : null;
@@ -165,6 +186,10 @@ function normalizeProfile(value: unknown): PlayerProfile {
       scarf: normalizeEquippedId(equippedSource.scarf),
       shoes: normalizeEquippedId(equippedSource.shoes),
       outfit: normalizeEquippedId(equippedSource.outfit),
+    },
+    shopObjects: {
+      lifeVial: shopObjectsSource.lifeVial === true,
+      watermelonMagnet: shopObjectsSource.watermelonMagnet === true,
     },
     controlTalents: normalizeControlTalentState(source.controlTalents),
     enduranceTalents: normalizeEnduranceTalentState(source.enduranceTalents),
@@ -296,6 +321,101 @@ export function purchaseShopItem(
       status: 'purchased',
       profile: cloneProfile(next),
     };
+  });
+}
+
+function getShopObjectInventoryKey(
+  objectId: ShopObjectId,
+): keyof ShopObjectInventory {
+  switch (objectId) {
+    case 'life-vial':
+      return 'lifeVial';
+    case 'watermelon-magnet':
+      return 'watermelonMagnet';
+  }
+}
+
+export function purchaseShopObject(
+  objectId: ShopObjectId,
+  price: number,
+): Promise<PurchaseResult> {
+  const safePrice = Math.max(0, Math.floor(price));
+  const inventoryKey = getShopObjectInventoryKey(objectId);
+
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.shopObjects[inventoryKey]) {
+      return {
+        status: 'already-owned',
+        profile: cloneProfile(current),
+      };
+    }
+
+    if (current.watermelons < safePrice) {
+      return {
+        status: 'not-enough-watermelons',
+        profile: cloneProfile(current),
+      };
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      watermelons: current.watermelons - safePrice,
+      shopObjects: {
+        ...current.shopObjects,
+        [inventoryKey]: true,
+      },
+    };
+
+    await persistProfile(next);
+
+    return {
+      status: 'purchased',
+      profile: cloneProfile(next),
+    };
+  });
+}
+
+export function consumeLifeVial(): Promise<PlayerProfile> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!current.shopObjects.lifeVial) {
+      return cloneProfile(current);
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      shopObjects: {
+        ...current.shopObjects,
+        lifeVial: false,
+      },
+    };
+
+    await persistProfile(next);
+    return cloneProfile(next);
+  });
+}
+
+export function consumeWatermelonMagnet(): Promise<PlayerProfile> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (!current.shopObjects.watermelonMagnet) {
+      return cloneProfile(current);
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      shopObjects: {
+        ...current.shopObjects,
+        watermelonMagnet: false,
+      },
+    };
+
+    await persistProfile(next);
+    return cloneProfile(next);
   });
 }
 

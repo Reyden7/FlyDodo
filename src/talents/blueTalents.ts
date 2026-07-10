@@ -57,10 +57,10 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     title: 'Aimant a pasteque',
     icon: '/assets/competences/Talents/aimantPasteque.png',
     description:
-      "Renforce le futur objet aimant a pasteque. L'objet n'est pas encore disponible.",
-    levels: [1, 2, 3],
+      "Augmente le rayon d'attraction de l'objet aimant a pasteque.",
+    levels: [150, 300, 500],
     costs: [35, 55, 80],
-    statLabel: 'Aimant',
+    statLabel: 'Rayon',
   },
   {
     id: 'fruitMultiplier',

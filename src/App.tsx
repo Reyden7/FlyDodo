@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { GameCanvas } from './components/GameCanvas';
 import {
   emitCosmeticEquipped,
+  emitShopObjectsUpdated,
   emitTalentsUpdated,
   gameEvents,
   requestGamePause,
@@ -22,6 +23,7 @@ import {
   purchaseControlTalentLevel,
   purchaseEndurancePhoenixTalent,
   purchaseEnduranceTalentLevel,
+  purchaseShopObject,
   purchaseShopItem,
   refundBlueFeastTalent,
   refundBlueTalentLevel,
@@ -31,6 +33,7 @@ import {
   refundEnduranceTalentLevel,
   unequipShopItem,
   type PlayerProfile,
+  type ShopObjectId,
 } from './services/saveService';
 import {
   getShopItemImagePath,
@@ -139,26 +142,37 @@ const TALENT_TREE_TABS: ReadonlyArray<{
   },
 ] as const;
 
-const SHOP_OBJECT_SLOTS = [
+const SHOP_OBJECT_SLOTS: ReadonlyArray<{
+  id: ShopObjectId;
+  title: string;
+  icon: string;
+  price: number;
+}> = [
   {
-    id: 'extra-life',
-    title: 'Vie bonus',
-    icon: '/assets/ui/vie/1.png',
+    id: 'life-vial',
+    title: 'Fiole de vie',
+    icon: '/assets/objets/fioleVie.png',
     price: 50,
   },
   {
-    id: 'shield-charge',
-    title: 'Bouclier',
-    icon: '/assets/ui/bouclier/1.png',
+    id: 'watermelon-magnet',
+    title: 'Aimant a pasteques',
+    icon: '/assets/objets/aimant.png',
     price: 40,
   },
-  {
-    id: 'coming-soon',
-    title: 'Bientot',
-    icon: '/assets/collectable/pasteque.png',
-    price: 25,
-  },
 ] as const;
+
+function isShopObjectActive(
+  profile: PlayerProfile,
+  objectId: ShopObjectId,
+): boolean {
+  switch (objectId) {
+    case 'life-vial':
+      return profile.shopObjects.lifeVial;
+    case 'watermelon-magnet':
+      return profile.shopObjects.watermelonMagnet;
+  }
+}
 
 function ShopItemPreview({ item }: { item: ShopItem }): React.JSX.Element {
   const [imageFailed, setImageFailed] = useState(false);
@@ -228,6 +242,7 @@ export default function App(): React.JSX.Element {
   const [watermelons, setWatermelons] = useState(0);
   const [lives, setLives] = useState(1);
   const [maxLives, setMaxLives] = useState(1);
+  const [lifeVialActive, setLifeVialActive] = useState(false);
   const [shield, setShield] = useState(0);
   const [maxShield, setMaxShield] = useState(0);
   const [fallSeconds, setFallSeconds] = useState<number | null>(null);
@@ -250,6 +265,8 @@ export default function App(): React.JSX.Element {
     createEmptyPlayerProfile(),
   );
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [pendingShopObjectId, setPendingShopObjectId] =
+    useState<ShopObjectId | null>(null);
   const [pendingTalentAction, setPendingTalentAction] = useState<string | null>(
     null,
   );
@@ -277,9 +294,14 @@ export default function App(): React.JSX.Element {
         : SHOP_ITEMS.filter((item) => item.category === selectedCategory),
     [selectedCategory],
   );
+  const visibleHeartMax = maxLives;
+  const visibleHeartCount = Math.min(lives, visibleHeartMax);
 
   useEffect(() => {
-    void loadLatestPlayerProfile().then(setPlayerProfile);
+    void loadLatestPlayerProfile().then((profile) => {
+      setPlayerProfile(profile);
+      emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
+    });
 
     const onHud = (event: Event): void => {
       const hud = (event as CustomEvent<FlightHudDetail>).detail;
@@ -289,6 +311,7 @@ export default function App(): React.JSX.Element {
       setWatermelons(hud.watermelons);
       setLives(hud.lives);
       setMaxLives(hud.maxLives);
+      setLifeVialActive(hud.lifeVialActive);
       setShield(hud.shield);
       setMaxShield(hud.maxShield);
     };
@@ -428,6 +451,7 @@ export default function App(): React.JSX.Element {
     setWatermelons(0);
     setLives(1);
     setMaxLives(1);
+    setLifeVialActive(false);
     setShield(0);
     setMaxShield(0);
     setHasMovedThisRun(false);
@@ -444,7 +468,9 @@ export default function App(): React.JSX.Element {
     setIsEnduranceTalentSheetClosing(false);
     requestGamePause();
     setIsShopOpen(true);
-    setPlayerProfile(await loadLatestPlayerProfile());
+    const profile = await loadLatestPlayerProfile();
+    setPlayerProfile(profile);
+    emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
   };
 
   const closeShop = (): void => {
@@ -519,6 +545,38 @@ export default function App(): React.JSX.Element {
       }
     } finally {
       setPendingItemId(null);
+    }
+  };
+
+  const handleShopObjectAction = async (
+    item: (typeof SHOP_OBJECT_SLOTS)[number],
+  ): Promise<void> => {
+    if (pendingShopObjectId) {
+      return;
+    }
+
+    setPendingShopObjectId(item.id);
+    setShopNotice(null);
+
+    try {
+      const result = await purchaseShopObject(item.id, item.price);
+      setPlayerProfile(result.profile);
+
+      if (result.status === 'not-enough-watermelons') {
+        setShopNotice('Pas assez de pasteques pour cet objet.');
+        return;
+      }
+
+      if (result.status === 'already-owned') {
+        emitShopObjectsUpdated({ shopObjects: result.profile.shopObjects });
+        setShopNotice(`${item.title} deja actif.`);
+        return;
+      }
+
+      emitShopObjectsUpdated({ shopObjects: result.profile.shopObjects });
+      setShopNotice(`${item.title} achete !`);
+    } finally {
+      setPendingShopObjectId(null);
     }
   };
 
@@ -1048,13 +1106,23 @@ export default function App(): React.JSX.Element {
         </div>
 
         <div className="survival-icons">
-          <SurvivalIconRow
-            label="Vie"
-            current={lives}
-            max={maxLives}
-            fullSrc="/assets/ui/vie/1.png"
-            emptySrc="/assets/ui/vie/2.png"
-          />
+          <div className="survival-icons__life-row">
+            <SurvivalIconRow
+              label="Vie"
+              current={visibleHeartCount}
+              max={visibleHeartMax}
+              fullSrc="/assets/ui/vie/1.png"
+              emptySrc="/assets/ui/vie/2.png"
+            />
+            {lifeVialActive && (
+              <img
+                className="survival-icons__life-vial"
+                src="/assets/objets/fioleVie.png"
+                alt=""
+                aria-hidden="true"
+              />
+            )}
+          </div>
           <SurvivalIconRow
             label="Bouclier"
             current={shield}
@@ -1336,29 +1404,46 @@ export default function App(): React.JSX.Element {
 
               {selectedShopTab === 'items' && (
                 <div className="shop-object-grid" role="tabpanel">
-                  {SHOP_OBJECT_SLOTS.map((item) => (
-                    <article className="shop-object-card" key={item.id}>
-                      <div className="shop-object-card__icon" aria-hidden="true">
-                        <img src={item.icon} alt="" />
-                      </div>
-                      <h2>{item.title}</h2>
-                      <div className="shop-object-card__price">
-                        <img
-                          src="/assets/collectable/pasteque.png"
-                          alt=""
-                          aria-hidden="true"
-                        />
-                        <strong>{item.price}</strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="shop-object-card__button"
-                        onClick={() => setShopNotice('Objet bientôt disponible')}
+                  {SHOP_OBJECT_SLOTS.map((item) => {
+                    const isActive = isShopObjectActive(playerProfile, item.id);
+                    const isPending = pendingShopObjectId === item.id;
+                    const isUnaffordable =
+                      !isActive && playerProfile.watermelons < item.price;
+
+                    return (
+                      <article
+                        className={`shop-object-card${
+                          isActive ? ' shop-object-card--owned' : ''
+                        }`}
+                        key={item.id}
                       >
-                        <span className="visually-hidden">Acheter</span>
-                      </button>
-                    </article>
-                  ))}
+                        <div className="shop-object-card__icon" aria-hidden="true">
+                          <img src={item.icon} alt="" />
+                        </div>
+                        <h2>{item.title}</h2>
+                        <div className="shop-object-card__price">
+                          <img
+                            src="/assets/collectable/pasteque.png"
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <strong>{item.price}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          className={`shop-object-card__button${
+                            isActive ? ' is-owned' : ''
+                          }${isUnaffordable ? ' is-unaffordable' : ''}`}
+                          disabled={isPending}
+                          onClick={() => void handleShopObjectAction(item)}
+                        >
+                          <span className="visually-hidden">
+                            {isActive ? 'Possede' : 'Acheter'}
+                          </span>
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
 

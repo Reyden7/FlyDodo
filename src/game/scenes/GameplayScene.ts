@@ -4,16 +4,23 @@ import {
   emitFlightHud,
   emitGameOver,
   emitMovementStarted,
+  emitShopObjectsUpdated,
   emitWalletUpdated,
   gameEvents,
+  getLatestShopObjectInventory,
   type CosmeticEquippedDetail,
+  type ShopObjectsUpdatedDetail,
 } from '../events';
 import {
   addWatermelons,
+  consumeLifeVial,
+  consumeWatermelonMagnet,
+  createEmptyShopObjectInventory,
   loadBestAltitude,
   loadLatestPlayerProfile,
   saveBestAltitude,
   type EquippedCosmetics,
+  type ShopObjectInventory,
 } from '../../services/saveService';
 import {
   getControlTalentStats,
@@ -172,6 +179,9 @@ type ObstacleKindId =
   | 'satellite'
   | 'meteor'
   | 'asteroid';
+
+type PlayerDamageReason = 'obstacle' | 'lava' | 'mosquito';
+type FinishGameReason = PlayerDamageReason | 'default';
 
 interface ObstacleKind {
   id: ObstacleKindId;
@@ -338,6 +348,12 @@ const FRUIT_DETECTOR_TEXTURE_KEY = 'fruit-detector-talent-button';
 const WATERMELON_SOUND_KEY = 'watermelon-collect-sound';
 const WATERMELON_SOUND_PATH = '/assets/sounds/pasteque.mp3';
 const WATERMELON_SOUND_VOLUME = 0.65;
+const WATERMELON_MAGNET_BASE_RADIUS = 100;
+const WATERMELON_MAGNET_RADIUS_BY_LEVEL = [100, 200, 300, 400] as const;
+const WATERMELON_MAGNET_SPEED_BY_LEVEL = [350, 400, 500, 600] as const;
+const POTION_SOUND_KEY = 'life-vial-consume-sound';
+const POTION_SOUND_PATH = '/assets/sounds/drinkPotion.mp3';
+const POTION_SOUND_VOLUME = 0.7;
 
 const FLIGHT_SOUND_KEY = 'dodo-flight-default-sound';
 const FLIGHT_SOUND_PATH = '/assets/sounds/defaut.mp3';
@@ -710,6 +726,8 @@ export class GameplayScene extends Phaser.Scene {
     powerTakeoff: false,
     feast: false,
   };
+  private shopObjectInventory: ShopObjectInventory =
+    createEmptyShopObjectInventory();
   private watermelonCollectStreak = 0;
   private fruitDetectorButton?: Phaser.GameObjects.Image;
   private fruitDetectorArrow?: Phaser.GameObjects.Graphics;
@@ -786,6 +804,7 @@ export class GameplayScene extends Phaser.Scene {
     );
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
     this.load.audio(WATERMELON_SOUND_KEY, WATERMELON_SOUND_PATH);
+    this.load.audio(POTION_SOUND_KEY, POTION_SOUND_PATH);
     this.load.audio(FLIGHT_SOUND_KEY, FLIGHT_SOUND_PATH);
     this.load.audio(FLAP_SOUND_KEY, FLAP_SOUND_PATH);
 
@@ -896,6 +915,10 @@ export class GameplayScene extends Phaser.Scene {
       this.handleCosmeticEquipped,
     );
     gameEvents.addEventListener('flydodo:talents-updated', this.handleTalentsUpdated);
+    gameEvents.addEventListener(
+      'flydodo:shop-objects-updated',
+      this.handleShopObjectsUpdated,
+    );
     this.events.on(
       Phaser.Scenes.Events.POST_UPDATE,
       this.syncDodoVisualsBeforeRender,
@@ -905,6 +928,7 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializeBestScore();
     void this.initializeEquippedCosmetics();
     void this.initializeTalents();
+    void this.initializeShopObjects();
     this.updateDodoVisuals(0);
     this.runStartTime = this.time.now;
   }
@@ -932,6 +956,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateWingBeats(direction, deltaSeconds);
     this.updateCamera(deltaSeconds);
     this.updateWatermelonMisses();
+    this.updateWatermelonMagnetAttraction(deltaSeconds);
     this.updateFeastAttraction(deltaSeconds);
     this.updateFruitDetectorArrow();
     this.updateEnduranceTimers(time);
@@ -963,6 +988,10 @@ export class GameplayScene extends Phaser.Scene {
       this.handleCosmeticEquipped,
     );
     gameEvents.removeEventListener('flydodo:talents-updated', this.handleTalentsUpdated);
+    gameEvents.removeEventListener(
+      'flydodo:shop-objects-updated',
+      this.handleShopObjectsUpdated,
+    );
   }
 
   private createCosmeticDisplayObjects(): void {
@@ -1035,6 +1064,23 @@ export class GameplayScene extends Phaser.Scene {
     this.applyBlueTalentStats(getBlueTalentStats(profile.blueTalents));
   }
 
+  private async initializeShopObjects(): Promise<void> {
+    const latestInventory = getLatestShopObjectInventory();
+
+    if (latestInventory) {
+      this.applyShopObjectInventory(latestInventory);
+      return;
+    }
+
+    const profile = await loadLatestPlayerProfile();
+
+    if (!this.scene.isActive()) {
+      return;
+    }
+
+    this.applyShopObjectInventory(profile.shopObjects);
+  }
+
   private applyBlueTalentStats(nextStats: BlueTalentStats): void {
     this.blueTalentStats = nextStats;
 
@@ -1045,34 +1091,40 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private applyEnduranceStats(nextStats: EnduranceTalentStats): void {
+  private applyShopObjectInventory(nextInventory: ShopObjectInventory): void {
+    this.shopObjectInventory = { ...nextInventory };
+    this.refreshPlayerSurvivalStats();
+  }
+
+  private refreshPlayerSurvivalStats(): void {
     const previousMaxLives = this.playerMaxLives;
     const previousMaxShield = this.playerMaxShield;
+    const nextMaxLives = this.enduranceStats.maxLives;
+    const nextMaxShield = this.enduranceStats.maxShield;
 
-    this.enduranceStats = nextStats;
-    this.playerMaxLives = nextStats.maxLives;
-    this.playerMaxShield = nextStats.maxShield;
+    this.playerMaxLives = nextMaxLives;
+    this.playerMaxShield = nextMaxShield;
 
-    if (previousMaxLives <= PLAYER_BASE_LIVES && this.playerLives === PLAYER_BASE_LIVES) {
+    if (nextMaxLives > previousMaxLives && this.playerLives === previousMaxLives) {
       this.playerLives = this.playerMaxLives;
     } else {
       this.playerLives = Math.min(this.playerLives, this.playerMaxLives);
     }
 
-    if (previousMaxShield <= PLAYER_BASE_SHIELD && this.playerShield === PLAYER_BASE_SHIELD) {
+    if (nextMaxShield > previousMaxShield && this.playerShield === previousMaxShield) {
       this.playerShield = this.playerMaxShield;
     } else {
       this.playerShield = Math.min(this.playerShield, this.playerMaxShield);
     }
 
-    if (this.playerLives >= this.playerMaxLives || !nextStats.regeneration) {
+    if (this.playerLives >= this.playerMaxLives || !this.enduranceStats.regeneration) {
       this.nextLifeRegenerationAt = null;
     } else if (this.nextLifeRegenerationAt === null) {
       this.nextLifeRegenerationAt =
         this.time.now + PLAYER_REGENERATION_DELAY_MS;
     }
 
-    if (this.playerShield >= this.playerMaxShield || !nextStats.shieldRecharge) {
+    if (this.playerShield >= this.playerMaxShield || !this.enduranceStats.shieldRecharge) {
       this.nextShieldRechargeAt = null;
     } else if (this.nextShieldRechargeAt === null) {
       this.nextShieldRechargeAt =
@@ -1080,6 +1132,11 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.emitHud();
+  }
+
+  private applyEnduranceStats(nextStats: EnduranceTalentStats): void {
+    this.enduranceStats = nextStats;
+    this.refreshPlayerSurvivalStats();
   }
 
   private createTrimmedCosmeticCanvas(image: HTMLImageElement): HTMLCanvasElement {
@@ -1287,6 +1344,17 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializeTalents();
   };
 
+  private handleShopObjectsUpdated = (event: Event): void => {
+    const detail = (event as CustomEvent<ShopObjectsUpdatedDetail>).detail;
+
+    if (detail?.shopObjects) {
+      this.applyShopObjectInventory(detail.shopObjects);
+      return;
+    }
+
+    void this.initializeShopObjects();
+  };
+
   private syncDodoVisualsBeforeRender = (): void => {
     this.updateDodoVisuals(0);
   };
@@ -1433,6 +1501,7 @@ export class GameplayScene extends Phaser.Scene {
       powerTakeoff: false,
       feast: false,
     };
+    this.shopObjectInventory = createEmptyShopObjectInventory();
     this.watermelonCollectStreak = 0;
     this.fruitDetectorActive = false;
     this.perchedBranch = null;
@@ -2182,7 +2251,7 @@ export class GameplayScene extends Phaser.Scene {
 
     void this.damagePlayer(
       1,
-      obstacleKind === 'flyingInsect' ? 'mosquito' : 'default',
+      obstacleKind === 'flyingInsect' ? 'mosquito' : 'obstacle',
     );
   };
 
@@ -2241,11 +2310,88 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
+  private updateWatermelonMagnetAttraction(deltaSeconds: number): void {
+    const latestInventory = getLatestShopObjectInventory();
+
+    if (
+      latestInventory &&
+      latestInventory.watermelonMagnet !== this.shopObjectInventory.watermelonMagnet
+    ) {
+      this.applyShopObjectInventory(latestInventory);
+    }
+
+    if (!this.shopObjectInventory.watermelonMagnet) {
+      return;
+    }
+
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const targetX = playerBody.center.x;
+    const targetY = playerBody.center.y;
+    const magnetLevel = Phaser.Math.Clamp(
+      this.blueTalentStats.watermelonMagnetLevel,
+      0,
+      WATERMELON_MAGNET_RADIUS_BY_LEVEL.length - 1,
+    );
+    const attractionRadius =
+      WATERMELON_MAGNET_RADIUS_BY_LEVEL[magnetLevel] ??
+      WATERMELON_MAGNET_BASE_RADIUS;
+    const attractionSpeed =
+      (WATERMELON_MAGNET_SPEED_BY_LEVEL[magnetLevel] ??
+        WATERMELON_MAGNET_SPEED_BY_LEVEL[0]) * deltaSeconds;
+
+    for (const child of this.watermelonCollectables.getChildren()) {
+      const watermelon = child as Phaser.Physics.Arcade.Image;
+
+      if (!watermelon.active) {
+        continue;
+      }
+
+      const watermelonBody = watermelon.body as Phaser.Physics.Arcade.StaticBody;
+      const watermelonX = watermelonBody.center.x;
+      const watermelonY = watermelonBody.center.y;
+      const distance = Phaser.Math.Distance.Between(
+        watermelonX,
+        watermelonY,
+        targetX,
+        targetY,
+      );
+
+      if (distance > attractionRadius) {
+        continue;
+      }
+
+      if (distance <= 24) {
+        this.handleWatermelonCollected(
+          this.player as Phaser.Types.Physics.Arcade.GameObjectWithBody,
+          watermelon as Phaser.Types.Physics.Arcade.GameObjectWithBody,
+        );
+        continue;
+      }
+
+      const step = Math.min(attractionSpeed, distance);
+      const angle = Phaser.Math.Angle.Between(
+        watermelonX,
+        watermelonY,
+        targetX,
+        targetY,
+      );
+
+      watermelon.setPosition(
+        watermelon.x + Math.cos(angle) * step,
+        watermelon.y + Math.sin(angle) * step,
+      );
+      watermelon.refreshBody();
+    }
+  }
+
   private updateFeastAttraction(deltaSeconds: number): void {
     if (!this.blueTalentStats.feast) {
       return;
     }
 
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    const targetX = playerBody.center.x;
+    const targetY = playerBody.center.y;
     const view = this.cameras.main.worldView;
     const attractionSpeed = 430 * deltaSeconds;
 
@@ -2265,11 +2411,14 @@ export class GameplayScene extends Phaser.Scene {
         continue;
       }
 
+      const watermelonBody = watermelon.body as Phaser.Physics.Arcade.StaticBody;
+      const watermelonX = watermelonBody.center.x;
+      const watermelonY = watermelonBody.center.y;
       const distance = Phaser.Math.Distance.Between(
-        watermelon.x,
-        watermelon.y,
-        this.player.x,
-        this.player.y,
+        watermelonX,
+        watermelonY,
+        targetX,
+        targetY,
       );
 
       if (distance <= 24) {
@@ -2282,10 +2431,10 @@ export class GameplayScene extends Phaser.Scene {
 
       const step = Math.min(attractionSpeed, distance);
       const angle = Phaser.Math.Angle.Between(
-        watermelon.x,
-        watermelon.y,
-        this.player.x,
-        this.player.y,
+        watermelonX,
+        watermelonY,
+        targetX,
+        targetY,
       );
 
       watermelon.setPosition(
@@ -2834,6 +2983,7 @@ export class GameplayScene extends Phaser.Scene {
       this.watermelons,
       this.playerMaxLives,
       this.playerLives,
+      this.shopObjectInventory.lifeVial,
       this.playerMaxShield,
       this.playerShield,
     ].join(':');
@@ -2850,6 +3000,7 @@ export class GameplayScene extends Phaser.Scene {
       watermelons: this.watermelons,
       lives: this.playerLives,
       maxLives: this.playerMaxLives,
+      lifeVialActive: this.shopObjectInventory.lifeVial,
       shield: this.playerShield,
       maxShield: this.playerMaxShield,
     });
@@ -2940,9 +3091,39 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
+  private canLifeVialAbsorbDamage(reason: PlayerDamageReason): boolean {
+    return reason === 'obstacle' || reason === 'mosquito';
+  }
+
+  private async consumeActiveLifeVial(): Promise<void> {
+    this.sound.play(POTION_SOUND_KEY, {
+      volume: POTION_SOUND_VOLUME,
+    });
+
+    this.shopObjectInventory = {
+      ...this.shopObjectInventory,
+      lifeVial: false,
+    };
+    this.refreshPlayerSurvivalStats();
+    const profile = await consumeLifeVial();
+    emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
+    this.applyShopObjectInventory(profile.shopObjects);
+  }
+
+  private async consumeActiveWatermelonMagnet(): Promise<void> {
+    this.shopObjectInventory = {
+      ...this.shopObjectInventory,
+      watermelonMagnet: false,
+    };
+    this.emitHud();
+    const profile = await consumeWatermelonMagnet();
+    emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
+    this.applyShopObjectInventory(profile.shopObjects);
+  }
+
   private async damagePlayer(
     amount = 1,
-    reason: 'default' | 'lava' | 'mosquito' = 'default',
+    reason: PlayerDamageReason = 'obstacle',
   ): Promise<void> {
     if (this.gameOver) {
       return;
@@ -2973,6 +3154,15 @@ export class GameplayScene extends Phaser.Scene {
       if (reason === 'mosquito' && this.enduranceStats.mosquitoShield) {
         remainingDamage = 0;
       }
+    }
+
+    if (
+      remainingDamage > 0 &&
+      this.shopObjectInventory.lifeVial &&
+      this.canLifeVialAbsorbDamage(reason)
+    ) {
+      remainingDamage -= 1;
+      await this.consumeActiveLifeVial();
     }
 
     if (remainingDamage > 0) {
@@ -3042,7 +3232,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private async finishGame(
-    reason: 'default' | 'lava' | 'mosquito' = 'default',
+    reason: FinishGameReason = 'default',
   ): Promise<void> {
     if (this.gameOver) {
       return;
@@ -3055,6 +3245,9 @@ export class GameplayScene extends Phaser.Scene {
     this.gameOver = true;
     this.playerLives = 0;
     this.emitHud();
+    if (this.shopObjectInventory.watermelonMagnet) {
+      await this.consumeActiveWatermelonMagnet();
+    }
     this.stopFlightSounds();
     this.angularVelocity = 180;
     this.player.setAcceleration(0, GRAVITY_Y * 1.4);
@@ -3101,6 +3294,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.gamePaused = false;
+    void this.initializeShopObjects();
     this.physics.world.resume();
     this.tweens.resumeAll();
 
