@@ -84,6 +84,7 @@ import {
 } from './talents/enduranceTalentNodePositions';
 
 type TutorialSide = 'left' | 'right' | null;
+type MainMenuButton = 'play' | 'shop' | 'tutorial';
 type ShopTab = 'accessories' | 'talents' | 'items' | 'watermelons';
 type TalentTreeTab = 'control' | 'endurance' | 'talents';
 type SelectedControlTalent =
@@ -123,6 +124,19 @@ const getTalentNodePositionStyle = ({
 });
 
 const IS_DEV = import.meta.env.DEV;
+const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
+const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
+const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
+const MENU_BUTTON_SOUND_PATH = '/assets/menu/sounds/button.mp3';
+const MENU_POP_SOUND_DELAYS_MS = [180, 760, 1280, 1390] as const;
+const MAIN_MENU_CLICK_DELAY_MS = 140;
+const SHOP_MAIN_TAB_SOUND_PATH = '/assets/sounds/button3.mp3';
+const SHOP_FILTER_SOUND_PATH = '/assets/sounds/button.mp3';
+const SHOP_BUY_SOUND_PATH = '/assets/sounds/buy2.mp3';
+const SHOP_ERROR_SOUND_PATH = '/assets/sounds/error.mp3';
+const SHOP_EQUIP_SOUND_PATH = '/assets/sounds/equipe.mp3';
+const TALENT_UNLOCKED_SOUND_PATH = '/assets/sounds/skillUnlocked.mp3';
+const TALENT_REFUND_SOUND_PATH = '/assets/sounds/buy.mp3';
 
 const TALENT_TREE_TABS: ReadonlyArray<{
   id: TalentTreeTab;
@@ -252,6 +266,9 @@ function SurvivalIconRow({
 }
 
 export default function App(): React.JSX.Element {
+  const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
+  const [clickedMainMenuButton, setClickedMainMenuButton] =
+    useState<MainMenuButton | null>(null);
   const [altitude, setAltitude] = useState(0);
   const [bestAltitude, setBestAltitude] = useState(0);
   const [speed, setSpeed] = useState(0);
@@ -302,6 +319,11 @@ export default function App(): React.JSX.Element {
   const controlTalentSheetCloseTimerRef = useRef<number | null>(null);
   const enduranceTalentSheetCloseTimerRef = useRef<number | null>(null);
   const blueTalentSheetCloseTimerRef = useRef<number | null>(null);
+  const menuMusicRef = useRef<HTMLAudioElement | null>(null);
+  const menuPopTimersRef = useRef<number[]>([]);
+  const mainMenuActionTimerRef = useRef<number | null>(null);
+  const interfaceAudioContextRef = useRef<AudioContext | null>(null);
+  const reversedEquipSoundBufferRef = useRef<AudioBuffer | null>(null);
 
   const filteredShopItems = useMemo(
     () =>
@@ -312,6 +334,74 @@ export default function App(): React.JSX.Element {
   );
   const visibleHeartMax = maxLives;
   const visibleHeartCount = Math.min(lives, visibleHeartMax);
+
+  const playInterfaceSound = (src: string, volume = 1): void => {
+    const sound = new Audio(src);
+    sound.volume = volume;
+    void sound.play().catch(() => undefined);
+  };
+
+  const getInterfaceAudioContext = (): AudioContext => {
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (
+        window as typeof window & {
+          webkitAudioContext?: typeof AudioContext;
+        }
+      ).webkitAudioContext;
+
+    if (!AudioContextConstructor) {
+      throw new Error('Web Audio is not supported.');
+    }
+
+    if (!interfaceAudioContextRef.current) {
+      interfaceAudioContextRef.current = new AudioContextConstructor();
+    }
+
+    return interfaceAudioContextRef.current;
+  };
+
+  const playReversedEquipSound = async (): Promise<void> => {
+    try {
+      const context = getInterfaceAudioContext();
+
+      if (context.state === 'suspended') {
+        await context.resume();
+      }
+
+      if (!reversedEquipSoundBufferRef.current) {
+        const response = await fetch(SHOP_EQUIP_SOUND_PATH);
+        const audioData = await response.arrayBuffer();
+        const decodedBuffer = await context.decodeAudioData(audioData);
+        const reversedBuffer = context.createBuffer(
+          decodedBuffer.numberOfChannels,
+          decodedBuffer.length,
+          decodedBuffer.sampleRate,
+        );
+
+        for (let channel = 0; channel < decodedBuffer.numberOfChannels; channel += 1) {
+          const sourceData = decodedBuffer.getChannelData(channel);
+          const reversedData = reversedBuffer.getChannelData(channel);
+
+          for (let index = 0; index < sourceData.length; index += 1) {
+            reversedData[index] = sourceData[sourceData.length - 1 - index];
+          }
+        }
+
+        reversedEquipSoundBufferRef.current = reversedBuffer;
+      }
+
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      gain.gain.value = 1;
+      source.buffer = reversedEquipSoundBufferRef.current;
+      source.connect(gain);
+      gain.connect(context.destination);
+      source.start();
+    } catch {
+      playInterfaceSound(SHOP_EQUIP_SOUND_PATH);
+    }
+  };
 
   useEffect(() => {
     void loadLatestPlayerProfile().then((profile) => {
@@ -375,7 +465,86 @@ export default function App(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (!showControlTutorial) {
+    if (!isMainMenuOpen) {
+      return;
+    }
+
+    const music = new Audio(MENU_MUSIC_PATH);
+    const popSound = new Audio(MENU_POP_SOUND_PATH);
+    let isDisposed = false;
+    let unlockListenersQueued = false;
+
+    music.loop = false;
+    music.preload = 'auto';
+    music.volume = 0.72;
+    popSound.preload = 'auto';
+    popSound.volume = 1;
+    menuMusicRef.current = music;
+
+    const clearPopTimers = (): void => {
+      menuPopTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      menuPopTimersRef.current = [];
+    };
+
+    const removeUnlockListeners = (): void => {
+      window.removeEventListener('pointerdown', unlockMenuAudio, true);
+      window.removeEventListener('keydown', unlockMenuAudio, true);
+      unlockListenersQueued = false;
+    };
+
+    const playPopSound = (): void => {
+      const pop = popSound.cloneNode(true) as HTMLAudioElement;
+      pop.volume = popSound.volume;
+      pop.currentTime = 0;
+      void pop.play().catch(() => undefined);
+    };
+
+    const schedulePopSounds = (): void => {
+      if (isDisposed) {
+        return;
+      }
+
+      clearPopTimers();
+      menuPopTimersRef.current = MENU_POP_SOUND_DELAYS_MS.map((delay) =>
+        window.setTimeout(playPopSound, delay),
+      );
+    };
+
+    const startMenuAudio = (): void => {
+      void music.play().then(schedulePopSounds).catch(queueAudioUnlock);
+    };
+
+    const unlockMenuAudio = (): void => {
+      removeUnlockListeners();
+      startMenuAudio();
+    };
+
+    function queueAudioUnlock(): void {
+      if (unlockListenersQueued || isDisposed) {
+        return;
+      }
+
+      unlockListenersQueued = true;
+      window.addEventListener('pointerdown', unlockMenuAudio, true);
+      window.addEventListener('keydown', unlockMenuAudio, true);
+    }
+
+    startMenuAudio();
+
+    return () => {
+      isDisposed = true;
+      removeUnlockListeners();
+      clearPopTimers();
+      music.pause();
+      music.currentTime = 0;
+      music.removeAttribute('src');
+      music.load();
+      menuMusicRef.current = null;
+    };
+  }, [isMainMenuOpen]);
+
+  useEffect(() => {
+    if (!showControlTutorial || isMainMenuOpen) {
       return;
     }
 
@@ -426,7 +595,7 @@ export default function App(): React.JSX.Element {
         window.clearTimeout(hideTimer);
       }
     };
-  }, [showControlTutorial]);
+  }, [isMainMenuOpen, showControlTutorial]);
 
   useEffect(() => {
     if (!shopNotice) {
@@ -453,11 +622,19 @@ export default function App(): React.JSX.Element {
       if (blueTalentSheetCloseTimerRef.current !== null) {
         window.clearTimeout(blueTalentSheetCloseTimerRef.current);
       }
+
+      if (mainMenuActionTimerRef.current !== null) {
+        window.clearTimeout(mainMenuActionTimerRef.current);
+      }
+
+      void interfaceAudioContextRef.current?.close();
+      interfaceAudioContextRef.current = null;
+      reversedEquipSoundBufferRef.current = null;
     },
     [],
   );
 
-  const restart = (): void => {
+  const resetRunState = (): void => {
     setIsShopOpen(false);
     setIsGameOver(false);
     setFallSeconds(null);
@@ -471,6 +648,53 @@ export default function App(): React.JSX.Element {
     setShield(0);
     setMaxShield(0);
     setHasMovedThisRun(false);
+  };
+
+  const startGame = (withTutorial = false): void => {
+    resetRunState();
+    tutorialAcknowledgedRef.current = !withTutorial;
+    setTutorialSide(null);
+    setShowControlTutorial(withTutorial);
+    setIsMainMenuOpen(false);
+  };
+
+  const handleMainMenuButtonClick = (
+    button: MainMenuButton,
+    action: () => void | Promise<void>,
+  ): void => {
+    if (mainMenuActionTimerRef.current !== null) {
+      return;
+    }
+
+    playInterfaceSound(
+      button === 'play' ? MENU_PLAY_SOUND_PATH : MENU_BUTTON_SOUND_PATH,
+    );
+
+    setClickedMainMenuButton(button);
+    mainMenuActionTimerRef.current = window.setTimeout(() => {
+      mainMenuActionTimerRef.current = null;
+      setClickedMainMenuButton(null);
+      void action();
+    }, MAIN_MENU_CLICK_DELAY_MS);
+  };
+
+  const selectShopTab = (tab: ShopTab): void => {
+    playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
+    setSelectedShopTab(tab);
+  };
+
+  const selectShopCategory = (category: ShopFilterCategory): void => {
+    playInterfaceSound(SHOP_FILTER_SOUND_PATH);
+    setSelectedCategory(category);
+  };
+
+  const selectTalentTreeTab = (tab: TalentTreeTab): void => {
+    playInterfaceSound(SHOP_FILTER_SOUND_PATH);
+    setSelectedTalentTreeTab(tab);
+  };
+
+  const restart = (): void => {
+    resetRunState();
     requestRestart();
   };
 
@@ -482,7 +706,10 @@ export default function App(): React.JSX.Element {
     setIsControlTalentSheetClosing(false);
     setSelectedEnduranceTalent(null);
     setIsEnduranceTalentSheetClosing(false);
-    requestGamePause();
+    if (!isMainMenuOpen) {
+      requestGamePause();
+    }
+
     setIsShopOpen(true);
     const profile = await loadLatestPlayerProfile();
     setPlayerProfile(profile);
@@ -497,7 +724,7 @@ export default function App(): React.JSX.Element {
     setIsEnduranceTalentSheetClosing(false);
     setIsShopOpen(false);
 
-    if (!isGameOver) {
+    if (!isGameOver && !isMainMenuOpen) {
       requestGameResume();
     }
   };
@@ -520,6 +747,13 @@ export default function App(): React.JSX.Element {
       const isOwned = playerProfile.ownedItemIds.includes(item.id);
 
       if (!isOwned) {
+        if (playerProfile.watermelons < item.price) {
+          playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+          setShopNotice('Pas assez de pastèques pour cet accessoire.');
+          return;
+        }
+
+        playInterfaceSound(SHOP_BUY_SOUND_PATH);
         const result = await purchaseShopItem(item.id, item.price);
         setPlayerProfile(result.profile);
 
@@ -539,6 +773,7 @@ export default function App(): React.JSX.Element {
         setPlayerProfile(result.profile);
 
         if (result.status === 'unequipped') {
+          void playReversedEquipSound();
           emitCosmeticEquipped({
             category: item.category,
             itemId: null,
@@ -553,6 +788,7 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'equipped') {
+        playInterfaceSound(SHOP_EQUIP_SOUND_PATH);
         emitCosmeticEquipped({
           category: item.category,
           itemId: item.id,
@@ -575,6 +811,16 @@ export default function App(): React.JSX.Element {
     setShopNotice(null);
 
     try {
+      if (!isShopObjectActive(playerProfile, item.id)) {
+        if (playerProfile.watermelons < item.price) {
+          playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+          setShopNotice('Pas assez de pasteques pour cet objet.');
+          return;
+        }
+
+        playInterfaceSound(SHOP_BUY_SOUND_PATH);
+      }
+
       const result = await purchaseShopObject(item.id, item.price);
       setPlayerProfile(result.profile);
 
@@ -599,10 +845,13 @@ export default function App(): React.JSX.Element {
   const handleWatermelonPackAction = (
     pack: (typeof WATERMELON_PACKS)[number],
   ): void => {
+    playInterfaceSound(SHOP_BUY_SOUND_PATH);
     setShopNotice(`Paiement bientot disponible : ${pack.amount} pasteques.`);
   };
 
   const selectControlTalent = (target: SelectedControlTalent): void => {
+    playInterfaceSound(SHOP_FILTER_SOUND_PATH);
+
     if (controlTalentSheetCloseTimerRef.current !== null) {
       window.clearTimeout(controlTalentSheetCloseTimerRef.current);
       controlTalentSheetCloseTimerRef.current = null;
@@ -641,6 +890,8 @@ export default function App(): React.JSX.Element {
   };
 
   const selectEnduranceTalent = (target: SelectedEnduranceTalent): void => {
+    playInterfaceSound(SHOP_FILTER_SOUND_PATH);
+
     if (enduranceTalentSheetCloseTimerRef.current !== null) {
       window.clearTimeout(enduranceTalentSheetCloseTimerRef.current);
       enduranceTalentSheetCloseTimerRef.current = null;
@@ -679,6 +930,8 @@ export default function App(): React.JSX.Element {
   };
 
   const selectBlueTalent = (target: SelectedBlueTalent): void => {
+    playInterfaceSound(SHOP_FILTER_SOUND_PATH);
+
     if (blueTalentSheetCloseTimerRef.current !== null) {
       window.clearTimeout(blueTalentSheetCloseTimerRef.current);
       blueTalentSheetCloseTimerRef.current = null;
@@ -751,6 +1004,7 @@ export default function App(): React.JSX.Element {
         return;
       }
 
+      playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
       setShopNotice('Competence debloquee !');
     } finally {
@@ -769,6 +1023,7 @@ export default function App(): React.JSX.Element {
       target.kind === 'master' ? 'control-master-refund' : `${target.id}-refund`;
     setPendingTalentAction(actionId);
     setShopNotice(null);
+    playInterfaceSound(TALENT_REFUND_SOUND_PATH);
 
     try {
       const result =
@@ -825,6 +1080,7 @@ export default function App(): React.JSX.Element {
         return;
       }
 
+      playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
       setShopNotice('Competence achetee !');
     } finally {
@@ -843,6 +1099,7 @@ export default function App(): React.JSX.Element {
       target.kind === 'phoenix' ? 'endurance-phoenix' : `${target.id}-${target.level}`;
     setPendingTalentAction(actionId);
     setShopNotice(null);
+    playInterfaceSound(TALENT_REFUND_SOUND_PATH);
 
     try {
       const result =
@@ -899,6 +1156,7 @@ export default function App(): React.JSX.Element {
         return;
       }
 
+      playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
       setShopNotice('Competence achetee !');
     } finally {
@@ -919,6 +1177,7 @@ export default function App(): React.JSX.Element {
         : `blue-${target.id}-${target.level}-refund`;
     setPendingTalentAction(actionId);
     setShopNotice(null);
+    playInterfaceSound(TALENT_REFUND_SOUND_PATH);
 
     try {
       const result =
@@ -1106,56 +1365,92 @@ export default function App(): React.JSX.Element {
 
   return (
     <main className="app-shell">
-      <GameCanvas />
+      {!isMainMenuOpen && <GameCanvas />}
 
-      <section className="hud" aria-label="Informations de jeu">
-        <div className="hud__left-column">
-          <div className="hud-pill hud-pill--speed">
-            <span>VITESSE</span>
-            <strong>{speed} m/s</strong>
-          </div>
+      {isMainMenuOpen && (
+        <section className="main-menu" aria-label="Menu principal">
+          <div className="main-menu__title" aria-label="FlyDodo!" />
 
-          <div className="hud-pill hud-pill--altitude">
-            <span>ALTITUDE</span>
-            <strong>{altitude} m</strong>
-          </div>
-
-        </div>
-
-        <div className="hud-pill hud-pill--watermelons">
-          <span>PASTÈQUES</span>
-          <strong>{watermelons}</strong>
-        </div>
-
-        <div className="survival-icons">
-          <div className="survival-icons__life-row">
-            <SurvivalIconRow
-              label="Vie"
-              current={visibleHeartCount}
-              max={visibleHeartMax}
-              fullSrc="/assets/ui/vie/1.png"
-              emptySrc="/assets/ui/vie/2.png"
-            />
-            {lifeVialActive && (
-              <img
-                className="survival-icons__life-vial"
-                src="/assets/objets/fioleVie.png"
-                alt=""
-                aria-hidden="true"
-              />
-            )}
-          </div>
-          <SurvivalIconRow
-            label="Bouclier"
-            current={shield}
-            max={maxShield}
-            fullSrc="/assets/ui/bouclier/1.png"
-            emptySrc="/assets/ui/bouclier/2.png"
+          <button
+            type="button"
+            className={`main-menu__button main-menu__button--play${
+              clickedMainMenuButton === 'play' ? ' is-clicked' : ''
+            }`}
+            aria-label="Jouer"
+            onClick={() => handleMainMenuButtonClick('play', () => startGame(false))}
           />
-        </div>
-      </section>
 
-      {showControlTutorial && !isGameOver && (
+          <div className="main-menu__secondary-actions">
+            <button
+              type="button"
+              className={`main-menu__button main-menu__button--shop${
+                clickedMainMenuButton === 'shop' ? ' is-clicked' : ''
+              }`}
+              aria-label="Boutique"
+              onClick={() => handleMainMenuButtonClick('shop', openShop)}
+            />
+            <button
+              type="button"
+              className={`main-menu__button main-menu__button--tutorial${
+                clickedMainMenuButton === 'tutorial' ? ' is-clicked' : ''
+              }`}
+              aria-label="Tutoriel"
+              onClick={() => handleMainMenuButtonClick('tutorial', () => startGame(true))}
+            />
+          </div>
+        </section>
+      )}
+
+      {!isMainMenuOpen && (
+        <section className="hud" aria-label="Informations de jeu">
+          <div className="hud__left-column">
+            <div className="hud-pill hud-pill--speed">
+              <span>VITESSE</span>
+              <strong>{speed} m/s</strong>
+            </div>
+
+            <div className="hud-pill hud-pill--altitude">
+              <span>ALTITUDE</span>
+              <strong>{altitude} m</strong>
+            </div>
+
+          </div>
+
+          <div className="hud-pill hud-pill--watermelons">
+            <span>PASTÈQUES</span>
+            <strong>{watermelons}</strong>
+          </div>
+
+          <div className="survival-icons">
+            <div className="survival-icons__life-row">
+              <SurvivalIconRow
+                label="Vie"
+                current={visibleHeartCount}
+                max={visibleHeartMax}
+                fullSrc="/assets/ui/vie/1.png"
+                emptySrc="/assets/ui/vie/2.png"
+              />
+              {lifeVialActive && (
+                <img
+                  className="survival-icons__life-vial"
+                  src="/assets/objets/fioleVie.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            <SurvivalIconRow
+              label="Bouclier"
+              current={shield}
+              max={maxShield}
+              fullSrc="/assets/ui/bouclier/1.png"
+              emptySrc="/assets/ui/bouclier/2.png"
+            />
+          </div>
+        </section>
+      )}
+
+      {showControlTutorial && !isMainMenuOpen && !isGameOver && (
         <section
           className={`control-tutorial${
             tutorialSide !== null
@@ -1203,14 +1498,14 @@ export default function App(): React.JSX.Element {
         </section>
       )}
 
-      {fallSeconds !== null && !isGameOver && (
+      {fallSeconds !== null && !isMainMenuOpen && !isGameOver && (
         <div className="fall-warning">
           {warningReason === 'side' ? 'Reviens' : 'Remonte'} !{' '}
           <strong>{fallSeconds}</strong>
         </div>
       )}
 
-      {!isGameOver && !isShopOpen && !hasMovedThisRun && (
+      {!isMainMenuOpen && !isGameOver && !isShopOpen && !hasMovedThisRun && (
         <button
           type="button"
           className="floating-shop-button"
@@ -1219,7 +1514,7 @@ export default function App(): React.JSX.Element {
         />
       )}
 
-      {isGameOver && !isShopOpen && (
+      {!isMainMenuOpen && isGameOver && !isShopOpen && (
         <section className="game-over" role="dialog" aria-modal="true">
           <div className="game-over__card">
             <p className="eyebrow">FIN DE L’ASCENSION</p>
@@ -1285,7 +1580,7 @@ export default function App(): React.JSX.Element {
                   className={`shop-main-tab shop-main-tab--accessories${
                     selectedShopTab === 'accessories' ? ' is-active' : ''
                   }`}
-                  onClick={() => setSelectedShopTab('accessories')}
+                  onClick={() => selectShopTab('accessories')}
                 >
                   <span className="visually-hidden">Accessoires</span>
                 </button>
@@ -1296,7 +1591,7 @@ export default function App(): React.JSX.Element {
                   className={`shop-main-tab shop-main-tab--items${
                     selectedShopTab === 'items' ? ' is-active' : ''
                   }`}
-                  onClick={() => setSelectedShopTab('items')}
+                  onClick={() => selectShopTab('items')}
                 >
                   <span className="visually-hidden">Objets</span>
                 </button>
@@ -1307,7 +1602,7 @@ export default function App(): React.JSX.Element {
                   className={`shop-main-tab shop-main-tab--talents${
                     selectedShopTab === 'talents' ? ' is-active' : ''
                   }`}
-                  onClick={() => setSelectedShopTab('talents')}
+                  onClick={() => selectShopTab('talents')}
                 >
                   <span className="visually-hidden">Arbre talents</span>
                 </button>
@@ -1318,7 +1613,7 @@ export default function App(): React.JSX.Element {
                   className={`shop-main-tab shop-main-tab--watermelons${
                     selectedShopTab === 'watermelons' ? ' is-active' : ''
                   }`}
-                  onClick={() => setSelectedShopTab('watermelons')}
+                  onClick={() => selectShopTab('watermelons')}
                 >
                   <img
                     src="/assets/collectable/pasteque.png"
@@ -1345,7 +1640,7 @@ export default function App(): React.JSX.Element {
                         className={`shop-filter__button shop-filter__button--${option.value}${
                           selectedCategory === option.value ? ' is-active' : ''
                         }`}
-                        onClick={() => setSelectedCategory(option.value)}
+                        onClick={() => selectShopCategory(option.value)}
                       >
                         {option.label}
                       </button>
@@ -1561,7 +1856,7 @@ export default function App(): React.JSX.Element {
                         className={`talent-tree-tab talent-tree-tab--${tab.id}${
                           selectedTalentTreeTab === tab.id ? ' is-active' : ''
                         }`}
-                        onClick={() => setSelectedTalentTreeTab(tab.id)}
+                        onClick={() => selectTalentTreeTab(tab.id)}
                       >
                         {tab.label}
                       </button>
