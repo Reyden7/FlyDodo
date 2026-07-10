@@ -110,6 +110,14 @@ const FOREST_MOSQUITO_FRAME_COUNT = 25;
 const PTERODACTYL_TEXTURE_PREFIX = 'low-sky-pterodactyl';
 const PTERODACTYL_ANIMATION_KEY = 'low-sky-pterodactyl-fly';
 const PTERODACTYL_FRAME_COUNT = 16;
+const STORM_CLOUD_TEXTURE_PREFIX = 'mid-sky-storm-cloud';
+const STORM_CLOUD_ANIMATION_KEY = 'mid-sky-storm-cloud-flash';
+const STORM_CLOUD_FRAME_COUNT = 9;
+const LIGHTNING_TEXTURE_PREFIX = 'mid-sky-lightning';
+const LIGHTNING_ANIMATION_KEY = 'mid-sky-lightning-flash';
+const LIGHTNING_FRAME_COUNT = 16;
+const SATELLITE_TEXTURE_KEY = 'space-satellite';
+const ASTEROID_TEXTURE_KEY = 'space-asteroid';
 const LAVA_TEXTURE_KEY = 'lava-flow';
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
 const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
@@ -132,6 +140,26 @@ const MOSQUITO_HITBOX_WIDTH_RATIO = 0.42;
 const MOSQUITO_HITBOX_HEIGHT_RATIO = 0.34;
 const PTERODACTYL_PATROL_SPEED = 95;
 const PTERODACTYL_TURN_DELAY_MS = 180;
+const SATELLITE_DRIFT_X_RADIUS = 28;
+const SATELLITE_DRIFT_Y_RADIUS = 12;
+const SATELLITE_DRIFT_X_DURATION_MS = 12_000;
+const SATELLITE_DRIFT_Y_DURATION_MS = 16_000;
+const SATELLITE_ROTATION_SPEED_DEGREES = 2.2;
+const ASTEROID_TRIGGER_DISTANCE_METRES = 100;
+const ASTEROID_PASS_SPEED = 430;
+const ASTEROID_PASS_VERTICAL_SPEED = 220;
+const ASTEROID_ROTATION_SPEED_DEGREES = 120;
+const ASTEROID_SPAWN_Y_OFFSETS = [-120, -45, 45, 120] as const;
+const ASTEROID_CLUSTER_FIRST_OFFSET_METRES = 90;
+const ASTEROID_CLUSTER_SPACING_MIN_METRES = 90;
+const ASTEROID_CLUSTER_SPACING_MAX_METRES = 150;
+const ASTEROID_CLUSTER_SIZE_MIN = 2;
+const ASTEROID_CLUSTER_SIZE_MAX = 3;
+const ASTEROID_CLUSTER_INNER_SPACING_MIN_METRES = 5;
+const ASTEROID_CLUSTER_INNER_SPACING_MAX_METRES = 10;
+const LIGHTNING_TRIGGER_DISTANCE_METRES = 28;
+const LIGHTNING_HITBOX_WIDTH_RATIO = 0.58;
+const LIGHTNING_HITBOX_HEIGHT_RATIO = 0.82;
 const PLAYER_MANUAL_HITBOX_WIDTH_RATIO = 0.46;
 const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
 const PLAYER_BASE_LIVES = 1;
@@ -177,10 +205,9 @@ type ObstacleKindId =
   | 'lightning'
   | 'strongWind'
   | 'satellite'
-  | 'meteor'
   | 'asteroid';
 
-type PlayerDamageReason = 'obstacle' | 'lava' | 'mosquito';
+type PlayerDamageReason = 'obstacle' | 'lava' | 'mosquito' | 'lightning';
 type FinishGameReason = PlayerDamageReason | 'default';
 
 interface ObstacleKind {
@@ -193,6 +220,7 @@ interface ObstacleKind {
   sourceTextureKey?: string;
   edge?: 'left' | 'right';
   displayWidth?: number;
+  displayHeight?: number;
   animationKey?: string;
 }
 
@@ -221,6 +249,30 @@ interface PterodactylPatrolMotion {
   sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   direction: 1 | -1;
   resumeAt: number;
+}
+
+interface SatelliteDriftMotion {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  homeX: number;
+  homeY: number;
+  startPhaseX: number;
+  startPhaseY: number;
+  rotationDirection: 1 | -1;
+}
+
+interface AsteroidPassageMotion {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  triggerAltitude: number;
+  launchSide: 'left' | 'right';
+  verticalDirection: 1 | -1;
+  rotationDirection: 1 | -1;
+  launched: boolean;
+}
+
+interface LightningFlashMotion {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  triggerAltitude: number;
+  flashed: boolean;
 }
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
@@ -354,6 +406,9 @@ const WATERMELON_MAGNET_SPEED_BY_LEVEL = [350, 400, 500, 600] as const;
 const POTION_SOUND_KEY = 'life-vial-consume-sound';
 const POTION_SOUND_PATH = '/assets/sounds/drinkPotion.mp3';
 const POTION_SOUND_VOLUME = 0.7;
+const DODO_HIT_SOUND_KEYS = ['dodo-hit-sound-1', 'dodo-hit-sound-2'] as const;
+const DODO_HIT_SOUND_PATHS = ['/assets/sounds/hit1.m4a', '/assets/sounds/hit2.mp3'] as const;
+const DODO_HIT_SOUND_VOLUME = 0.72;
 
 const FLIGHT_SOUND_KEY = 'dodo-flight-default-sound';
 const FLIGHT_SOUND_PATH = '/assets/sounds/defaut.mp3';
@@ -428,9 +483,11 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   },
   {
     id: 'stormCloud',
-    textureKey: 'obstacle-storm-cloud-placeholder',
-    width: 62,
-    height: 42,
+    textureKey: `${STORM_CLOUD_TEXTURE_PREFIX}-000`,
+    width: 220,
+    height: 220,
+    displayWidth: 220,
+    animationKey: STORM_CLOUD_ANIMATION_KEY,
     fillColor: 0x273449,
     strokeColor: 0x101721,
   },
@@ -444,9 +501,12 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   },
   {
     id: 'lightning',
-    textureKey: 'obstacle-lightning-placeholder',
-    width: 34,
-    height: 62,
+    textureKey: `${LIGHTNING_TEXTURE_PREFIX}-000`,
+    width: 100,
+    height: 500,
+    displayWidth: 100,
+    displayHeight: GAME_HEIGHT,
+    animationKey: LIGHTNING_ANIMATION_KEY,
     fillColor: 0xffda39,
     strokeColor: 0x8f6a00,
   },
@@ -460,25 +520,19 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
   },
   {
     id: 'satellite',
-    textureKey: 'obstacle-satellite-placeholder',
-    width: 58,
-    height: 34,
+    textureKey: SATELLITE_TEXTURE_KEY,
+    width: 200,
+    height: 200,
+    displayWidth: 200,
     fillColor: 0xc2c6d2,
     strokeColor: 0x545b6d,
   },
   {
-    id: 'meteor',
-    textureKey: 'obstacle-meteor-placeholder',
-    width: 42,
-    height: 42,
-    fillColor: 0xff7a24,
-    strokeColor: 0x7a2f0c,
-  },
-  {
     id: 'asteroid',
-    textureKey: 'obstacle-asteroid-placeholder',
-    width: 52,
-    height: 52,
+    textureKey: ASTEROID_TEXTURE_KEY,
+    width: 180,
+    height: 180,
+    displayWidth: 180,
     fillColor: 0x8c8178,
     strokeColor: 0x3c3632,
   },
@@ -545,7 +599,7 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     label: 'Space',
     minAltitude: 3000,
     maxAltitude: null,
-    obstacleKinds: ['satellite', 'meteor', 'asteroid'],
+    obstacleKinds: ['satellite', 'asteroid'],
     firstObstacleOffset: 120,
     spacingMin: 280,
     spacingMax: 430,
@@ -661,6 +715,9 @@ export class GameplayScene extends Phaser.Scene {
   private obstacleGroup!: Phaser.Physics.Arcade.Group;
   private mosquitoCircleMotions: MosquitoCircleMotion[] = [];
   private pterodactylPatrols: PterodactylPatrolMotion[] = [];
+  private satelliteDriftMotions: SatelliteDriftMotion[] = [];
+  private asteroidPassageMotions: AsteroidPassageMotion[] = [];
+  private lightningFlashMotions: LightningFlashMotion[] = [];
   private flightSound?: Phaser.Sound.BaseSound;
   private cosmeticImages = new Map<
     CosmeticCategory,
@@ -788,6 +845,22 @@ export class GameplayScene extends Phaser.Scene {
         `/assets/obstacles/lowSky/pterodactyl/frame_${paddedIndex}.png`,
       );
     }
+    for (let index = 0; index < STORM_CLOUD_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(3, '0');
+      this.load.image(
+        `${STORM_CLOUD_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/obstacles/midSky/nuage/frame_${paddedIndex}.png`,
+      );
+    }
+    for (let index = 0; index < LIGHTNING_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(3, '0');
+      this.load.image(
+        `${LIGHTNING_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/obstacles/midSky/eclaire/frame_${paddedIndex}.png`,
+      );
+    }
+    this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.png');
+    this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.png');
     this.load.image(LAVA_TEXTURE_KEY, '/assets/obstacles/lave/lave.png');
     this.load.image(
       FRUIT_DETECTOR_TEXTURE_KEY,
@@ -805,6 +878,9 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
     this.load.audio(WATERMELON_SOUND_KEY, WATERMELON_SOUND_PATH);
     this.load.audio(POTION_SOUND_KEY, POTION_SOUND_PATH);
+    DODO_HIT_SOUND_KEYS.forEach((key, index) => {
+      this.load.audio(key, DODO_HIT_SOUND_PATHS[index]);
+    });
     this.load.audio(FLIGHT_SOUND_KEY, FLIGHT_SOUND_PATH);
     this.load.audio(FLAP_SOUND_KEY, FLAP_SOUND_PATH);
 
@@ -951,6 +1027,9 @@ export class GameplayScene extends Phaser.Scene {
     const direction = this.consumeFlapDirection(time);
     this.updateMosquitoCircleMotions(time);
     this.updatePterodactylPatrols(time);
+    this.updateSatelliteDrifts(time, deltaSeconds);
+    this.updateAsteroidPassages(deltaSeconds);
+    this.updateLightningFlashes();
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
@@ -1526,6 +1605,9 @@ export class GameplayScene extends Phaser.Scene {
     this.legAnimationTime = 0;
     this.mosquitoCircleMotions = [];
     this.pterodactylPatrols = [];
+    this.satelliteDriftMotions = [];
+    this.asteroidPassageMotions = [];
+    this.lightningFlashMotions = [];
     this.lavaTopY = LAVA_START_Y;
     this.runStartTime = 0;
   }
@@ -1640,6 +1722,34 @@ export class GameplayScene extends Phaser.Scene {
         }),
         frameRate: 14,
         repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists(STORM_CLOUD_ANIMATION_KEY)) {
+      this.anims.create({
+        key: STORM_CLOUD_ANIMATION_KEY,
+        frames: Array.from({ length: STORM_CLOUD_FRAME_COUNT }, (_value, index) => {
+          const paddedIndex = index.toString().padStart(3, '0');
+          return {
+            key: `${STORM_CLOUD_TEXTURE_PREFIX}-${paddedIndex}`,
+          };
+        }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+
+    if (!this.anims.exists(LIGHTNING_ANIMATION_KEY)) {
+      this.anims.create({
+        key: LIGHTNING_ANIMATION_KEY,
+        frames: Array.from({ length: LIGHTNING_FRAME_COUNT }, (_value, index) => {
+          const paddedIndex = index.toString().padStart(3, '0');
+          return {
+            key: `${LIGHTNING_TEXTURE_PREFIX}-${paddedIndex}`,
+          };
+        }),
+        frameRate: 34,
+        repeat: 0,
       });
     }
   }
@@ -1905,7 +2015,8 @@ export class GameplayScene extends Phaser.Scene {
         );
         this.obstacleGroup.add(obstacle);
         const displayWidth = obstacleKind.displayWidth ?? obstacleKind.width;
-        const displayHeight = displayWidth * (obstacle.height / obstacle.width);
+        const displayHeight =
+          obstacleKind.displayHeight ?? displayWidth * (obstacle.height / obstacle.width);
         const originX =
           obstacleKind.edge === 'left' ? 0 : obstacleKind.edge === 'right' ? 1 : 0.5;
 
@@ -1919,7 +2030,7 @@ export class GameplayScene extends Phaser.Scene {
           .setData('levelLabel', level.label)
           .setData('kind', obstacleKind.id)
           .setData('altitude', Math.round(altitude));
-        if (obstacleKind.animationKey) {
+        if (obstacleKind.animationKey && obstacleKind.id !== 'lightning') {
           obstacle.play(obstacleKind.animationKey);
         }
         obstacle.body.setAllowGravity(false);
@@ -1931,10 +2042,93 @@ export class GameplayScene extends Phaser.Scene {
           this.registerPterodactylPatrol(obstacle);
         }
 
+        if (obstacleKind.id === 'satellite') {
+          this.registerSatelliteDrift(obstacle);
+        }
+
+        if (obstacleKind.id === 'lightning') {
+          this.registerLightningFlash(obstacle, altitude);
+        }
+
+        if (obstacleKind.id === 'asteroid') {
+          this.registerAsteroidPassage(obstacle, altitude);
+        }
+
         previousX = x;
         altitude += Phaser.Math.Between(level.spacingMin, level.spacingMax);
       }
+
+      if (level.id === 'space') {
+        this.createAsteroidClusters(level, maxAltitude);
+      }
     }
+  }
+
+  private createAsteroidClusters(level: AltitudeLevelConfig, maxAltitude: number): void {
+    const asteroidKind = OBSTACLE_KINDS.find(
+      (obstacleKind) => obstacleKind.id === 'asteroid',
+    );
+
+    if (!asteroidKind) {
+      return;
+    }
+
+    let clusterAltitude = level.minAltitude + ASTEROID_CLUSTER_FIRST_OFFSET_METRES;
+
+    while (clusterAltitude < maxAltitude) {
+      const clusterSize = Phaser.Math.Between(
+        ASTEROID_CLUSTER_SIZE_MIN,
+        ASTEROID_CLUSTER_SIZE_MAX,
+      );
+      let asteroidAltitude = clusterAltitude;
+
+      for (let index = 0; index < clusterSize && asteroidAltitude < maxAltitude; index += 1) {
+        this.createAsteroidObstacle(asteroidKind, level, asteroidAltitude);
+        asteroidAltitude += Phaser.Math.Between(
+          ASTEROID_CLUSTER_INNER_SPACING_MIN_METRES,
+          ASTEROID_CLUSTER_INNER_SPACING_MAX_METRES,
+        );
+      }
+
+      clusterAltitude += Phaser.Math.Between(
+        ASTEROID_CLUSTER_SPACING_MIN_METRES,
+        ASTEROID_CLUSTER_SPACING_MAX_METRES,
+      );
+    }
+  }
+
+  private createAsteroidObstacle(
+    obstacleKind: ObstacleKind,
+    level: AltitudeLevelConfig,
+    altitude: number,
+  ): void {
+    const asteroid = this.physics.add.sprite(
+      GAME_WIDTH / 2,
+      this.altitudeToWorldY(altitude),
+      obstacleKind.textureKey,
+    );
+    this.obstacleGroup.add(asteroid);
+
+    const displayWidth = obstacleKind.displayWidth ?? obstacleKind.width;
+    const displayHeight = displayWidth * (asteroid.height / asteroid.width);
+
+    asteroid
+      .setOrigin(0.5)
+      .setDisplaySize(displayWidth, displayHeight)
+      .setDepth(OBSTACLE_DEPTH)
+      .setAlpha(OBSTACLE_ALPHA)
+      .setAngle(Phaser.Math.Between(-10, 10))
+      .setData('level', level.id)
+      .setData('levelLabel', level.label)
+      .setData('kind', obstacleKind.id)
+      .setData('altitude', Math.round(altitude));
+
+    asteroid.body.setAllowGravity(false);
+    asteroid.body.setImmovable(true);
+    asteroid.body.setVelocity(0, 0);
+    asteroid.body.reset(asteroid.x, asteroid.y);
+
+    this.registerAsteroidPassage(asteroid, altitude);
   }
 
   private createMosquitoObstacle(
@@ -2071,6 +2265,162 @@ export class GameplayScene extends Phaser.Scene {
       sprite.setFlipX(patrol.direction === -1);
       sprite.body.setVelocityX(0);
       sprite.body.reset(sprite.x, sprite.y);
+    }
+  }
+
+  private registerSatelliteDrift(
+    satellite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+  ): void {
+    this.satelliteDriftMotions.push({
+      sprite: satellite,
+      homeX: satellite.x,
+      homeY: satellite.y,
+      startPhaseX: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      startPhaseY: Phaser.Math.FloatBetween(0, Math.PI * 2),
+      rotationDirection: Phaser.Math.Between(0, 1) === 0 ? -1 : 1,
+    });
+  }
+
+  private updateSatelliteDrifts(time: number, deltaSeconds: number): void {
+    const xProgress =
+      ((time % SATELLITE_DRIFT_X_DURATION_MS) / SATELLITE_DRIFT_X_DURATION_MS) *
+      Math.PI *
+      2;
+    const yProgress =
+      ((time % SATELLITE_DRIFT_Y_DURATION_MS) / SATELLITE_DRIFT_Y_DURATION_MS) *
+      Math.PI *
+      2;
+
+    for (const motion of this.satelliteDriftMotions) {
+      const { sprite } = motion;
+
+      if (!sprite.active) {
+        continue;
+      }
+
+      sprite.setPosition(
+        motion.homeX + Math.sin(xProgress + motion.startPhaseX) * SATELLITE_DRIFT_X_RADIUS,
+        motion.homeY + Math.sin(yProgress + motion.startPhaseY) * SATELLITE_DRIFT_Y_RADIUS,
+      );
+      sprite.setAngle(
+        sprite.angle +
+          SATELLITE_ROTATION_SPEED_DEGREES *
+            motion.rotationDirection *
+            deltaSeconds,
+      );
+      sprite.body.reset(sprite.x, sprite.y);
+    }
+  }
+
+  private registerAsteroidPassage(
+    asteroid: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+    altitude: number,
+  ): void {
+    const launchSide: 'left' | 'right' =
+      Phaser.Math.Between(0, 1) === 0 ? 'left' : 'right';
+    const startX =
+      launchSide === 'left'
+        ? -asteroid.displayWidth / 2
+        : GAME_WIDTH + asteroid.displayWidth / 2;
+    const yOffset =
+      ASTEROID_SPAWN_Y_OFFSETS[
+        Phaser.Math.Between(0, ASTEROID_SPAWN_Y_OFFSETS.length - 1)
+      ];
+
+    asteroid.setPosition(startX, asteroid.y + yOffset);
+    asteroid.setVisible(false);
+    asteroid.body.reset(asteroid.x, asteroid.y);
+    asteroid.disableBody(false, true);
+
+    this.asteroidPassageMotions.push({
+      sprite: asteroid,
+      triggerAltitude: Math.round(altitude) - ASTEROID_TRIGGER_DISTANCE_METRES,
+      launchSide,
+      verticalDirection: Phaser.Math.Between(0, 1) === 0 ? -1 : 1,
+      rotationDirection: Phaser.Math.Between(0, 1) === 0 ? -1 : 1,
+      launched: false,
+    });
+  }
+
+  private updateAsteroidPassages(deltaSeconds: number): void {
+    for (const motion of this.asteroidPassageMotions) {
+      const { sprite } = motion;
+
+      if (!sprite.active) {
+        continue;
+      }
+
+      if (!motion.launched) {
+        if (this.currentAltitude < motion.triggerAltitude) {
+          continue;
+        }
+
+        motion.launched = true;
+        sprite.enableBody(true, sprite.x, sprite.y, true, true);
+        sprite.body.setVelocity(
+          motion.launchSide === 'left' ? ASTEROID_PASS_SPEED : -ASTEROID_PASS_SPEED,
+          motion.verticalDirection * ASTEROID_PASS_VERTICAL_SPEED,
+        );
+      }
+
+      sprite.setAngle(
+        sprite.angle +
+          ASTEROID_ROTATION_SPEED_DEGREES *
+            motion.rotationDirection *
+            deltaSeconds,
+      );
+
+      const margin = Math.max(sprite.displayWidth, sprite.displayHeight);
+      const isOutOnRight =
+        motion.launchSide === 'left' && sprite.x - sprite.displayWidth / 2 > GAME_WIDTH + margin;
+      const isOutOnLeft =
+        motion.launchSide === 'right' && sprite.x + sprite.displayWidth / 2 < -margin;
+
+      if (isOutOnRight || isOutOnLeft) {
+        sprite.disableBody(true, true);
+      }
+    }
+  }
+
+  private registerLightningFlash(
+    lightning: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody,
+    altitude: number,
+  ): void {
+    lightning.setVisible(false);
+    lightning.body.setSize(
+      lightning.width * LIGHTNING_HITBOX_WIDTH_RATIO,
+      lightning.height * LIGHTNING_HITBOX_HEIGHT_RATIO,
+      true,
+    );
+    lightning.body.reset(lightning.x, lightning.y);
+    lightning.disableBody(false, true);
+
+    lightning.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      lightning.disableBody(true, true);
+    });
+
+    this.lightningFlashMotions.push({
+      sprite: lightning,
+      triggerAltitude: Math.round(altitude) - LIGHTNING_TRIGGER_DISTANCE_METRES,
+      flashed: false,
+    });
+  }
+
+  private updateLightningFlashes(): void {
+    for (const motion of this.lightningFlashMotions) {
+      const { sprite } = motion;
+
+      if (!sprite.active || motion.flashed) {
+        continue;
+      }
+
+      if (this.currentAltitude < motion.triggerAltitude) {
+        continue;
+      }
+
+      motion.flashed = true;
+      sprite.enableBody(true, sprite.x, sprite.y, true, true);
+      sprite.play(LIGHTNING_ANIMATION_KEY);
     }
   }
 
@@ -2243,6 +2593,11 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
+
+    if (obstacleKind === 'lightning') {
+      void this.finishGame('lightning', false);
+      return;
+    }
 
     if (this.canPerchOnBranch(obstacle, obstacleKind)) {
       this.perchOnBranch(obstacle);
@@ -3121,6 +3476,17 @@ export class GameplayScene extends Phaser.Scene {
     this.applyShopObjectInventory(profile.shopObjects);
   }
 
+  private playRandomHitSound(): void {
+    const soundKey =
+      DODO_HIT_SOUND_KEYS[
+        Phaser.Math.Between(0, DODO_HIT_SOUND_KEYS.length - 1)
+      ];
+
+    this.sound.play(soundKey, {
+      volume: DODO_HIT_SOUND_VOLUME,
+    });
+  }
+
   private async damagePlayer(
     amount = 1,
     reason: PlayerDamageReason = 'obstacle',
@@ -3141,6 +3507,8 @@ export class GameplayScene extends Phaser.Scene {
     if (remainingDamage === 0) {
       return;
     }
+
+    this.playRandomHitSound();
 
     const absorbedDamage = Math.min(this.playerShield, remainingDamage);
     this.playerShield -= absorbedDamage;
@@ -3233,12 +3601,13 @@ export class GameplayScene extends Phaser.Scene {
 
   private async finishGame(
     reason: FinishGameReason = 'default',
+    allowRevival = true,
   ): Promise<void> {
     if (this.gameOver) {
       return;
     }
 
-    if (this.tryPhoenixRevival()) {
+    if (allowRevival && this.tryPhoenixRevival()) {
       return;
     }
 
@@ -3251,7 +3620,8 @@ export class GameplayScene extends Phaser.Scene {
     this.stopFlightSounds();
     this.angularVelocity = 180;
     this.player.setAcceleration(0, GRAVITY_Y * 1.4);
-    const tintColor = reason === 'lava' ? 0x3a1a0f : 0xff7777;
+    const tintColor =
+      reason === 'lava' ? 0x3a1a0f : reason === 'lightning' ? 0x8eeeff : 0xff7777;
     this.player.setTint(tintColor);
     this.leftWing.setTint(tintColor);
     this.rightWing.setTint(tintColor);
