@@ -84,7 +84,7 @@ import {
 } from './talents/enduranceTalentNodePositions';
 
 type TutorialSide = 'left' | 'right' | null;
-type ShopTab = 'accessories' | 'talents' | 'items';
+type ShopTab = 'accessories' | 'talents' | 'items' | 'watermelons';
 type TalentTreeTab = 'control' | 'endurance' | 'talents';
 type SelectedControlTalent =
   | {
@@ -160,6 +160,22 @@ const SHOP_OBJECT_SLOTS: ReadonlyArray<{
     icon: '/assets/objets/aimant.png',
     price: 40,
   },
+] as const;
+
+const WATERMELON_PACKS: ReadonlyArray<{
+  id: string;
+  title: string;
+  amount: string;
+  price: string;
+  pile: number;
+  src:string;
+}> = [
+  { id: 'small', title: 'Petit sac', amount: '500', price: '2,29 €', pile: 1, src:"/assets/shopPasteque/petitSac.png" },
+  { id: 'medium', title: 'Sac moyen', amount: '1 200', price: '4,49 €', pile: 1 , src:"/assets/shopPasteque/sacMoyen.png"},
+  { id: 'large', title: 'Grand sac', amount: '2 800', price: '8,99 €', pile: 1, src:"/assets/shopPasteque/GrandSac.png" },
+  { id: 'chest', title: 'Coffre de pastèques', amount: '6 000', price: '17,99 €', pile: 1, src:"/assets/shopPasteque/Coffre.png" },
+  { id: 'barrel', title: 'Tonneau de pastèques', amount: '12 000', price: '32,99 €', pile: 1 , src:"/assets/shopPasteque/Tonneau.png"},
+  { id: 'mountain', title: 'Montagne de pastèques', amount: '25 000', price: '64,99 €', pile: 1, src:"/assets/shopPasteque/Montagne.png" },
 ] as const;
 
 function isShopObjectActive(
@@ -578,6 +594,12 @@ export default function App(): React.JSX.Element {
     } finally {
       setPendingShopObjectId(null);
     }
+  };
+
+  const handleWatermelonPackAction = (
+    pack: (typeof WATERMELON_PACKS)[number],
+  ): void => {
+    setShopNotice(`Paiement bientot disponible : ${pack.amount} pasteques.`);
   };
 
   const selectControlTalent = (target: SelectedControlTalent): void => {
@@ -1237,7 +1259,7 @@ export default function App(): React.JSX.Element {
                 <div className="shop-title" aria-label="Boutique">
                 <img src="/assets/ui/title.png" alt="" aria-hidden="true" />
               </div>
-                <div className="shop-wallet" aria-label="PastÃ¨ques disponibles">
+                <div className="shop-wallet" aria-label="Pastèques disponibles">
                 <strong>{playerProfile.watermelons}</strong>
                 <img
                   src="/assets/collectable/pasteque.png"
@@ -1288,6 +1310,22 @@ export default function App(): React.JSX.Element {
                   onClick={() => setSelectedShopTab('talents')}
                 >
                   <span className="visually-hidden">Arbre talents</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedShopTab === 'watermelons'}
+                  className={`shop-main-tab shop-main-tab--watermelons${
+                    selectedShopTab === 'watermelons' ? ' is-active' : ''
+                  }`}
+                  onClick={() => setSelectedShopTab('watermelons')}
+                >
+                  <img
+                    src="/assets/collectable/pasteque.png"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>Pastèques</span>
                 </button>
               </div>
 
@@ -1444,6 +1482,66 @@ export default function App(): React.JSX.Element {
                       </article>
                     );
                   })}
+                </div>
+              )}
+
+              {selectedShopTab === 'watermelons' && (
+                <div className="watermelon-shop" role="tabpanel">
+                  <header className="watermelon-shop__hero">
+                    <h2>
+                      <img
+                        src="/assets/collectable/pasteque.png"
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      Pastèques
+                    </h2>
+                    <p>Achetez des pastèques pour booster votre aventure !</p>
+                  </header>
+
+                  <div className="watermelon-pack-grid">
+                    {WATERMELON_PACKS.map((pack) => (
+                      <article className="watermelon-pack-card" key={pack.id}>
+                        <h3>{pack.title}</h3>
+                        <div
+                          className={`watermelon-pack-card__pile watermelon-pack-card__pile--${pack.id}`}
+                          aria-hidden="true"
+                        >
+                          {Array.from({ length: pack.pile }, (_value, index) => (
+                            <img
+                              key={`${pack.id}-${index}`}
+                              src={pack.src}
+                              alt=""
+                            />
+                          ))}
+                        </div>
+                        <div className="watermelon-pack-card__amount">
+                          <img
+                            src="/assets/collectable/pasteque.png"
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <strong>{pack.amount}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          className="watermelon-pack-card__button"
+                          onClick={() => handleWatermelonPackAction(pack)}
+                        >
+                          {pack.price}
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+
+                  <p className="watermelon-shop__note">
+                    <img
+                      src="/assets/collectable/pasteque.png"
+                      alt=""
+                      aria-hidden="true"
+                    />
+                    Les pastèques sont utilisées pour acheter des objets et des accessoires !
+                  </p>
                 </div>
               )}
 

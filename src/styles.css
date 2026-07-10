@@ -701,8 +701,8 @@ button {
 
 .shop-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
   margin-bottom: 10px;
 }
 
@@ -745,6 +745,42 @@ button {
 .shop-main-tab--talents.is-active,
 .shop-main-tab--talents:active {
   background-image: url("/assets/ui/bt/talent-clicked.png");
+}
+
+.shop-main-tab--watermelons {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("/assets/shopPasteque/bt-normal.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+
+  box-shadow: none;
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 2px rgb(55 27 5 / 22%));
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+.shop-main-tab--watermelons img,
+.shop-main-tab--watermelons span {
+  display: none;
+}
+
+.shop-main-tab--watermelons.is-active,
+.shop-main-tab--watermelons:active {
+  background-image: url("/assets/shopPasteque/bt-clicked.png");
+}
+
+.shop-main-tab--watermelons:active {
+  transform: translateY(2px);
+  filter: drop-shadow(0 2px 1px rgb(55 27 5 / 18%));
 }
 
 .shop-main-tab:active {
@@ -987,6 +1023,17 @@ button {
   background: url("/assets/ui/bg-shop.png") center top / 100% 100% no-repeat;
 }
 
+.shop-panel--watermelons .shop-toolbar {
+  display: none;
+}
+
+.shop-panel--watermelons .shop-content {
+  position: relative;
+  z-index: 1;
+  padding: 32px 16px 28px;
+  background: url("/assets/ui/bg-shop.png") center top / 100% 100% no-repeat;
+}
+
 .shop-content--talents {
   display: flex;
   position: relative;
@@ -1012,37 +1059,29 @@ button {
 .shop-object-card {
   display: grid;
   min-width: 0;
-  gap: 6px;
-  padding: 12px 10px 14px;
-  border: 2px solid #f1c96a;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgb(255 249 221 / 94%), rgb(244 218 151 / 94%));
-  box-shadow:
-    inset 0 0 0 2px rgb(255 255 255 / 50%),
-    0 4px 0 #b77d22,
-    0 10px 18px rgb(57 29 7 / 18%);
+  gap: 0px;
+  padding: 18px 15px 20px;
+  border: 0;
+  background: url("/assets/ui/bg-tuile-accessoire.png") center / 125% 100% no-repeat;
+  box-shadow: none;
   text-align: center;
 }
 
 .shop-object-card__icon {
   display: grid;
-  height: 86px;
+  height: 108px;
   place-items: center;
-  overflow: hidden;
-  border: 2px solid rgb(158 88 16 / 35%);
-  border-radius: 14px;
-  background: linear-gradient(145deg, #d7f2ff, #74b8dc);
-  box-shadow:
-    inset 0 0 0 2px rgb(255 255 255 / 25%),
-    inset 0 -4px 0 rgb(87 46 6 / 10%);
+  overflow: visible;
+  border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .shop-object-card__icon img {
-  width: 72px;
-  height: 72px;
+  width: min(118px, 92%);
+  height: min(118px, 92%);
   object-fit: contain;
-  filter: drop-shadow(0 5px 4px rgb(0 0 0 / 18%));
+  filter: drop-shadow(0 8px 7px rgb(65 32 5 / 24%));
 }
 
 .shop-object-card h2 {
@@ -1111,6 +1150,172 @@ button {
   filter: saturate(0.75) opacity(0.7);
 }
 
+.watermelon-shop {
+  display: grid;
+  gap: 16px;
+  padding: 2px 0 8px;
+}
+
+.watermelon-shop__hero {
+  display: grid;
+  width: min(100%, 420px);
+  aspect-ratio: 1684 / 420;
+  justify-self: center;
+  place-content: center;
+  gap: 0px;
+  padding: 0px clamp(45px, 14vw, 75px);
+
+  background:
+    url("/assets/shopPasteque/panneauSansEcriture.png")
+    center / 80% 90%
+    no-repeat;
+
+  text-align: center;
+}
+
+.watermelon-shop__hero h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: #ffd76d;
+  font-size: clamp(0.85rem, 5vw, 1.7rem);
+  font-weight: 1000;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow:
+    0 2px 0 #5c2a07,
+    0 4px 5px rgb(0 0 0 / 35%);
+}
+
+.watermelon-shop__hero h2 img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  
+}
+
+.watermelon-shop__hero p {
+  margin-top: 0;
+  font-size: clamp(0.6rem, 2vw, 0.9rem);
+  font-weight: 500;
+  color: #f0c363;
+}
+
+.watermelon-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.watermelon-pack-card {
+  display: grid;
+  min-width: 0;
+  gap: 0px;
+  padding: 16px 12px 18px;
+  background: url("/assets/ui/bg-tuile-accessoire.png") center / 125% 100% no-repeat;
+  text-align: center;
+}
+
+.watermelon-pack-card h3 {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  margin: 0;
+  color: #351606;
+  font-size: clamp(0.8rem, 3.4vw, 1.05rem);
+  font-weight: 1000;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.watermelon-pack-card__pile {
+  position: relative;
+  height: 94px;
+}
+
+.watermelon-pack-card__pile img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 4px rgb(66 31 5 / 24%));
+  transform: translate(-50%, -50%);
+}
+
+
+
+.watermelon-pack-card__amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  color: #331707;
+}
+
+.watermelon-pack-card__amount img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  transform: rotate(-10deg);
+}
+
+.watermelon-pack-card__amount strong {
+  font-size: clamp(1rem, 4.2vw, 1.35rem);
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.watermelon-pack-card__button {
+  min-height: 42px;
+  padding: 4px 10px 8px;
+  border: 2px solid #3d7c16;
+  border-radius: 8px;
+  color: white;
+  background:
+    linear-gradient(180deg, #91d833, #4b990f 78%, #2f700b);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 38%),
+    0 4px 0 #24570a,
+    0 7px 10px rgb(58 30 5 / 18%);
+  font-size: clamp(0.98rem, 4vw, 1.35rem);
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.watermelon-pack-card__button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 2px 0 #24570a,
+    0 4px 7px rgb(58 30 5 / 16%);
+}
+
+.watermelon-shop__note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: #3c1e08;
+  font-size: clamp(0.86rem, 3.7vw, 1.05rem);
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.watermelon-shop__note img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  transform: rotate(-12deg);
+}
+
 .talent-tree-panel {
   display: flex;
   position: relative;
@@ -1129,87 +1334,70 @@ button {
 .talent-tree-panel::before {
   
 }
-
 .talent-tree-tabs {
-  display: grid;
   position: relative;
   z-index: 3;
+  display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  padding: 0 14px 2px;
+  width: 100%;
+  padding: 0 14px 4px;
 }
 
 .talent-tree-tab {
-  position: relative;
-  min-height: 42px;
-  padding: 8px 5px;
-  overflow: hidden;
-  border: 3px solid rgb(255 224 143 / 88%);
-  border-radius: 12px;
-  color: #fff8cf;
-  box-shadow:
-    inset 0 0 0 2px rgb(51 26 9 / 35%),
-    inset 0 -8px 0 rgb(0 0 0 / 18%),
-    0 5px 0 rgb(72 43 18 / 55%),
-    0 10px 18px rgb(23 58 98 / 16%);
-  font-size: clamp(0.62rem, 2.7vw, 0.86rem);
-  font-weight: 1000;
-  letter-spacing: 0.03em;
-  text-shadow:
-    0 2px 0 rgb(62 35 12 / 70%),
-    0 0 7px rgb(255 255 255 / 30%);
-}
-
-.talent-tree-tab::before,
-.talent-tree-tab::after {
-  position: absolute;
-  inset: 6px;
-  pointer-events: none;
-  content: "";
-  border: 2px solid rgb(255 240 177 / 36%);
-  border-radius: 8px;
-}
-
-.talent-tree-tab::after {
-  inset: auto 12px 7px;
-  height: 4px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: rgb(255 239 154 / 24%);
+
+  color: transparent;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 105% 110%;
+
+  font-size: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 2px rgb(55 27 5 / 22%));
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Contrôle */
 .talent-tree-tab--control {
-  background:
-    linear-gradient(180deg, rgb(157 197 55 / 72%), transparent 36%),
-    linear-gradient(180deg, #7f9d1f, #375f1d 70%, #233f14);
+  background-image: url("/assets/competences/Controle/bt-control-normal.png");
 }
 
+.talent-tree-tab--control.is-active,
+.talent-tree-tab--control:active {
+  background-image: url("/assets/competences/Controle/bt-control-clicked.png");
+}
+
+/* Endurance */
 .talent-tree-tab--endurance {
-  background:
-    linear-gradient(180deg, rgb(236 151 51 / 62%), transparent 38%),
-    linear-gradient(180deg, #a96428, #6d3418 70%, #3d2112);
+  background-image: url("/assets/competences/Endurance/bt-endu-normal.png");
 }
 
+.talent-tree-tab--endurance.is-active,
+.talent-tree-tab--endurance:active {
+  background-image: url("/assets/competences/Endurance/bt-endu-clicked.png");
+}
+
+/* Talents */
 .talent-tree-tab--talents {
-  background:
-    linear-gradient(180deg, rgb(89 172 195 / 62%), transparent 38%),
-    linear-gradient(180deg, #2b7f93, #14516e 70%, #0d344b);
+  background-image: url("/assets/competences/Talents/bt-talent-normal.png");
 }
 
-.talent-tree-tab.is-active {
-  border-color: white;
-  filter: saturate(1.18) brightness(1.07);
-  transform: translateY(-1px);
+.talent-tree-tab--talents.is-active,
+.talent-tree-tab--talents:active {
+  background-image: url("/assets/competences/Talents/bt-talent-clicked.png");
 }
 
 .talent-tree-tab:active {
-  transform: translateY(3px);
-  box-shadow:
-    inset 0 0 0 2px rgb(51 26 9 / 35%),
-    inset 0 -5px 0 rgb(0 0 0 / 18%),
-    0 2px 0 rgb(72 43 18 / 55%),
-    0 6px 12px rgb(23 58 98 / 12%);
+  transform: translateY(2px);
+  filter: drop-shadow(0 2px 1px rgb(55 27 5 / 18%));
 }
 
 .talent-tree-stage {
@@ -1903,16 +2091,16 @@ button {
   }
 
   .shop-object-card {
-    padding: 9px;
+    padding: 14px 12px 16px;
   }
 
   .shop-object-card__icon {
-    height: 72px;
+    height: 92px;
   }
 
   .shop-object-card__icon img {
-    width: 58px;
-    height: 58px;
+    width: min(100px, 92%);
+    height: min(100px, 92%);
   }
 
   .shop-object-card__button {
@@ -1924,9 +2112,8 @@ button {
   }
 
   .talent-tree-tab {
-    min-height: 38px;
-    font-size: 0.58rem;
-  }
+  min-height: 38px;
+}
 }
 
 /* Options de la liste déroulante du filtre */
