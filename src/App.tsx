@@ -10,6 +10,8 @@ import {
   requestRestart,
   type FallWarningDetail,
   type FlightHudDetail,
+  type PlayerDeathReason,
+  type PlayerDiedDetail,
   type WalletUpdatedDetail,
 } from './game/events';
 import {
@@ -128,6 +130,15 @@ const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
 const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
 const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
 const MENU_BUTTON_SOUND_PATH = '/assets/menu/sounds/button.mp3';
+const GAME_MUSIC_PATH = '/assets/sounds/musique.mp3';
+const GAME_MUSIC_VOLUME = 0.5;
+const GAME_OVER_DEATH_IMAGES: Record<PlayerDeathReason, string> = {
+  default: '/assets/ui/GameOver/deadByOther.png',
+  obstacle: '/assets/ui/GameOver/deadByOther.png',
+  mosquito: '/assets/ui/GameOver/deadByMosquito.png',
+  lava: '/assets/ui/GameOver/deadLava.png',
+  lightning: '/assets/ui/GameOver/deadLightning.png',
+};
 const MENU_POP_SOUND_DELAYS_MS = [180, 760, 1280, 1390] as const;
 const MAIN_MENU_CLICK_DELAY_MS = 140;
 const SHOP_MAIN_TAB_SOUND_PATH = '/assets/sounds/button3.mp3';
@@ -281,6 +292,8 @@ export default function App(): React.JSX.Element {
   const [fallSeconds, setFallSeconds] = useState<number | null>(null);
   const [warningReason, setWarningReason] = useState<'fall' | 'side'>('fall');
   const [isGameOver, setIsGameOver] = useState(false);
+  const [playerDeathReason, setPlayerDeathReason] =
+    useState<PlayerDeathReason>('default');
   const [hasMovedThisRun, setHasMovedThisRun] = useState(false);
 
   const [showControlTutorial, setShowControlTutorial] = useState(true);
@@ -320,6 +333,7 @@ export default function App(): React.JSX.Element {
   const enduranceTalentSheetCloseTimerRef = useRef<number | null>(null);
   const blueTalentSheetCloseTimerRef = useRef<number | null>(null);
   const menuMusicRef = useRef<HTMLAudioElement | null>(null);
+  const gameMusicRef = useRef<HTMLAudioElement | null>(null);
   const menuPopTimersRef = useRef<number[]>([]);
   const mainMenuActionTimerRef = useRef<number | null>(null);
   const interfaceAudioContextRef = useRef<AudioContext | null>(null);
@@ -339,6 +353,22 @@ export default function App(): React.JSX.Element {
     const sound = new Audio(src);
     sound.volume = volume;
     void sound.play().catch(() => undefined);
+  };
+
+  const startGameMusic = (): void => {
+    let music = gameMusicRef.current;
+
+    if (!music) {
+      music = new Audio(GAME_MUSIC_PATH);
+      music.loop = true;
+      music.preload = 'auto';
+      music.volume = GAME_MUSIC_VOLUME;
+      gameMusicRef.current = music;
+    }
+
+    music.pause();
+    music.currentTime = 0;
+    void music.play().catch(() => undefined);
   };
 
   const getInterfaceAudioContext = (): AudioContext => {
@@ -441,6 +471,18 @@ export default function App(): React.JSX.Element {
       setWarningReason(reason);
     };
 
+    const onPlayerDied = (event: Event): void => {
+      const { reason } = (event as CustomEvent<PlayerDiedDetail>).detail;
+      setPlayerDeathReason(reason);
+
+      const gameMusic = gameMusicRef.current;
+
+      if (gameMusic) {
+        gameMusic.pause();
+        gameMusic.currentTime = 0;
+      }
+    };
+
     const onGameOver = (): void => {
       setIsGameOver(true);
     };
@@ -452,6 +494,7 @@ export default function App(): React.JSX.Element {
     gameEvents.addEventListener('flydodo:hud', onHud);
     gameEvents.addEventListener('flydodo:wallet-updated', onWalletUpdated);
     gameEvents.addEventListener('flydodo:fall-warning', onFallWarning);
+    gameEvents.addEventListener('flydodo:player-died', onPlayerDied);
     gameEvents.addEventListener('flydodo:game-over', onGameOver);
     gameEvents.addEventListener('flydodo:movement-started', onMovementStarted);
 
@@ -459,6 +502,7 @@ export default function App(): React.JSX.Element {
       gameEvents.removeEventListener('flydodo:hud', onHud);
       gameEvents.removeEventListener('flydodo:wallet-updated', onWalletUpdated);
       gameEvents.removeEventListener('flydodo:fall-warning', onFallWarning);
+      gameEvents.removeEventListener('flydodo:player-died', onPlayerDied);
       gameEvents.removeEventListener('flydodo:game-over', onGameOver);
       gameEvents.removeEventListener('flydodo:movement-started', onMovementStarted);
     };
@@ -627,6 +671,15 @@ export default function App(): React.JSX.Element {
         window.clearTimeout(mainMenuActionTimerRef.current);
       }
 
+      const gameMusic = gameMusicRef.current;
+
+      if (gameMusic) {
+        gameMusic.pause();
+        gameMusic.removeAttribute('src');
+        gameMusic.load();
+        gameMusicRef.current = null;
+      }
+
       void interfaceAudioContextRef.current?.close();
       interfaceAudioContextRef.current = null;
       reversedEquipSoundBufferRef.current = null;
@@ -637,6 +690,7 @@ export default function App(): React.JSX.Element {
   const resetRunState = (): void => {
     setIsShopOpen(false);
     setIsGameOver(false);
+    setPlayerDeathReason('default');
     setFallSeconds(null);
     setWarningReason('fall');
     setAltitude(0);
@@ -670,6 +724,10 @@ export default function App(): React.JSX.Element {
       button === 'play' ? MENU_PLAY_SOUND_PATH : MENU_BUTTON_SOUND_PATH,
     );
 
+    if (button === 'play') {
+      startGameMusic();
+    }
+
     setClickedMainMenuButton(button);
     mainMenuActionTimerRef.current = window.setTimeout(() => {
       mainMenuActionTimerRef.current = null;
@@ -694,6 +752,7 @@ export default function App(): React.JSX.Element {
   };
 
   const restart = (): void => {
+    startGameMusic();
     resetRunState();
     requestRestart();
   };
@@ -1518,20 +1577,38 @@ export default function App(): React.JSX.Element {
         <section className="game-over" role="dialog" aria-modal="true">
           <div className="game-over__card">
             <p className="eyebrow">FIN DE L’ASCENSION</p>
-            <h1>FlyDodo!</h1>
-            <p className="game-over__score">Altitude : {altitude} m</p>
-            <p>Record : {bestAltitude} m</p>
+            <h1>Game Over</h1>
+
+            <img
+              className={`game-over__death-visual game-over__death-visual--${playerDeathReason}`}
+              src={GAME_OVER_DEATH_IMAGES[playerDeathReason]}
+              alt=""
+              aria-hidden="true"
+            />
+
+            <div className="game-over__stats">
+              <p className="game-over__score">
+                <span>Altitude :</span>
+                <strong>{altitude}</strong>
+                <span>m</span>
+              </p>
+              <p className="game-over__record">Record : {bestAltitude} m</p>
+            </div>
 
             <div className="game-over__actions">
-              <button type="button" onClick={restart}>
-                REJOUER
+              <button
+                type="button"
+                className="game-over__replay-button"
+                onClick={restart}
+              >
+                <span>REJOUER</span>
               </button>
               <button
                 type="button"
                 className="game-over__shop-button"
                 onClick={() => void openShop()}
               >
-                SHOP
+                <span>BOUTIQUE</span>
               </button>
             </div>
           </div>

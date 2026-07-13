@@ -22,6 +22,17 @@ export interface WalletUpdatedDetail {
   watermelons: number;
 }
 
+export type PlayerDeathReason =
+  | 'default'
+  | 'obstacle'
+  | 'mosquito'
+  | 'lava'
+  | 'lightning';
+
+export interface PlayerDiedDetail {
+  reason: PlayerDeathReason;
+}
+
 export interface CosmeticEquippedDetail {
   category: CosmeticCategory;
   itemId: string | null;
@@ -108,6 +119,14 @@ export function getLatestShopObjectInventory(): ShopObjectInventory | null {
 
 export function emitGameOver(): void {
   gameEvents.dispatchEvent(new Event('flydodo:game-over'));
+}
+
+export function emitPlayerDied(reason: PlayerDeathReason): void {
+  gameEvents.dispatchEvent(
+    new CustomEvent<PlayerDiedDetail>('flydodo:player-died', {
+      detail: { reason },
+    }),
+  );
 }
 
 export function emitMovementStarted(): void {

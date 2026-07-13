@@ -4,6 +4,7 @@ import {
   emitFlightHud,
   emitGameOver,
   emitMovementStarted,
+  emitPlayerDied,
   emitShopObjectsUpdated,
   emitWalletUpdated,
   gameEvents,
@@ -64,6 +65,18 @@ const DODO_FLIGHT_FEET_SCALE_Y = 0.07;
 const DODO_FLIGHT_FEET_OFFSET_X = 0;
 const DODO_FLIGHT_FEET_OFFSET_Y = 15;
 const DODO_INDICATOR_SCALE = 0.045;
+const DODO_LIGHTNING_DEATH_TEXTURE_KEY = 'dodo-lightning-death';
+const DODO_LIGHTNING_DEATH_TEXTURE_PATH = '/assets/dodo/deadLightning.png';
+const DODO_LIGHTNING_DEATH_SCALE = 0.125;
+const DODO_LAVA_DEATH_TEXTURE_PREFIX = 'dodo-lava-death';
+const DODO_LAVA_DEATH_ANIMATION_KEY = 'dodo-lava-death-animation';
+const DODO_LAVA_DEATH_FRAME_INDICES = [
+  0, 4, 5, 7, 8, 9, 11, 14, 31, 32, 33, 34, 35,
+] as const;
+const DODO_LAVA_DEATH_FRAME_RATE = 10;
+const DODO_LAVA_DEATH_SCALE = 0.28;
+const DODO_LAVA_DEATH_OFFSET_Y = 48;
+const DODO_LAVA_DEATH_DEPTH = 12;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
 const CAMERA_FALL_FOLLOW_SPEED = 1.15;
@@ -92,6 +105,7 @@ const FLAP_LEG_ANIMATION_DURATION = 0;
 const FALL_LIMIT_BELOW_CAMERA = 5;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
 const GAME_OVER_DELAY_MS = 2_000;
+const LIGHTNING_GAME_OVER_REVEAL_DELAY_MS = 1_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
 const SAFE_GROUND_TOUCH_ALTITUDE = 50;
 const GROUND_DIRT_HEIGHT = 85;
@@ -113,9 +127,19 @@ const PTERODACTYL_FRAME_COUNT = 16;
 const STORM_CLOUD_TEXTURE_PREFIX = 'mid-sky-storm-cloud';
 const STORM_CLOUD_ANIMATION_KEY = 'mid-sky-storm-cloud-flash';
 const STORM_CLOUD_FRAME_COUNT = 9;
+const THUNDER_SOUND_KEY = 'mid-sky-thunder-sound';
+const THUNDER_SOUND_PATH = '/assets/sounds/thunder.mp3';
+const THUNDER_SOUND_VOLUME = 0.7;
 const LIGHTNING_TEXTURE_PREFIX = 'mid-sky-lightning';
 const LIGHTNING_ANIMATION_KEY = 'mid-sky-lightning-flash';
 const LIGHTNING_FRAME_COUNT = 16;
+const LIGHTNING_SOUND_KEY = 'mid-sky-lightning-sound';
+const LIGHTNING_SOUND_PATH = '/assets/sounds/lightning.mp3';
+const LIGHTNING_SOUND_VOLUME = 0.8;
+const LIGHTNING_SCREEN_FLASH_COLOR = 0xeafaff;
+const LIGHTNING_SCREEN_FLASH_ALPHA = 0.25;
+const LIGHTNING_SCREEN_FLASH_FADE_MS = 420;
+const LIGHTNING_SCREEN_FLASH_DEPTH = 1_000;
 const SATELLITE_TEXTURE_KEY = 'space-satellite';
 const ASTEROID_TEXTURE_KEY = 'space-asteroid';
 const LAVA_TEXTURE_KEY = 'lava-flow';
@@ -424,6 +448,9 @@ const FLIGHT_SOUND_VOLUME = 0.24;
 const FLAP_SOUND_KEY = 'dodo-single-flap-sound';
 const FLAP_SOUND_PATH = '/assets/sounds/1Flap.mp3';
 const FLAP_SOUND_VOLUME = 0.25;
+const GAME_OVER_SOUND_KEY = 'game-over-sound';
+const GAME_OVER_SOUND_PATH = '/assets/sounds/GO.mp3';
+const GAME_OVER_SOUND_VOLUME = 1;
 
 const COSMETIC_FALLBACK_TEXTURE_KEY = 'cosmetic-runtime-placeholder';
 const COSMETIC_TRIM_ALPHA_THRESHOLD = 64;
@@ -727,6 +754,7 @@ export class GameplayScene extends Phaser.Scene {
   private rightWing!: Phaser.GameObjects.Image;
   private groundFeet!: Phaser.GameObjects.Image;
   private flightFeet!: Phaser.GameObjects.Image;
+  private lavaDeathSprite!: Phaser.GameObjects.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
@@ -737,6 +765,8 @@ export class GameplayScene extends Phaser.Scene {
   private satelliteDriftMotions: SatelliteDriftMotion[] = [];
   private asteroidPassageMotions: AsteroidPassageMotion[] = [];
   private lightningFlashMotions: LightningFlashMotion[] = [];
+  private stormCloudObstacles: Phaser.Physics.Arcade.Sprite[] = [];
+  private lightningScreenFlash!: Phaser.GameObjects.Rectangle;
   private flightSound?: Phaser.Sound.BaseSound;
   private cosmeticImages = new Map<
     CosmeticCategory,
@@ -819,6 +849,7 @@ export class GameplayScene extends Phaser.Scene {
   private isGrounded = true;
 
   private gameOver = false;
+  private deathReason: FinishGameReason | null = null;
   private gamePaused = false;
   private outOfScreenSince: number | null = null;
   private lastWarningSecond: number | null = null;
@@ -837,6 +868,20 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.audio(THUNDER_SOUND_KEY, THUNDER_SOUND_PATH);
+    this.load.audio(LIGHTNING_SOUND_KEY, LIGHTNING_SOUND_PATH);
+    this.load.audio(GAME_OVER_SOUND_KEY, GAME_OVER_SOUND_PATH);
+    this.load.image(
+      DODO_LIGHTNING_DEATH_TEXTURE_KEY,
+      DODO_LIGHTNING_DEATH_TEXTURE_PATH,
+    );
+    for (const frameIndex of DODO_LAVA_DEATH_FRAME_INDICES) {
+      const paddedIndex = frameIndex.toString().padStart(3, '0');
+      this.load.image(
+        `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${paddedIndex}.png`,
+      );
+    }
     this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
     this.load.image(FOREST_TREE_1_KEY, '/assets/Decors/arbre1.png');
     this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.png');
@@ -937,6 +982,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createGroundForestDecor();
     this.createGroundRecord();
     this.createLava();
+    this.createLightningScreenFlash();
 
     this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
     this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
@@ -964,6 +1010,17 @@ export class GameplayScene extends Phaser.Scene {
       .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
       .setScale(DODO_FLIGHT_FEET_SCALE_X, DODO_FLIGHT_FEET_SCALE_Y)
       .setDepth(9)
+      .setVisible(false);
+
+    this.lavaDeathSprite = this.add
+      .sprite(
+        GAME_WIDTH / 2,
+        START_Y,
+        `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-000`,
+      )
+      .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
+      .setScale(DODO_LAVA_DEATH_SCALE)
+      .setDepth(DODO_LAVA_DEATH_DEPTH)
       .setVisible(false);
 
     this.createCosmeticDisplayObjects();
@@ -1066,6 +1123,9 @@ export class GameplayScene extends Phaser.Scene {
 
   shutdown(): void {
     this.destroyFlightSounds();
+    this.sound.stopByKey(THUNDER_SOUND_KEY);
+    this.sound.stopByKey(LIGHTNING_SOUND_KEY);
+    this.sound.stopByKey(GAME_OVER_SOUND_KEY);
     this.destroyFruitDetectorButton();
     this.events.off(
       Phaser.Scenes.Events.POST_UPDATE,
@@ -1458,6 +1518,7 @@ export class GameplayScene extends Phaser.Scene {
     // behind at high speed and creates a visible trailing / double-image effect.
     if (!this.gamePaused) {
       this.updateCamera(Math.min(delta / 1000, 0.034));
+      this.updateStormCloudSounds();
     }
 
     this.updateDodoVisuals(0);
@@ -1577,6 +1638,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private resetRuntimeState(): void {
     this.gameOver = false;
+    this.deathReason = null;
     this.gamePaused = false;
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
@@ -1633,6 +1695,7 @@ export class GameplayScene extends Phaser.Scene {
     this.satelliteDriftMotions = [];
     this.asteroidPassageMotions = [];
     this.lightningFlashMotions = [];
+    this.stormCloudObstacles = [];
     this.lavaTopY = LAVA_START_Y;
     this.runStartTime = 0;
   }
@@ -1774,6 +1837,19 @@ export class GameplayScene extends Phaser.Scene {
           };
         }),
         frameRate: 34,
+        repeat: 0,
+      });
+    }
+
+    if (!this.anims.exists(DODO_LAVA_DEATH_ANIMATION_KEY)) {
+      this.anims.create({
+        key: DODO_LAVA_DEATH_ANIMATION_KEY,
+        frames: DODO_LAVA_DEATH_FRAME_INDICES.map((frameIndex) => ({
+          key: `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${frameIndex
+            .toString()
+            .padStart(3, '0')}`,
+        })),
+        frameRate: DODO_LAVA_DEATH_FRAME_RATE,
         repeat: 0,
       });
     }
@@ -1988,6 +2064,37 @@ export class GameplayScene extends Phaser.Scene {
     this.renderLava();
   }
 
+  private createLightningScreenFlash(): void {
+    this.lightningScreenFlash = this.add
+      .rectangle(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT / 2,
+        GAME_WIDTH,
+        GAME_HEIGHT,
+        LIGHTNING_SCREEN_FLASH_COLOR,
+        1,
+      )
+      .setScrollFactor(0)
+      .setDepth(LIGHTNING_SCREEN_FLASH_DEPTH)
+      .setAlpha(0)
+      .setVisible(false);
+  }
+
+  private playLightningScreenFlash(): void {
+    this.tweens.killTweensOf(this.lightningScreenFlash);
+    this.lightningScreenFlash
+      .setVisible(true)
+      .setAlpha(LIGHTNING_SCREEN_FLASH_ALPHA);
+
+    this.tweens.add({
+      targets: this.lightningScreenFlash,
+      alpha: 0,
+      duration: LIGHTNING_SCREEN_FLASH_FADE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => this.lightningScreenFlash.setVisible(false),
+    });
+  }
+
   private updateLava(time: number, deltaSeconds: number): void {
     if (time - this.runStartTime < LAVA_START_DELAY_MS) {
       this.renderLava();
@@ -1998,7 +2105,7 @@ export class GameplayScene extends Phaser.Scene {
     this.renderLava();
 
     if (this.player.getBounds().bottom - LAVA_PLAYER_BOTTOM_CONTACT_OFFSET >= this.lavaTopY) {
-      void this.damagePlayer(1, 'lava');
+      void this.finishGame('lava', false);
     }
   }
 
@@ -2062,6 +2169,11 @@ export class GameplayScene extends Phaser.Scene {
           .setData('levelLabel', level.label)
           .setData('kind', obstacleKind.id)
           .setData('altitude', Math.round(altitude));
+
+        if (obstacleKind.id === 'stormCloud') {
+          obstacle.setData('thunderPlayed', false);
+          this.stormCloudObstacles.push(obstacle);
+        }
         if (obstacleKind.animationKey && obstacleKind.id !== 'lightning') {
           obstacle.play(obstacleKind.animationKey);
         }
@@ -2469,6 +2581,8 @@ export class GameplayScene extends Phaser.Scene {
       motion.flashed = true;
       sprite.enableBody(true, sprite.x, sprite.y, true, true);
       sprite.play(LIGHTNING_ANIMATION_KEY);
+      this.sound.play(LIGHTNING_SOUND_KEY, { volume: LIGHTNING_SOUND_VOLUME });
+      this.playLightningScreenFlash();
     }
   }
 
@@ -3270,6 +3384,53 @@ export class GameplayScene extends Phaser.Scene {
       sprite.setRotation(rotation + localRotation);
     };
 
+    if (this.deathReason === 'lava') {
+      this.player.setVisible(false);
+      this.leftWing.setVisible(false);
+      this.rightWing.setVisible(false);
+      this.groundFeet.setVisible(false);
+      this.flightFeet.setVisible(false);
+      this.lavaDeathSprite
+        .setPosition(
+          this.player.x,
+          this.player.y + DODO_LAVA_DEATH_OFFSET_Y,
+        )
+        .setRotation(0)
+        .setVisible(true);
+
+      for (const image of this.cosmeticImages.values()) {
+        image.setVisible(false);
+      }
+
+      for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+        fallbackText.setVisible(false);
+      }
+
+      return;
+    }
+
+    if (this.deathReason === 'lightning') {
+      this.player
+        .setTexture(DODO_LIGHTNING_DEATH_TEXTURE_KEY)
+        .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
+        .setScale(DODO_LIGHTNING_DEATH_SCALE)
+        .clearTint();
+      this.leftWing.setVisible(false);
+      this.rightWing.setVisible(false);
+      this.groundFeet.setVisible(false);
+      this.flightFeet.setVisible(false);
+
+      for (const image of this.cosmeticImages.values()) {
+        image.setVisible(false);
+      }
+
+      for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+        fallbackText.setVisible(false);
+      }
+
+      return;
+    }
+
     if (this.isGrounded) {
       this.player.setTexture('dodo-pose-ground');
       this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
@@ -3415,6 +3576,27 @@ export class GameplayScene extends Phaser.Scene {
 
     for (const cloud of this.backgroundClouds) {
       cloud.setVisible(cloud.y > cameraTop - 200 && cloud.y < cameraBottom + 200);
+    }
+  }
+
+  private updateStormCloudSounds(): void {
+    if (this.gameOver) {
+      return;
+    }
+
+    const cameraView = this.cameras.main.worldView;
+
+    for (const obstacle of this.stormCloudObstacles) {
+      if (
+        !obstacle.active ||
+        obstacle.getData('thunderPlayed') === true ||
+        !Phaser.Geom.Intersects.RectangleToRectangle(cameraView, obstacle.getBounds())
+      ) {
+        continue;
+      }
+
+      obstacle.setData('thunderPlayed', true);
+      this.sound.play(THUNDER_SOUND_KEY, { volume: THUNDER_SOUND_VOLUME });
     }
   }
 
@@ -3660,21 +3842,35 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.gameOver = true;
+    this.deathReason = reason;
     this.playerLives = 0;
     this.emitHud();
+    this.stopFlightSounds();
+    emitPlayerDied(reason);
+    this.sound.play(GAME_OVER_SOUND_KEY, { volume: GAME_OVER_SOUND_VOLUME });
+    this.updateDodoVisuals(0);
+    const lavaDeathAnimation =
+      reason === 'lava' ? this.playLavaDeathAnimation() : null;
+
     if (this.shopObjectInventory.watermelonMagnet) {
       await this.consumeActiveWatermelonMagnet();
     }
-    this.stopFlightSounds();
     this.angularVelocity = 180;
-    this.player.setAcceleration(0, GRAVITY_Y * 1.4);
+    if (reason === 'lava') {
+      this.player.setVelocity(0, 0);
+      this.player.setAcceleration(0, 0);
+    } else {
+      this.player.setAcceleration(0, GRAVITY_Y * 1.4);
+    }
     const tintColor =
       reason === 'lava' ? 0x3a1a0f : reason === 'lightning' ? 0x8eeeff : 0xff7777;
-    this.player.setTint(tintColor);
-    this.leftWing.setTint(tintColor);
-    this.rightWing.setTint(tintColor);
-    this.groundFeet.setTint(tintColor);
-    this.flightFeet.setTint(tintColor);
+    if (reason !== 'lightning') {
+      this.player.setTint(tintColor);
+      this.leftWing.setTint(tintColor);
+      this.rightWing.setTint(tintColor);
+      this.groundFeet.setTint(tintColor);
+      this.flightFeet.setTint(tintColor);
+    }
 
     for (const image of this.cosmeticImages.values()) {
       if (image.visible) {
@@ -3689,8 +3885,27 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     emitFallWarning({ secondsRemaining: null });
+
+    if (lavaDeathAnimation) {
+      await lavaDeathAnimation;
+    } else if (reason === 'lightning') {
+      await new Promise<void>((resolve) => {
+        this.time.delayedCall(LIGHTNING_GAME_OVER_REVEAL_DELAY_MS, resolve);
+      });
+    }
+
     emitGameOver();
     await saveBestAltitude(this.bestAltitude);
+  }
+
+  private playLavaDeathAnimation(): Promise<void> {
+    return new Promise((resolve) => {
+      this.lavaDeathSprite.once(
+        Phaser.Animations.Events.ANIMATION_COMPLETE,
+        resolve,
+      );
+      this.lavaDeathSprite.play(DODO_LAVA_DEATH_ANIMATION_KEY);
+    });
   }
 
   private handleRestartRequest = (): void => {
