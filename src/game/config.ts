@@ -14,7 +14,10 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     transparent: false,
     pixelArt: false,
     antialias: true,
-    roundPixels: true,
+    // The Dodo uses smooth, independently positioned layers. Pixel rounding makes
+    // those layers jump at slightly different moments and looks like ghosting.
+    roundPixels: false,
+    powerPreference: 'high-performance',
     physics: {
       default: 'arcade',
       arcade: {

@@ -91,7 +91,7 @@ const FLAP_LEG_ANIMATION_DURATION = 0;
 
 const FALL_LIMIT_BELOW_CAMERA = 5;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
-const GAME_OVER_DELAY_MS = 5_000;
+const GAME_OVER_DELAY_MS = 2_000;
 const PIXELS_PER_METRE_PER_SECOND = 82;
 const SAFE_GROUND_TOUCH_ALTITUDE = 50;
 const GROUND_DIRT_HEIGHT = 85;
@@ -160,6 +160,7 @@ const ASTEROID_CLUSTER_INNER_SPACING_MAX_METRES = 10;
 const LIGHTNING_TRIGGER_DISTANCE_METRES = 28;
 const LIGHTNING_HITBOX_WIDTH_RATIO = 0.58;
 const LIGHTNING_HITBOX_HEIGHT_RATIO = 0.82;
+const BRANCH_PERCH_TOP_TOLERANCE = 50;
 const PLAYER_MANUAL_HITBOX_WIDTH_RATIO = 0.46;
 const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
 const PLAYER_BASE_LIVES = 1;
@@ -222,6 +223,12 @@ interface ObstacleKind {
   displayWidth?: number;
   displayHeight?: number;
   animationKey?: string;
+  hitbox?: {
+    widthRatio: number;
+    heightRatio: number;
+    offsetXRatio: number;
+    offsetYRatio: number;
+  };
 }
 
 interface AltitudeLevelConfig {
@@ -439,6 +446,12 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     width: 215,
     height: 86,
     displayWidth: 215,
+    hitbox: {
+      widthRatio: 0.88,
+      heightRatio: 0.3,
+      offsetXRatio: 0.06,
+      offsetYRatio: 0.45,
+    },
     fillColor: 0x7b4322,
     strokeColor: 0x3c1e10,
   },
@@ -450,6 +463,12 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     width: 215,
     height: 86,
     displayWidth: 215,
+    hitbox: {
+      widthRatio: 0.88,
+      heightRatio: 0.27,
+      offsetXRatio: 0.06,
+      offsetYRatio: 0.29,
+    },
     fillColor: 0x7b4322,
     strokeColor: 0x3c1e10,
   },
@@ -969,7 +988,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createOffscreenIndicator();
 
     const camera = this.cameras.main;
-    camera.roundPixels = true;
+    camera.roundPixels = false;
     camera.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
     camera.setScroll(0, START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO);
     camera.setBackgroundColor('#73d8ff');
@@ -1033,7 +1052,6 @@ export class GameplayScene extends Phaser.Scene {
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
-    this.updateCamera(deltaSeconds);
     this.updateWatermelonMisses();
     this.updateWatermelonMagnetAttraction(deltaSeconds);
     this.updateFeastAttraction(deltaSeconds);
@@ -1434,7 +1452,14 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializeShopObjects();
   };
 
-  private syncDodoVisualsBeforeRender = (): void => {
+  private syncDodoVisualsBeforeRender = (_time: number, delta: number): void => {
+    // Arcade Physics copies the body's final position to the Game Object during
+    // POST_UPDATE. Following the player any earlier leaves the camera one frame
+    // behind at high speed and creates a visible trailing / double-image effect.
+    if (!this.gamePaused) {
+      this.updateCamera(Math.min(delta / 1000, 0.034));
+    }
+
     this.updateDodoVisuals(0);
   };
 
@@ -1779,6 +1804,7 @@ export class GameplayScene extends Phaser.Scene {
 
       const sourceWidth = image.naturalWidth;
       const sourceHeight = image.naturalHeight;
+      const renderScale = GAME_WIDTH / sourceWidth;
       const segmentCount = Math.ceil(sourceHeight / SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT);
 
       for (let index = 0; index < segmentCount; index += 1) {
@@ -1794,8 +1820,15 @@ export class GameplayScene extends Phaser.Scene {
           image.naturalHeight - sourceY,
         );
         const canvas = document.createElement('canvas');
-        canvas.width = sourceWidth;
-        canvas.height = sourceHeight;
+        // Store the very tall background at its actual in-game resolution. The
+        // source is wider than the 390 px canvas, and retaining every segment at
+        // source size wastes tens of MB of GPU memory on mobile.
+        canvas.width = GAME_WIDTH;
+        canvas.height = Math.max(
+          1,
+          Math.round((sourceY + sourceHeight) * renderScale) -
+            Math.round(sourceY * renderScale),
+        );
         canvas
           .getContext('2d')
           ?.drawImage(
@@ -1806,8 +1839,8 @@ export class GameplayScene extends Phaser.Scene {
             sourceHeight,
             0,
             0,
-            sourceWidth,
-            sourceHeight,
+            canvas.width,
+            canvas.height,
           );
 
         this.textures.addCanvas(textureKey, canvas);
@@ -1827,7 +1860,7 @@ export class GameplayScene extends Phaser.Scene {
   ): void {
     const scale = GAME_WIDTH / sourceWidth;
     const backgroundBottomY = GROUND_Y + GROUND_DIRT_HEIGHT;
-    const backgroundTopY = backgroundBottomY - sourceHeight * scale;
+    const backgroundTopY = backgroundBottomY - Math.round(sourceHeight * scale);
 
     if (backgroundTopY > 0) {
       this.add
@@ -1853,9 +1886,8 @@ export class GameplayScene extends Phaser.Scene {
       const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
 
       this.add
-        .image(GAME_WIDTH / 2, backgroundTopY + sourceY * scale, textureKey)
+        .image(GAME_WIDTH / 2, backgroundTopY + Math.round(sourceY * scale), textureKey)
         .setOrigin(0.5, 0)
-        .setScale(scale)
         .setDepth(SKY_BACKGROUND_DEPTH);
     }
   }
@@ -2036,6 +2068,22 @@ export class GameplayScene extends Phaser.Scene {
         obstacle.body.setAllowGravity(false);
         obstacle.body.setImmovable(true);
         obstacle.body.setVelocity(0, 0);
+
+        if (obstacleKind.hitbox) {
+          const { widthRatio, heightRatio, offsetXRatio, offsetYRatio } =
+            obstacleKind.hitbox;
+
+          obstacle.body.setSize(
+            obstacle.width * widthRatio,
+            obstacle.height * heightRatio,
+            false,
+          );
+          obstacle.body.setOffset(
+            obstacle.width * offsetXRatio,
+            obstacle.height * offsetYRatio,
+          );
+        }
+
         obstacle.body.reset(obstacle.x, obstacle.y);
 
         if (obstacleKind.id === 'pterodactyl') {
@@ -2626,8 +2674,8 @@ export class GameplayScene extends Phaser.Scene {
 
     return (
       playerBody.velocity.y >= 0 &&
-      playerBody.bottom <= obstacleBody.top + 24 &&
-      this.player.y < obstacle.y
+      playerBody.bottom <= obstacleBody.top + BRANCH_PERCH_TOP_TOLERANCE &&
+      playerBody.center.y < obstacleBody.center.y
     );
   }
 
