@@ -713,6 +713,18 @@ button {
   background-image: url("/assets/ui/GameOver/bt-rejouer-normal.png");
 }
 
+.game-over__revive-button {
+  background-image: url("/assets/ui/GameOver/bt-rejouer-normal.png");
+  filter:
+    hue-rotate(165deg)
+    saturate(1.15)
+    drop-shadow(0 5px 3px rgb(44 28 7 / 28%));
+}
+
+.game-over__revive-button:active {
+  background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.png");
+}
+
 .game-over__replay-button:active {
   background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.png");
 }
@@ -727,6 +739,12 @@ button {
   transform: translateY(2px);
   box-shadow: none;
   filter: drop-shadow(0 2px 2px rgb(44 28 7 / 24%));
+}
+
+.game-over__card button:disabled {
+  cursor: wait;
+  filter: saturate(0.55) opacity(0.78);
+  transform: none;
 }
 
 .game-over__card .game-over__shop-button:active {
@@ -1201,7 +1219,7 @@ button {
   line-height: 1;
 }
 
-.shop-dev-watermelon-button {
+.shop-reward-watermelon-button {
   position: absolute;
   right: 5px;
   bottom: -15px;
@@ -1221,11 +1239,17 @@ button {
   cursor: pointer;
 }
 
-.shop-dev-watermelon-button:active {
+.shop-reward-watermelon-button:active {
   transform: translateY(1px);
   box-shadow:
     0 1px 0 #0d3049,
     0 2px 5px rgb(0 0 0 / 22%);
+}
+
+.shop-reward-watermelon-button:disabled {
+  cursor: wait;
+  filter: saturate(0.55);
+  opacity: 0.78;
 }
 
 .shop-notice {

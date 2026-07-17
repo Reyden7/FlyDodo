@@ -137,6 +137,14 @@ export function requestRestart(): void {
   gameEvents.dispatchEvent(new Event('flydodo:restart-request'));
 }
 
+export function requestRewardedRevive(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:rewarded-revive-request'));
+}
+
+export function emitRewardedRevived(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:rewarded-revived'));
+}
+
 export function requestGamePause(): void {
   gameEvents.dispatchEvent(new Event('flydodo:pause-request'));
 }

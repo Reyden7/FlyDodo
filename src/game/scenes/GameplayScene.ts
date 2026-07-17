@@ -5,11 +5,13 @@ import {
   emitGameOver,
   emitMovementStarted,
   emitPlayerDied,
+  emitRewardedRevived,
   emitShopObjectsUpdated,
   emitWalletUpdated,
   gameEvents,
   getLatestShopObjectInventory,
   type CosmeticEquippedDetail,
+  type FlightHudDetail,
   type ShopObjectsUpdatedDetail,
 } from '../events';
 import {
@@ -844,6 +846,7 @@ export class GameplayScene extends Phaser.Scene {
   private nextLifeRegenerationAt: number | null = null;
   private nextShieldRechargeAt: number | null = null;
   private hasUsedPhoenix = false;
+  private hasUsedRewardedRevive = false;
   private hasEmittedMovementStarted = false;
   private maxAltitudeSinceTakeoff = 0;
   private isGrounded = true;
@@ -854,7 +857,8 @@ export class GameplayScene extends Phaser.Scene {
   private outOfScreenSince: number | null = null;
   private lastWarningSecond: number | null = null;
   private lastWarningReason: 'fall' | 'side' | null = null;
-  private lastHudSignature = '';
+  private lastHudSnapshot: FlightHudDetail | null = null;
+  private lastDodoPose: CosmeticPose | 'lava' | 'lightning' | null = null;
   private backgroundClouds: Phaser.GameObjects.Arc[] = [];
   private offscreenIndicator!: Phaser.GameObjects.Container;
   private offscreenIndicatorBody!: Phaser.GameObjects.Image;
@@ -1060,6 +1064,10 @@ export class GameplayScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.handlePointerUp, this);
 
     gameEvents.addEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.addEventListener(
+      'flydodo:rewarded-revive-request',
+      this.handleRewardedReviveRequest,
+    );
     gameEvents.addEventListener('flydodo:pause-request', this.handlePauseRequest);
     gameEvents.addEventListener('flydodo:resume-request', this.handleResumeRequest);
     gameEvents.addEventListener(
@@ -1078,9 +1086,7 @@ export class GameplayScene extends Phaser.Scene {
     );
 
     void this.initializeBestScore();
-    void this.initializeEquippedCosmetics();
-    void this.initializeTalents();
-    void this.initializeShopObjects();
+    void this.initializePlayerState();
     this.updateDodoVisuals(0);
     this.runStartTime = this.time.now;
   }
@@ -1138,6 +1144,10 @@ export class GameplayScene extends Phaser.Scene {
     this.input.off('pointerup', this.handlePointerUp, this);
     this.input.off('pointerupoutside', this.handlePointerUp, this);
     gameEvents.removeEventListener('flydodo:restart-request', this.handleRestartRequest);
+    gameEvents.removeEventListener(
+      'flydodo:rewarded-revive-request',
+      this.handleRewardedReviveRequest,
+    );
     gameEvents.removeEventListener('flydodo:pause-request', this.handlePauseRequest);
     gameEvents.removeEventListener('flydodo:resume-request', this.handleResumeRequest);
     gameEvents.removeEventListener(
@@ -1193,12 +1203,19 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private async initializeEquippedCosmetics(): Promise<void> {
+  private async initializePlayerState(): Promise<void> {
     const profile = await loadLatestPlayerProfile();
 
     if (!this.scene.isActive()) {
       return;
     }
+
+    this.controlStats = getControlTalentStats(profile.controlTalents);
+    this.applyEnduranceStats(getEnduranceTalentStats(profile.enduranceTalents));
+    this.applyBlueTalentStats(getBlueTalentStats(profile.blueTalents));
+    this.applyShopObjectInventory(
+      getLatestShopObjectInventory() ?? profile.shopObjects,
+    );
 
     await Promise.all(
       COSMETIC_CATEGORIES.map((category) =>
@@ -1206,7 +1223,9 @@ export class GameplayScene extends Phaser.Scene {
       ),
     );
 
-    this.updateDodoVisuals(0);
+    if (this.scene.isActive()) {
+      this.updateDodoVisuals(0);
+    }
   }
 
   private async initializeTalents(): Promise<void> {
@@ -1677,10 +1696,12 @@ export class GameplayScene extends Phaser.Scene {
     this.nextLifeRegenerationAt = null;
     this.nextShieldRechargeAt = null;
     this.hasUsedPhoenix = false;
+    this.hasUsedRewardedRevive = false;
     this.hasEmittedMovementStarted = false;
     this.maxAltitudeSinceTakeoff = 0;
     this.isGrounded = true;
-    this.lastHudSignature = '';
+    this.lastHudSnapshot = null;
+    this.lastDodoPose = null;
     this.pendingLeftFlap = false;
     this.pendingRightFlap = false;
     this.angularVelocity = 0;
@@ -2339,11 +2360,19 @@ export class GameplayScene extends Phaser.Scene {
       ((time % MOSQUITO_CIRCLE_DURATION_MS) / MOSQUITO_CIRCLE_DURATION_MS) *
       Math.PI *
       2;
+    const view = this.cameras.main.worldView;
 
     for (const motion of this.mosquitoCircleMotions) {
       const { sprite } = motion;
 
       if (!sprite.active) {
+        continue;
+      }
+
+      if (
+        motion.homeY + motion.radius < view.top - GAME_HEIGHT ||
+        motion.homeY - motion.radius > view.bottom + GAME_HEIGHT
+      ) {
         continue;
       }
 
@@ -2355,17 +2384,13 @@ export class GameplayScene extends Phaser.Scene {
 
       if (
         !this.gameOver &&
-        Phaser.Geom.Intersects.RectangleToRectangle(
-          this.getCenteredHitbox(
-            this.player,
-            PLAYER_MANUAL_HITBOX_WIDTH_RATIO,
-            PLAYER_MANUAL_HITBOX_HEIGHT_RATIO,
-          ),
-          this.getCenteredHitbox(
-            sprite,
-            MOSQUITO_HITBOX_WIDTH_RATIO,
-            MOSQUITO_HITBOX_HEIGHT_RATIO,
-          ),
+        this.centeredHitboxesOverlap(
+          this.player,
+          PLAYER_MANUAL_HITBOX_WIDTH_RATIO,
+          PLAYER_MANUAL_HITBOX_HEIGHT_RATIO,
+          sprite,
+          MOSQUITO_HITBOX_WIDTH_RATIO,
+          MOSQUITO_HITBOX_HEIGHT_RATIO,
         )
       ) {
         void this.damagePlayer(1, 'mosquito');
@@ -2450,11 +2475,19 @@ export class GameplayScene extends Phaser.Scene {
       ((time % SATELLITE_DRIFT_Y_DURATION_MS) / SATELLITE_DRIFT_Y_DURATION_MS) *
       Math.PI *
       2;
+    const view = this.cameras.main.worldView;
 
     for (const motion of this.satelliteDriftMotions) {
       const { sprite } = motion;
 
       if (!sprite.active) {
+        continue;
+      }
+
+      if (
+        motion.homeY + SATELLITE_DRIFT_Y_RADIUS < view.top - GAME_HEIGHT ||
+        motion.homeY - SATELLITE_DRIFT_Y_RADIUS > view.bottom + GAME_HEIGHT
+      ) {
         continue;
       }
 
@@ -2586,20 +2619,24 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private getCenteredHitbox(
-    sprite: Phaser.GameObjects.Components.Transform &
+  private centeredHitboxesOverlap(
+    first: Phaser.GameObjects.Components.Transform &
       Phaser.GameObjects.Components.ComputedSize,
-    widthRatio: number,
-    heightRatio: number,
-  ): Phaser.Geom.Rectangle {
-    const width = sprite.displayWidth * widthRatio;
-    const height = sprite.displayHeight * heightRatio;
+    firstWidthRatio: number,
+    firstHeightRatio: number,
+    second: Phaser.GameObjects.Components.Transform &
+      Phaser.GameObjects.Components.ComputedSize,
+    secondWidthRatio: number,
+    secondHeightRatio: number,
+  ): boolean {
+    const firstHalfWidth = (first.displayWidth * firstWidthRatio) / 2;
+    const firstHalfHeight = (first.displayHeight * firstHeightRatio) / 2;
+    const secondHalfWidth = (second.displayWidth * secondWidthRatio) / 2;
+    const secondHalfHeight = (second.displayHeight * secondHeightRatio) / 2;
 
-    return new Phaser.Geom.Rectangle(
-      sprite.x - width / 2,
-      sprite.y - height / 2,
-      width,
-      height,
+    return (
+      Math.abs(first.x - second.x) <= firstHalfWidth + secondHalfWidth &&
+      Math.abs(first.y - second.y) <= firstHalfHeight + secondHalfHeight
     );
   }
 
@@ -2828,15 +2865,6 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private updateWatermelonMagnetAttraction(deltaSeconds: number): void {
-    const latestInventory = getLatestShopObjectInventory();
-
-    if (
-      latestInventory &&
-      latestInventory.watermelonMagnet !== this.shopObjectInventory.watermelonMagnet
-    ) {
-      this.applyShopObjectInventory(latestInventory);
-    }
-
     if (!this.shopObjectInventory.watermelonMagnet) {
       return;
     }
@@ -2866,16 +2894,15 @@ export class GameplayScene extends Phaser.Scene {
       const watermelonBody = watermelon.body as Phaser.Physics.Arcade.StaticBody;
       const watermelonX = watermelonBody.center.x;
       const watermelonY = watermelonBody.center.y;
-      const distance = Phaser.Math.Distance.Between(
-        watermelonX,
-        watermelonY,
-        targetX,
-        targetY,
-      );
+      const offsetX = targetX - watermelonX;
+      const offsetY = targetY - watermelonY;
+      const distanceSquared = offsetX * offsetX + offsetY * offsetY;
 
-      if (distance > attractionRadius) {
+      if (distanceSquared > attractionRadius * attractionRadius) {
         continue;
       }
+
+      const distance = Math.sqrt(distanceSquared);
 
       if (distance <= 24) {
         this.handleWatermelonCollected(
@@ -2886,16 +2913,9 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       const step = Math.min(attractionSpeed, distance);
-      const angle = Phaser.Math.Angle.Between(
-        watermelonX,
-        watermelonY,
-        targetX,
-        targetY,
-      );
-
       watermelon.setPosition(
-        watermelon.x + Math.cos(angle) * step,
-        watermelon.y + Math.sin(angle) * step,
+        watermelon.x + (offsetX / distance) * step,
+        watermelon.y + (offsetY / distance) * step,
       );
       watermelon.refreshBody();
     }
@@ -3025,12 +3045,9 @@ export class GameplayScene extends Phaser.Scene {
         continue;
       }
 
-      const distance = Phaser.Math.Distance.Between(
-        this.player.x,
-        this.player.y,
-        watermelon.x,
-        watermelon.y,
-      );
+      const offsetX = watermelon.x - this.player.x;
+      const offsetY = watermelon.y - this.player.y;
+      const distance = offsetX * offsetX + offsetY * offsetY;
 
       if (distance < selectedDistance) {
         selected = watermelon;
@@ -3064,7 +3081,10 @@ export class GameplayScene extends Phaser.Scene {
     const endY = startY + Math.sin(angle) * arrowLength;
 
     this.fruitDetectorArrow.lineStyle(4, 0xfff18a, 0.95);
-    this.fruitDetectorArrow.strokeLineShape(new Phaser.Geom.Line(startX, startY, endX, endY));
+    this.fruitDetectorArrow.beginPath();
+    this.fruitDetectorArrow.moveTo(startX, startY);
+    this.fruitDetectorArrow.lineTo(endX, endY);
+    this.fruitDetectorArrow.strokePath();
     this.fruitDetectorArrow.fillStyle(0xfff18a, 0.95);
     this.fruitDetectorArrow.fillTriangle(
       endX,
@@ -3385,11 +3405,14 @@ export class GameplayScene extends Phaser.Scene {
     };
 
     if (this.deathReason === 'lava') {
-      this.player.setVisible(false);
-      this.leftWing.setVisible(false);
-      this.rightWing.setVisible(false);
-      this.groundFeet.setVisible(false);
-      this.flightFeet.setVisible(false);
+      if (this.lastDodoPose !== 'lava') {
+        this.player.setVisible(false);
+        this.leftWing.setVisible(false);
+        this.rightWing.setVisible(false);
+        this.groundFeet.setVisible(false);
+        this.flightFeet.setVisible(false);
+        this.lastDodoPose = 'lava';
+      }
       this.lavaDeathSprite
         .setPosition(
           this.player.x,
@@ -3410,15 +3433,18 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     if (this.deathReason === 'lightning') {
-      this.player
-        .setTexture(DODO_LIGHTNING_DEATH_TEXTURE_KEY)
-        .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
-        .setScale(DODO_LIGHTNING_DEATH_SCALE)
-        .clearTint();
-      this.leftWing.setVisible(false);
-      this.rightWing.setVisible(false);
-      this.groundFeet.setVisible(false);
-      this.flightFeet.setVisible(false);
+      if (this.lastDodoPose !== 'lightning') {
+        this.player
+          .setTexture(DODO_LIGHTNING_DEATH_TEXTURE_KEY)
+          .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
+          .setScale(DODO_LIGHTNING_DEATH_SCALE)
+          .clearTint();
+        this.leftWing.setVisible(false);
+        this.rightWing.setVisible(false);
+        this.groundFeet.setVisible(false);
+        this.flightFeet.setVisible(false);
+        this.lastDodoPose = 'lightning';
+      }
 
       for (const image of this.cosmeticImages.values()) {
         image.setVisible(false);
@@ -3432,13 +3458,16 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     if (this.isGrounded) {
-      this.player.setTexture('dodo-pose-ground');
-      this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
-      this.player.setScale(DODO_GROUND_SCALE);
-      this.leftWing.setVisible(false);
-      this.rightWing.setVisible(false);
+      if (this.lastDodoPose !== 'ground') {
+        this.player.setTexture('dodo-pose-ground');
+        this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
+        this.player.setScale(DODO_GROUND_SCALE);
+        this.leftWing.setVisible(false);
+        this.rightWing.setVisible(false);
+        this.flightFeet.setVisible(false);
+        this.lastDodoPose = 'ground';
+      }
       this.groundFeet.setVisible(!hasEquippedShoes);
-      this.flightFeet.setVisible(false);
       placeSprite(
         this.groundFeet,
         DODO_GROUND_FEET_OFFSET_X,
@@ -3449,12 +3478,15 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    this.player.setTexture('dodo-body-flight');
-    this.player.setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y);
-    this.player.setScale(DODO_BODY_SCALE);
-    this.leftWing.setVisible(true);
-    this.rightWing.setVisible(true);
-    this.groundFeet.setVisible(false);
+    if (this.lastDodoPose !== 'flight') {
+      this.player.setTexture('dodo-body-flight');
+      this.player.setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y);
+      this.player.setScale(DODO_BODY_SCALE);
+      this.leftWing.setVisible(true);
+      this.rightWing.setVisible(true);
+      this.groundFeet.setVisible(false);
+      this.lastDodoPose = 'flight';
+    }
     this.flightFeet.setVisible(!hasEquippedShoes);
 
     const leftWingFrame = this.getAnimationFrame(this.leftWingPhase, LEFT_WING_FRAMES);
@@ -3540,24 +3572,23 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private emitHud(): void {
-    const signature = [
-      this.currentAltitude,
-      this.bestAltitude,
-      this.currentSpeed,
-      this.watermelons,
-      this.playerMaxLives,
-      this.playerLives,
-      this.shopObjectInventory.lifeVial,
-      this.playerMaxShield,
-      this.playerShield,
-    ].join(':');
+    const previous = this.lastHudSnapshot;
 
-    if (signature === this.lastHudSignature) {
+    if (
+      previous?.altitude === this.currentAltitude &&
+      previous.bestAltitude === this.bestAltitude &&
+      previous.speed === this.currentSpeed &&
+      previous.watermelons === this.watermelons &&
+      previous.maxLives === this.playerMaxLives &&
+      previous.lives === this.playerLives &&
+      previous.lifeVialActive === this.shopObjectInventory.lifeVial &&
+      previous.maxShield === this.playerMaxShield &&
+      previous.shield === this.playerShield
+    ) {
       return;
     }
 
-    this.lastHudSignature = signature;
-    emitFlightHud({
+    const detail: FlightHudDetail = {
       altitude: this.currentAltitude,
       bestAltitude: this.bestAltitude,
       speed: this.currentSpeed,
@@ -3567,7 +3598,9 @@ export class GameplayScene extends Phaser.Scene {
       lifeVialActive: this.shopObjectInventory.lifeVial,
       shield: this.playerShield,
       maxShield: this.playerMaxShield,
-    });
+    };
+    this.lastHudSnapshot = detail;
+    emitFlightHud(detail);
   }
 
   private updateCloudVisibility(): void {
@@ -3575,7 +3608,11 @@ export class GameplayScene extends Phaser.Scene {
     const cameraBottom = this.cameras.main.worldView.bottom;
 
     for (const cloud of this.backgroundClouds) {
-      cloud.setVisible(cloud.y > cameraTop - 200 && cloud.y < cameraBottom + 200);
+      const shouldBeVisible =
+        cloud.y > cameraTop - 200 && cloud.y < cameraBottom + 200;
+      if (cloud.visible !== shouldBeVisible) {
+        cloud.setVisible(shouldBeVisible);
+      }
     }
   }
 
@@ -3590,6 +3627,8 @@ export class GameplayScene extends Phaser.Scene {
       if (
         !obstacle.active ||
         obstacle.getData('thunderPlayed') === true ||
+        obstacle.y + obstacle.displayHeight / 2 < cameraView.top ||
+        obstacle.y - obstacle.displayHeight / 2 > cameraView.bottom ||
         !Phaser.Geom.Intersects.RectangleToRectangle(cameraView, obstacle.getBounds())
       ) {
         continue;
@@ -3912,6 +3951,81 @@ export class GameplayScene extends Phaser.Scene {
     this.tweens.resumeAll();
     this.physics.world.resume();
     this.scene.restart();
+  };
+
+  private handleRewardedReviveRequest = (): void => {
+    if (!this.gameOver || this.hasUsedRewardedRevive) {
+      return;
+    }
+
+    this.hasUsedRewardedRevive = true;
+    this.gameOver = false;
+    this.deathReason = null;
+    this.gamePaused = false;
+    this.playerLives = 1;
+    this.playerShield = 0;
+    this.outOfScreenSince = null;
+    this.lastWarningSecond = null;
+    this.lastWarningReason = null;
+    this.lastPlayerDamageTime = this.time.now;
+    this.nextLifeRegenerationAt =
+      this.enduranceStats.regeneration && this.playerMaxLives > 1
+        ? this.time.now + PLAYER_REGENERATION_DELAY_MS
+        : null;
+    this.nextShieldRechargeAt =
+      this.enduranceStats.shieldRecharge && this.playerMaxShield > 0
+        ? this.time.now + PLAYER_SHIELD_RECHARGE_DELAY_MS
+        : null;
+    this.perchedBranch = null;
+    this.pendingPowerTakeoff = false;
+    this.pendingLeftFlap = false;
+    this.pendingRightFlap = false;
+    this.angularVelocity = 0;
+    this.isGrounded = false;
+    this.lastDodoPose = null;
+
+    const camera = this.cameras.main;
+    const safeX = GAME_WIDTH / 2;
+    const safeY = Math.max(
+      80,
+      Math.min(
+        camera.scrollY + GAME_HEIGHT * 0.55,
+        this.lavaTopY - LAVA_PLAYER_BOTTOM_CONTACT_OFFSET - 100,
+        GROUND_Y - 160,
+      ),
+    );
+
+    this.lavaDeathSprite.stop().setVisible(false);
+    this.player
+      .setVisible(true)
+      .setAlpha(1)
+      .setPosition(safeX, safeY)
+      .setRotation(0)
+      .clearTint();
+    this.player.body?.reset(safeX, safeY);
+    this.player.setVelocity(0, -90).setAcceleration(0, GRAVITY_Y);
+    this.leftWing.setAlpha(1).clearTint();
+    this.rightWing.setAlpha(1).clearTint();
+    this.groundFeet.setAlpha(1).clearTint();
+    this.flightFeet.setAlpha(1).clearTint();
+
+    for (const image of this.cosmeticImages.values()) {
+      image.setAlpha(1).clearTint();
+    }
+
+    for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+      fallbackText.setAlpha(1).clearTint();
+    }
+
+    this.sound.stopByKey(GAME_OVER_SOUND_KEY);
+    this.physics.world.resume();
+    this.tweens.resumeAll();
+    this.updateDodoVisuals(0);
+    this.updateOffscreenIndicator();
+    this.emitHud();
+    emitFallWarning({ secondsRemaining: null });
+    emitRewardedRevived();
+    this.startFlightSound();
   };
 
   private handlePauseRequest = (): void => {

@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { GameCanvas } from './components/GameCanvas';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   emitCosmeticEquipped,
   emitShopObjectsUpdated,
@@ -7,6 +14,7 @@ import {
   gameEvents,
   requestGamePause,
   requestGameResume,
+  requestRewardedRevive,
   requestRestart,
   type FallWarningDetail,
   type FlightHudDetail,
@@ -37,6 +45,11 @@ import {
   type PlayerProfile,
   type ShopObjectId,
 } from './services/saveService';
+import {
+  initializeAds,
+  showInterstitialAd,
+  showRewardedAd,
+} from './services/adService';
 import {
   getShopItemImagePath,
   SHOP_CATEGORY_OPTIONS,
@@ -85,6 +98,11 @@ import {
   getEnduranceTalentNodePosition,
 } from './talents/enduranceTalentNodePositions';
 
+const GameCanvas = lazy(async () => {
+  const module = await import('./components/GameCanvas');
+  return { default: module.GameCanvas };
+});
+
 type TutorialSide = 'left' | 'right' | null;
 type MainMenuButton = 'play' | 'shop' | 'tutorial';
 type ShopTab = 'accessories' | 'talents' | 'items' | 'watermelons';
@@ -125,7 +143,6 @@ const getTalentNodePositionStyle = ({
   top: `${y}%`,
 });
 
-const IS_DEV = import.meta.env.DEV;
 const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
 const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
 const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
@@ -233,6 +250,8 @@ function ShopItemPreview({ item }: { item: ShopItem }): React.JSX.Element {
       src={imagePath}
       alt=""
       aria-hidden="true"
+      decoding="async"
+      loading="lazy"
       onError={() => setImageFailed(true)}
     />
   );
@@ -295,6 +314,15 @@ export default function App(): React.JSX.Element {
   const [playerDeathReason, setPlayerDeathReason] =
     useState<PlayerDeathReason>('default');
   const [hasMovedThisRun, setHasMovedThisRun] = useState(false);
+  const [hasUsedRewardedRevive, setHasUsedRewardedRevive] = useState(false);
+  const [rewardedReviveError, setRewardedReviveError] = useState(false);
+  const [pendingRewardedAd, setPendingRewardedAd] = useState<
+    'revive' | 'watermelons' | null
+  >(null);
+  const [isInterstitialPending, setIsInterstitialPending] = useState(false);
+  const deathsSinceInterstitialRef = useRef(0);
+  const nextInterstitialDeathRef = useRef(Math.random() < 0.5 ? 5 : 6);
+  const interstitialDueRef = useRef(false);
 
   const [showControlTutorial, setShowControlTutorial] = useState(true);
   const [tutorialSide, setTutorialSide] = useState<TutorialSide>(null);
@@ -434,6 +462,7 @@ export default function App(): React.JSX.Element {
   };
 
   useEffect(() => {
+    void initializeAds();
     void loadLatestPlayerProfile().then((profile) => {
       setPlayerProfile(profile);
       emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
@@ -485,6 +514,21 @@ export default function App(): React.JSX.Element {
 
     const onGameOver = (): void => {
       setIsGameOver(true);
+      deathsSinceInterstitialRef.current += 1;
+
+      if (
+        deathsSinceInterstitialRef.current >= nextInterstitialDeathRef.current
+      ) {
+        interstitialDueRef.current = true;
+      }
+    };
+
+    const onRewardedRevived = (): void => {
+      setIsGameOver(false);
+      setPlayerDeathReason('default');
+      setFallSeconds(null);
+      setRewardedReviveError(false);
+      startGameMusic();
     };
 
     const onMovementStarted = (): void => {
@@ -496,6 +540,7 @@ export default function App(): React.JSX.Element {
     gameEvents.addEventListener('flydodo:fall-warning', onFallWarning);
     gameEvents.addEventListener('flydodo:player-died', onPlayerDied);
     gameEvents.addEventListener('flydodo:game-over', onGameOver);
+    gameEvents.addEventListener('flydodo:rewarded-revived', onRewardedRevived);
     gameEvents.addEventListener('flydodo:movement-started', onMovementStarted);
 
     return () => {
@@ -504,6 +549,10 @@ export default function App(): React.JSX.Element {
       gameEvents.removeEventListener('flydodo:fall-warning', onFallWarning);
       gameEvents.removeEventListener('flydodo:player-died', onPlayerDied);
       gameEvents.removeEventListener('flydodo:game-over', onGameOver);
+      gameEvents.removeEventListener(
+        'flydodo:rewarded-revived',
+        onRewardedRevived,
+      );
       gameEvents.removeEventListener('flydodo:movement-started', onMovementStarted);
     };
   }, []);
@@ -702,6 +751,8 @@ export default function App(): React.JSX.Element {
     setShield(0);
     setMaxShield(0);
     setHasMovedThisRun(false);
+    setHasUsedRewardedRevive(false);
+    setRewardedReviveError(false);
   };
 
   const startGame = (withTutorial = false): void => {
@@ -751,7 +802,23 @@ export default function App(): React.JSX.Element {
     setSelectedTalentTreeTab(tab);
   };
 
-  const restart = (): void => {
+  const restart = async (): Promise<void> => {
+    if (isInterstitialPending || pendingRewardedAd) {
+      return;
+    }
+
+    if (interstitialDueRef.current) {
+      setIsInterstitialPending(true);
+      const wasShown = await showInterstitialAd();
+      setIsInterstitialPending(false);
+
+      if (wasShown) {
+        interstitialDueRef.current = false;
+        deathsSinceInterstitialRef.current = 0;
+        nextInterstitialDeathRef.current = Math.random() < 0.5 ? 5 : 6;
+      }
+    }
+
     startGameMusic();
     resetRunState();
     requestRestart();
@@ -788,10 +855,53 @@ export default function App(): React.JSX.Element {
     }
   };
 
-  const handleDevAddWatermelons = async (): Promise<void> => {
-    const profile = await addWatermelons(5);
-    setPlayerProfile(profile);
-    setShopNotice('+5 pasteques');
+  const handleRewardedRevive = async (): Promise<void> => {
+    if (pendingRewardedAd || hasUsedRewardedRevive) {
+      return;
+    }
+
+    setPendingRewardedAd('revive');
+    setRewardedReviveError(false);
+
+    try {
+      const rewardEarned = await showRewardedAd();
+
+      if (!rewardEarned) {
+        setRewardedReviveError(true);
+        return;
+      }
+
+      setHasUsedRewardedRevive(true);
+      requestRewardedRevive();
+    } finally {
+      setPendingRewardedAd(null);
+    }
+  };
+
+  const handleRewardedWatermelons = async (): Promise<void> => {
+    if (pendingRewardedAd) {
+      return;
+    }
+
+    setPendingRewardedAd('watermelons');
+    setShopNotice(null);
+
+    try {
+      const rewardEarned = await showRewardedAd();
+
+      if (!rewardEarned) {
+        playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+        setShopNotice('Regarde la publicité jusqu’au bout pour gagner +5.');
+        return;
+      }
+
+      const profile = await addWatermelons(5);
+      setPlayerProfile(profile);
+      playInterfaceSound(SHOP_BUY_SOUND_PATH);
+      setShopNotice('+5 pastèques !');
+    } finally {
+      setPendingRewardedAd(null);
+    }
   };
 
   const handleShopItemAction = async (item: ShopItem): Promise<void> => {
@@ -1424,7 +1534,11 @@ export default function App(): React.JSX.Element {
 
   return (
     <main className="app-shell">
-      {!isMainMenuOpen && <GameCanvas />}
+      {!isMainMenuOpen && (
+        <Suspense fallback={null}>
+          <GameCanvas />
+        </Suspense>
+      )}
 
       {isMainMenuOpen && (
         <section className="main-menu" aria-label="Menu principal">
@@ -1596,16 +1710,34 @@ export default function App(): React.JSX.Element {
             </div>
 
             <div className="game-over__actions">
+              {!hasUsedRewardedRevive && (
+                <button
+                  type="button"
+                  className="game-over__revive-button"
+                  disabled={pendingRewardedAd !== null || isInterstitialPending}
+                  onClick={() => void handleRewardedRevive()}
+                >
+                  <span>
+                    {pendingRewardedAd === 'revive'
+                      ? 'PUBLICITÉ...'
+                      : rewardedReviveError
+                        ? 'PUB INDISPONIBLE'
+                        : 'RESSUSCITER (PUB)'}
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 className="game-over__replay-button"
-                onClick={restart}
+                disabled={pendingRewardedAd !== null || isInterstitialPending}
+                onClick={() => void restart()}
               >
-                <span>REJOUER</span>
+                <span>{isInterstitialPending ? 'PUBLICITÉ...' : 'REJOUER'}</span>
               </button>
               <button
                 type="button"
                 className="game-over__shop-button"
+                disabled={pendingRewardedAd !== null || isInterstitialPending}
                 onClick={() => void openShop()}
               >
                 <span>BOUTIQUE</span>
@@ -1638,13 +1770,15 @@ export default function App(): React.JSX.Element {
                   alt=""
                   aria-hidden="true"
                 />
-                {IS_DEV && (
+                {selectedShopTab === 'watermelons' && (
                   <button
                     type="button"
-                    className="shop-dev-watermelon-button"
-                    onClick={() => void handleDevAddWatermelons()}
+                    className="shop-reward-watermelon-button"
+                    aria-label="Regarder une publicité pour gagner 5 pastèques"
+                    disabled={pendingRewardedAd !== null}
+                    onClick={() => void handleRewardedWatermelons()}
                   >
-                    +5
+                    {pendingRewardedAd === 'watermelons' ? '...' : '+5'}
                   </button>
                 )}
               </div>
@@ -1686,6 +1820,7 @@ export default function App(): React.JSX.Element {
                 <button
                   type="button"
                   role="tab"
+                  aria-label="Pastèques"
                   aria-selected={selectedShopTab === 'watermelons'}
                   className={`shop-main-tab shop-main-tab--watermelons${
                     selectedShopTab === 'watermelons' ? ' is-active' : ''
