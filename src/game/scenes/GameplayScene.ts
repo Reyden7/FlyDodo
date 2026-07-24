@@ -317,6 +317,27 @@ interface LightningFlashMotion {
   flashed: boolean;
 }
 
+interface FeatherParticle {
+  image: Phaser.GameObjects.Image;
+  velocityX: number;
+  velocityY: number;
+  angularVelocity: number;
+  age: number;
+  lifetime: number;
+  baseScale: number;
+  swayPhase: number;
+  swaySpeed: number;
+}
+
+interface WindStreak {
+  rectangle: Phaser.GameObjects.Rectangle;
+  velocityX: number;
+  velocityY: number;
+  age: number;
+  lifetime: number;
+  maxAlpha: number;
+}
+
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
   {
     textureKey: FOREST_TREE_2_KEY,
@@ -358,10 +379,10 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
   {
     textureKey: FOREST_TREE_1_KEY,
     x: 15,
-    scale: 1.5,
-    depth: -6.1,
+    scale: 1.2,
+    depth: -8,
     scrollFactor: 0.94,
-    groundOffset: 7,
+    groundOffset: 42,
     flipX: true,
     alpha: 1,
   },
@@ -465,6 +486,25 @@ const GAME_OVER_SOUND_VOLUME = 1;
 
 const COSMETIC_FALLBACK_TEXTURE_KEY = 'cosmetic-runtime-placeholder';
 const COSMETIC_TRIM_ALPHA_THRESHOLD = 64;
+const FEATHER_POOL_SIZE = 18;
+const WIND_STREAK_POOL_SIZE = 16;
+const FEATHER_TEXTURES = [
+  {
+    key: 'dodo-feather-small',
+    path: '/assets/dodo/feather-small.png',
+    scale: 0.04,
+  },
+  {
+    key: 'dodo-feather-medium',
+    path: '/assets/dodo/feather-medium.png',
+    scale: 0.026,
+  },
+  {
+    key: 'dodo-feather-large',
+    path: '/assets/dodo/feather-large.png',
+    scale: 0.019,
+  },
+] as const;
 
 const WATERMELON_SCALE = 0.075;
 const WATERMELON_DEPTH = 4;
@@ -779,6 +819,9 @@ export class GameplayScene extends Phaser.Scene {
   private stormCloudObstacles: Phaser.Physics.Arcade.Sprite[] = [];
   private lightningScreenFlash!: Phaser.GameObjects.Rectangle;
   private flightSound?: Phaser.Sound.BaseSound;
+  private featherParticles: FeatherParticle[] = [];
+  private windStreaks: WindStreak[] = [];
+  private windStreakSpawnAccumulator = 0;
   private cosmeticImages = new Map<
     CosmeticCategory,
     Phaser.GameObjects.Image
@@ -951,6 +994,9 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
     this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
     this.load.image('dodo-ground-feet', '/assets/dodo/optimized/foot-ground.png');
+    FEATHER_TEXTURES.forEach(({ key, path }) => {
+      this.load.image(key, path);
+    });
     this.load.image(
       'dodo-flight-feet-default',
       '/assets/dodo/optimized/animation/flight_feet.png',
@@ -1039,6 +1085,7 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(DODO_LAVA_DEATH_DEPTH)
       .setVisible(false);
 
+    this.createDodoJuicePools();
     this.createCosmeticDisplayObjects();
 
     this.createWatermelonCollectables();
@@ -1111,6 +1158,7 @@ export class GameplayScene extends Phaser.Scene {
     const deltaSeconds = Math.min(delta / 1000, 0.034);
 
     if (this.gameOver) {
+      this.updateDodoJuiceParticles(deltaSeconds);
       this.updateDodoVisuals(deltaSeconds);
       this.updateOffscreenIndicator();
       return;
@@ -1131,6 +1179,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateFlight(direction, deltaSeconds);
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
+    this.updateDodoJuice(deltaSeconds);
     this.updateWatermelonMisses();
     this.updateWatermelonMagnetAttraction(deltaSeconds);
     this.updateFeastAttraction(deltaSeconds);
@@ -1655,13 +1704,13 @@ export class GameplayScene extends Phaser.Scene {
       loop: true,
       volume: FLIGHT_SOUND_VOLUME,
     });
-
   }
 
   private startFlightSound(): void {
     if (this.flightSound && !this.flightSound.isPlaying) {
       this.flightSound.play();
     }
+
   }
 
   private playFlapSound(): void {
@@ -1744,6 +1793,9 @@ export class GameplayScene extends Phaser.Scene {
     this.rightWingBoostTime = 0;
     this.lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
     this.legAnimationTime = 0;
+    this.featherParticles = [];
+    this.windStreaks = [];
+    this.windStreakSpawnAccumulator = 0;
     this.mosquitoCircleMotions = [];
     this.pterodactylPatrols = [];
     this.satelliteDriftMotions = [];
@@ -1752,6 +1804,205 @@ export class GameplayScene extends Phaser.Scene {
     this.stormCloudObstacles = [];
     this.lavaTopY = LAVA_START_Y;
     this.runStartTime = 0;
+  }
+
+  private createDodoJuicePools(): void {
+    for (let index = 0; index < FEATHER_POOL_SIZE; index += 1) {
+      const texture = FEATHER_TEXTURES[index % FEATHER_TEXTURES.length];
+      const image = this.add
+        .image(0, 0, texture.key)
+        .setOrigin(0.5)
+        .setDepth(12)
+        .setVisible(false);
+
+      this.featherParticles.push({
+        image,
+        velocityX: 0,
+        velocityY: 0,
+        angularVelocity: 0,
+        age: 0,
+        lifetime: 0,
+        baseScale: texture.scale,
+        swayPhase: 0,
+        swaySpeed: 0,
+      });
+    }
+
+    for (let index = 0; index < WIND_STREAK_POOL_SIZE; index += 1) {
+      const rectangle = this.add
+        .rectangle(0, 0, 2, 18, 0xe8fbff, 0)
+        .setDepth(7)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false);
+
+      this.windStreaks.push({
+        rectangle,
+        velocityX: 0,
+        velocityY: 0,
+        age: 0,
+        lifetime: 0,
+        maxAlpha: 0,
+      });
+    }
+  }
+
+  private updateDodoJuice(deltaSeconds: number): void {
+    this.updateDodoJuiceParticles(deltaSeconds);
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const ascentRatio = this.isGrounded
+      ? 0
+      : Phaser.Math.Clamp((-body.velocity.y - 20) / 180, 0, 1);
+
+    this.updateWindStreakEmission(ascentRatio, deltaSeconds);
+  }
+
+  private updateWindStreakEmission(
+    ascentRatio: number,
+    deltaSeconds: number,
+  ): void {
+    if (ascentRatio <= 0) {
+      this.windStreakSpawnAccumulator = 0;
+      return;
+    }
+
+    this.windStreakSpawnAccumulator +=
+      deltaSeconds * (4 + ascentRatio * 16);
+
+    while (this.windStreakSpawnAccumulator >= 1) {
+      this.windStreakSpawnAccumulator -= 1;
+      this.spawnWindStreak();
+    }
+  }
+
+  private spawnWindStreak(): void {
+    const streak = this.windStreaks.find(
+      ({ rectangle }) => !rectangle.visible,
+    );
+
+    if (!streak) {
+      return;
+    }
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    streak.age = 0;
+    streak.lifetime = Phaser.Math.FloatBetween(0.38, 0.62);
+    streak.maxAlpha = Phaser.Math.FloatBetween(0.12, 0.28);
+    streak.velocityX =
+      body.velocity.x * 0.08 + Phaser.Math.Between(-18, 18);
+    streak.velocityY =
+      body.velocity.y * 0.08 + Phaser.Math.Between(95, 165);
+
+    streak.rectangle
+      .setPosition(
+        this.player.x + Phaser.Math.Between(-58, 58),
+        this.player.y + Phaser.Math.Between(32, 92),
+      )
+      .setRotation(
+        this.player.rotation + Phaser.Math.FloatBetween(-0.14, 0.14),
+      )
+      .setScale(
+        Phaser.Math.FloatBetween(0.55, 1.15),
+        Phaser.Math.FloatBetween(0.65, 1.3),
+      )
+      .setAlpha(0)
+      .setVisible(true);
+  }
+
+  private spawnFeatherBurst(direction: number, count: number): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const cosine = Math.cos(this.player.rotation);
+    const sine = Math.sin(this.player.rotation);
+
+    for (let index = 0; index < count; index += 1) {
+      const feather = this.featherParticles.find(({ image }) => !image.visible);
+
+      if (!feather) {
+        return;
+      }
+
+      const wingSide =
+        direction === 1
+          ? -1
+          : direction === -1
+            ? 1
+            : Phaser.Math.RND.sign();
+      const localX = wingSide * Phaser.Math.Between(24, 34);
+      const localY = Phaser.Math.Between(-30, -14);
+      const spawnX =
+        this.player.x + localX * cosine - localY * sine;
+      const spawnY =
+        this.player.y + localX * sine + localY * cosine;
+
+      feather.age = 0;
+      feather.lifetime = Phaser.Math.FloatBetween(0.75, 1.25);
+      feather.velocityX =
+        body.velocity.x * 0.18 +
+        wingSide * Phaser.Math.Between(18, 44) +
+        Phaser.Math.Between(-16, 16);
+      feather.velocityY =
+        body.velocity.y * 0.14 + Phaser.Math.Between(24, 64);
+      feather.angularVelocity = Phaser.Math.FloatBetween(-4.5, 4.5);
+      feather.swayPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      feather.swaySpeed = Phaser.Math.FloatBetween(5, 9);
+
+      feather.image
+        .setPosition(spawnX, spawnY)
+        .setRotation(Phaser.Math.FloatBetween(-Math.PI, Math.PI))
+        .setScale(
+          feather.baseScale * Phaser.Math.FloatBetween(0.78, 1.12),
+        )
+        .setAlpha(Phaser.Math.FloatBetween(0.78, 1))
+        .setVisible(true);
+    }
+  }
+
+  private updateDodoJuiceParticles(deltaSeconds: number): void {
+    for (const feather of this.featherParticles) {
+      if (!feather.image.visible) {
+        continue;
+      }
+
+      feather.age += deltaSeconds;
+
+      if (feather.age >= feather.lifetime) {
+        feather.image.setVisible(false);
+        continue;
+      }
+
+      const progress = feather.age / feather.lifetime;
+      feather.swayPhase += feather.swaySpeed * deltaSeconds;
+      feather.velocityX *= Math.exp(-1.1 * deltaSeconds);
+      feather.velocityY += 38 * deltaSeconds;
+      feather.image.x +=
+        (feather.velocityX + Math.sin(feather.swayPhase) * 18) *
+        deltaSeconds;
+      feather.image.y += feather.velocityY * deltaSeconds;
+      feather.image.rotation += feather.angularVelocity * deltaSeconds;
+      feather.image.setAlpha(
+        progress < 0.58 ? 1 : 1 - (progress - 0.58) / 0.42,
+      );
+    }
+
+    for (const streak of this.windStreaks) {
+      if (!streak.rectangle.visible) {
+        continue;
+      }
+
+      streak.age += deltaSeconds;
+
+      if (streak.age >= streak.lifetime) {
+        streak.rectangle.setVisible(false);
+        continue;
+      }
+
+      const progress = streak.age / streak.lifetime;
+      streak.rectangle.x += streak.velocityX * deltaSeconds;
+      streak.rectangle.y += streak.velocityY * deltaSeconds;
+      streak.rectangle.setAlpha(
+        Math.sin(progress * Math.PI) * streak.maxAlpha,
+      );
+    }
   }
 
   private async initializeBestScore(): Promise<void> {
@@ -3810,6 +4061,8 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    const previousShield = this.playerShield;
+    const previousLives = this.playerLives;
     this.playRandomHitSound();
 
     const absorbedDamage = Math.min(this.playerShield, remainingDamage);
@@ -3841,6 +4094,18 @@ export class GameplayScene extends Phaser.Scene {
         this.enduranceStats.regeneration && this.playerLives > 0
           ? now + PLAYER_REGENERATION_DELAY_MS
           : null;
+    }
+
+    const appliedDamage =
+      previousShield -
+      this.playerShield +
+      (previousLives - this.playerLives);
+
+    if (appliedDamage > 0) {
+      this.spawnFeatherBurst(
+        Phaser.Math.RND.sign(),
+        Math.min(7, 3 + appliedDamage * 2),
+      );
     }
 
     this.emitHud();
