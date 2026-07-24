@@ -12,6 +12,7 @@ import {
   getLatestShopObjectInventory,
   type CosmeticEquippedDetail,
   type FlightHudDetail,
+  type RestartRequestDetail,
   type ShopObjectsUpdatedDetail,
 } from '../events';
 import {
@@ -57,6 +58,8 @@ const GROUND_Y = START_Y;
 const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
 const DODO_WING_SCALE = 0.14;
+const DODO_HITBOX_WIDTH = 52;
+const DODO_HITBOX_HEIGHT = 76;
 const DODO_FLIGHT_ORIGIN_Y = 0.75;
 const DODO_GROUND_ORIGIN_Y = 0.77;
 const DODO_GROUND_FEET_SCALE = DODO_GROUND_SCALE;
@@ -79,6 +82,11 @@ const DODO_LAVA_DEATH_FRAME_RATE = 10;
 const DODO_LAVA_DEATH_SCALE = 0.28;
 const DODO_LAVA_DEATH_OFFSET_Y = 48;
 const DODO_LAVA_DEATH_DEPTH = 12;
+const PHOENIX_REVIVAL_TEXTURE_KEY = 'dodo-phoenix-revival';
+const PHOENIX_REVIVAL_TEXTURE_PATH = '/assets/dodo/pheonix.png';
+const PHOENIX_REVIVAL_DEPTH = 1_003;
+const PHOENIX_REVIVAL_FLASH_DEPTH = 1_001;
+const PHOENIX_REVIVAL_SPARK_DEPTH = 1_002;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
 const CAMERA_FALL_FOLLOW_SPEED = 1.15;
@@ -87,8 +95,9 @@ const CAMERA_MAX_FALL_CATCHUP = 360;
 const GRAVITY_Y = 800;
 const BASE_FLAP_UPWARD_IMPULSE = 160;
 const FLAP_SIDE_IMPULSE = 30;
-const MAX_HORIZONTAL_SPEED = 300;
-const MAX_VERTICAL_SPEED = 450;
+const DEFAULT_FLIGHT_SPEED_MULTIPLIER = 0.5;
+const MAX_HORIZONTAL_SPEED = 300 * DEFAULT_FLIGHT_SPEED_MULTIPLIER;
+const MAX_VERTICAL_SPEED = 450 * DEFAULT_FLIGHT_SPEED_MULTIPLIER;
 const VELOCITY_ALIGNMENT = 0.62;
 
 const BASE_FLAP_TURN_IMPULSE = 50;
@@ -792,8 +801,7 @@ export class GameplayScene extends Phaser.Scene {
   private cosmeticLoadPromises = new Map<string, Promise<boolean>>();
   private cosmeticRequestVersions = new Map<CosmeticCategory, number>();
 
-  private pendingLeftFlap = false;
-  private pendingRightFlap = false;
+  private heldPointerSides = new Map<number, -1 | 1>();
   private angularVelocity = 0;
   private leftWingPhase = 0;
   private rightWingPhase = 0;
@@ -878,6 +886,10 @@ export class GameplayScene extends Phaser.Scene {
     this.load.image(
       DODO_LIGHTNING_DEATH_TEXTURE_KEY,
       DODO_LIGHTNING_DEATH_TEXTURE_PATH,
+    );
+    this.load.image(
+      PHOENIX_REVIVAL_TEXTURE_KEY,
+      PHOENIX_REVIVAL_TEXTURE_PATH,
     );
     for (const frameIndex of DODO_LAVA_DEATH_FRAME_INDICES) {
       const paddedIndex = frameIndex.toString().padStart(3, '0');
@@ -971,7 +983,7 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  create(): void {
+  create(data?: { startPaused?: boolean }): void {
     this.resetRuntimeState();
     this.createFlightSounds();
 
@@ -1000,7 +1012,7 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(false);
     this.player.setVelocity(0, 0);
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
-    this.player.body?.setSize(42, 62, true);
+    this.configurePlayerHitbox();
 
     this.groundFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-ground-feet');
     this.groundFeet
@@ -1089,6 +1101,10 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializePlayerState();
     this.updateDodoVisuals(0);
     this.runStartTime = this.time.now;
+
+    if (data?.startPaused) {
+      this.handlePauseRequest();
+    }
   }
 
   update(time: number, delta: number): void {
@@ -1128,6 +1144,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.heldPointerSides.clear();
     this.destroyFlightSounds();
     this.sound.stopByKey(THUNDER_SOUND_KEY);
     this.sound.stopByKey(LIGHTNING_SOUND_KEY);
@@ -1226,6 +1243,23 @@ export class GameplayScene extends Phaser.Scene {
     if (this.scene.isActive()) {
       this.updateDodoVisuals(0);
     }
+  }
+
+  private configurePlayerHitbox(): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const scaleX = Math.max(Math.abs(this.player.scaleX), Number.EPSILON);
+    const scaleY = Math.max(Math.abs(this.player.scaleY), Number.EPSILON);
+
+    // Arcade Physics interprète setSize dans les pixels source, puis applique
+    // l'échelle du sprite. Cette conversion conserve donc toujours une hitbox
+    // réelle de 52 × 76 pixels, quelle que soit la pose ou le cosmétique.
+    body.updateFromGameObject();
+    body.setSize(
+      DODO_HITBOX_WIDTH / scaleX,
+      DODO_HITBOX_HEIGHT / scaleY,
+      true,
+    );
+    body.updateFromGameObject();
   }
 
   private async initializeTalents(): Promise<void> {
@@ -1702,8 +1736,7 @@ export class GameplayScene extends Phaser.Scene {
     this.isGrounded = true;
     this.lastHudSnapshot = null;
     this.lastDodoPose = null;
-    this.pendingLeftFlap = false;
-    this.pendingRightFlap = false;
+    this.heldPointerSides.clear();
     this.angularVelocity = 0;
     this.leftWingPhase = 0;
     this.rightWingPhase = 0;
@@ -3115,27 +3148,27 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (!this.gameOver) {
-      this.queueFlapFromPointer(pointer);
+    if (this.gameOver || this.gamePaused) {
+      return;
     }
+
+    this.heldPointerSides.set(pointer.id, this.getPointerSide(pointer));
   }
 
-  private handlePointerMove(): void {
-    // Maintenir ou glisser le doigt ne dirige pas le Dodo.
-  }
-
-  private handlePointerUp(): void {
-    // Le controle se fait au tap : rien a relacher.
-  }
-
-  private queueFlapFromPointer(pointer: Phaser.Input.Pointer): void {
-    const neutralZone = 18;
-
-    if (pointer.x < GAME_WIDTH / 2 - neutralZone) {
-      this.pendingLeftFlap = true;
-    } else if (pointer.x > GAME_WIDTH / 2 + neutralZone) {
-      this.pendingRightFlap = true;
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!pointer.isDown || !this.heldPointerSides.has(pointer.id)) {
+      return;
     }
+
+    this.heldPointerSides.set(pointer.id, this.getPointerSide(pointer));
+  }
+
+  private handlePointerUp(pointer: Phaser.Input.Pointer): void {
+    this.heldPointerSides.delete(pointer.id);
+  }
+
+  private getPointerSide(pointer: Phaser.Input.Pointer): -1 | 1 {
+    return pointer.x < GAME_WIDTH / 2 ? -1 : 1;
   }
 
   private consumeFlapDirection(time: number): number {
@@ -3153,24 +3186,22 @@ export class GameplayScene extends Phaser.Scene {
       return direction;
     };
 
-    if (this.pendingLeftFlap || this.pendingRightFlap) {
-      const direction = this.getDirectionFromSides(
-        this.pendingLeftFlap,
-        this.pendingRightFlap,
-      );
-      this.pendingLeftFlap = false;
-      this.pendingRightFlap = false;
-      return acceptDirection(direction);
+    let leftHeld = false;
+    let rightHeld = false;
+
+    for (const side of this.heldPointerSides.values()) {
+      leftHeld ||= side === -1;
+      rightHeld ||= side === 1;
+
+      if (leftHeld && rightHeld) {
+        break;
+      }
     }
 
-    const leftPressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.left) ||
-      Phaser.Input.Keyboard.JustDown(this.keyA);
-    const rightPressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.right) ||
-      Phaser.Input.Keyboard.JustDown(this.keyD);
+    leftHeld ||= this.cursors.left.isDown || this.keyA.isDown;
+    rightHeld ||= this.cursors.right.isDown || this.keyD.isDown;
 
-    return acceptDirection(this.getDirectionFromSides(leftPressed, rightPressed));
+    return acceptDirection(this.getDirectionFromSides(leftHeld, rightHeld));
   }
 
   private getDirectionFromSides(leftPressed: boolean, rightPressed: boolean): number {
@@ -3462,6 +3493,7 @@ export class GameplayScene extends Phaser.Scene {
         this.player.setTexture('dodo-pose-ground');
         this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
         this.player.setScale(DODO_GROUND_SCALE);
+        this.configurePlayerHitbox();
         this.leftWing.setVisible(false);
         this.rightWing.setVisible(false);
         this.flightFeet.setVisible(false);
@@ -3482,6 +3514,7 @@ export class GameplayScene extends Phaser.Scene {
       this.player.setTexture('dodo-body-flight');
       this.player.setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y);
       this.player.setScale(DODO_BODY_SCALE);
+      this.configurePlayerHitbox();
       this.leftWing.setVisible(true);
       this.rightWing.setVisible(true);
       this.groundFeet.setVisible(false);
@@ -3842,6 +3875,8 @@ export class GameplayScene extends Phaser.Scene {
     this.groundFeet.clearTint();
     this.flightFeet.clearTint();
 
+    this.playPhoenixRevivalEffect();
+
     this.tweens.add({
       targets: [
         this.player,
@@ -3868,6 +3903,113 @@ export class GameplayScene extends Phaser.Scene {
     return true;
   }
 
+  private playPhoenixRevivalEffect(): void {
+    const centerX = GAME_WIDTH / 2;
+    const centerY = GAME_HEIGHT / 2;
+    const warmFlash = this.add
+      .rectangle(
+        centerX,
+        centerY,
+        GAME_WIDTH,
+        GAME_HEIGHT,
+        0xff8a00,
+        1,
+      )
+      .setScrollFactor(0)
+      .setDepth(PHOENIX_REVIVAL_FLASH_DEPTH)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0.68);
+    const fireHalo = this.add
+      .circle(centerX, centerY, 115, 0xffc428, 0.72)
+      .setScrollFactor(0)
+      .setDepth(PHOENIX_REVIVAL_SPARK_DEPTH)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.18);
+
+    this.cameras.main.flash(180, 255, 208, 72);
+
+    this.tweens.add({
+      targets: warmFlash,
+      alpha: 0,
+      duration: 720,
+      ease: 'Quad.easeOut',
+      onComplete: () => warmFlash.destroy(),
+    });
+
+    this.tweens.add({
+      targets: fireHalo,
+      alpha: 0,
+      scale: 3.2,
+      duration: 760,
+      ease: 'Cubic.easeOut',
+      onComplete: () => fireHalo.destroy(),
+    });
+
+    const phoenix = this.add
+      .image(centerX, centerY, PHOENIX_REVIVAL_TEXTURE_KEY)
+      .setScrollFactor(0)
+      .setDepth(PHOENIX_REVIVAL_DEPTH)
+      .setAlpha(0);
+    const phoenixScale = Math.min(
+      (GAME_WIDTH * 0.88) / phoenix.width,
+      (GAME_HEIGHT * 0.52) / phoenix.height,
+    );
+
+    phoenix.setScale(phoenixScale * 0.18);
+
+    this.tweens.add({
+      targets: phoenix,
+      alpha: 1,
+      scale: phoenixScale,
+      duration: 360,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(420, () => {
+          this.tweens.add({
+            targets: phoenix,
+            alpha: 0,
+            scale: phoenixScale * 1.12,
+            y: centerY - 24,
+            duration: 460,
+            ease: 'Sine.easeIn',
+            onComplete: () => phoenix.destroy(),
+          });
+        });
+      },
+    });
+
+    const sparkColors = [0xffdc57, 0xff9d24, 0xff5b13] as const;
+
+    for (let index = 0; index < 18; index += 1) {
+      const startX = centerX + Phaser.Math.Between(-145, 145);
+      const startY = centerY + Phaser.Math.Between(70, 185);
+      const spark = this.add
+        .circle(
+          startX,
+          startY,
+          Phaser.Math.Between(2, 6),
+          sparkColors[index % sparkColors.length],
+          Phaser.Math.FloatBetween(0.6, 0.95),
+        )
+        .setScrollFactor(0)
+        .setDepth(PHOENIX_REVIVAL_SPARK_DEPTH)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setScale(0.35);
+
+      this.tweens.add({
+        targets: spark,
+        x: startX + Phaser.Math.Between(-38, 38),
+        y: startY - Phaser.Math.Between(170, 330),
+        alpha: 0,
+        scale: Phaser.Math.FloatBetween(1.1, 1.8),
+        delay: Phaser.Math.Between(0, 180),
+        duration: Phaser.Math.Between(620, 1_050),
+        ease: 'Cubic.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+  }
+
   private async finishGame(
     reason: FinishGameReason = 'default',
     allowRevival = true,
@@ -3882,6 +4024,7 @@ export class GameplayScene extends Phaser.Scene {
 
     this.gameOver = true;
     this.deathReason = reason;
+    this.heldPointerSides.clear();
     this.playerLives = 0;
     this.emitHud();
     this.stopFlightSounds();
@@ -3947,10 +4090,14 @@ export class GameplayScene extends Phaser.Scene {
     });
   }
 
-  private handleRestartRequest = (): void => {
+  private handleRestartRequest = (event: Event): void => {
+    const { startPaused = false } =
+      (event as CustomEvent<RestartRequestDetail>).detail ?? {};
+
     this.tweens.resumeAll();
     this.physics.world.resume();
-    this.scene.restart();
+    this.sound.stopAll();
+    this.scene.restart({ startPaused });
   };
 
   private handleRewardedReviveRequest = (): void => {
@@ -3961,7 +4108,7 @@ export class GameplayScene extends Phaser.Scene {
     this.hasUsedRewardedRevive = true;
     this.gameOver = false;
     this.deathReason = null;
-    this.gamePaused = false;
+    this.gamePaused = true;
     this.playerLives = 1;
     this.playerShield = 0;
     this.outOfScreenSince = null;
@@ -3978,8 +4125,7 @@ export class GameplayScene extends Phaser.Scene {
         : null;
     this.perchedBranch = null;
     this.pendingPowerTakeoff = false;
-    this.pendingLeftFlap = false;
-    this.pendingRightFlap = false;
+    this.heldPointerSides.clear();
     this.angularVelocity = 0;
     this.isGrounded = false;
     this.lastDodoPose = null;
@@ -4018,25 +4164,30 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.sound.stopByKey(GAME_OVER_SOUND_KEY);
-    this.physics.world.resume();
-    this.tweens.resumeAll();
+    this.physics.world.pause();
+    this.tweens.pauseAll();
+    this.sound.pauseAll();
     this.updateDodoVisuals(0);
     this.updateOffscreenIndicator();
     this.emitHud();
     emitFallWarning({ secondsRemaining: null });
     emitRewardedRevived();
-    this.startFlightSound();
   };
 
   private handlePauseRequest = (): void => {
+    if (this.gamePaused) {
+      return;
+    }
+
     this.gamePaused = true;
+    this.heldPointerSides.clear();
     this.physics.world.pause();
     this.tweens.pauseAll();
-    this.stopFlightSounds();
+    this.sound.pauseAll();
   };
 
   private handleResumeRequest = (): void => {
-    if (this.gameOver) {
+    if (this.gameOver || !this.gamePaused) {
       return;
     }
 
@@ -4044,6 +4195,7 @@ export class GameplayScene extends Phaser.Scene {
     void this.initializeShopObjects();
     this.physics.world.resume();
     this.tweens.resumeAll();
+    this.sound.resumeAll();
 
     if (!this.isGrounded) {
       this.startFlightSound();

@@ -40,7 +40,7 @@ export const ENDURANCE_TALENT_MAX_LEVEL_BY_ID = {
   recharge: 1,
 } as const satisfies Record<EnduranceTalentId, number>;
 
-export const ENDURANCE_PHOENIX_COST = 180;
+export const ENDURANCE_PHOENIX_COST = 100;
 
 export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
   {
@@ -49,7 +49,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
     icon: '/assets/competences/Endurance/coeur.png',
     description: 'Ajoute une vie au dodo pour survivre plus longtemps.',
     levels: [2, 3, 4],
-    costs: [30, 60, 95],
+    costs: [10, 25, 40],
     statLabel: 'Vies',
   },
   {
@@ -59,7 +59,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
     description:
       'Regagne une vie apres 7 secondes sans subir de degats.',
     levels: [1],
-    costs: [75],
+    costs: [50],
     statLabel: 'Soin',
     requirement: {
       talentId: 'heart',
@@ -74,7 +74,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
     description:
       'Ajoute un bouclier qui bloque les moustiques du niveau Forest.',
     levels: [1],
-    costs: [90],
+    costs: [30],
     statLabel: 'Bouclier',
     requirement: {
       talentId: 'heart',
@@ -89,7 +89,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
     description:
       'Repare le bouclier 10 secondes apres sa destruction.',
     levels: [1],
-    costs: [110],
+    costs: [55],
     statLabel: 'Recharge',
     requirement: {
       talentId: 'shield',

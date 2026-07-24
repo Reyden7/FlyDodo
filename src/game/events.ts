@@ -42,6 +42,10 @@ export interface ShopObjectsUpdatedDetail {
   shopObjects: ShopObjectInventory;
 }
 
+export interface RestartRequestDetail {
+  startPaused: boolean;
+}
+
 export const gameEvents = new EventTarget();
 const SHOP_OBJECT_INVENTORY_GLOBAL_KEY = '__flydodoShopObjectInventory';
 
@@ -133,8 +137,12 @@ export function emitMovementStarted(): void {
   gameEvents.dispatchEvent(new Event('flydodo:movement-started'));
 }
 
-export function requestRestart(): void {
-  gameEvents.dispatchEvent(new Event('flydodo:restart-request'));
+export function requestRestart(startPaused = false): void {
+  gameEvents.dispatchEvent(
+    new CustomEvent<RestartRequestDetail>('flydodo:restart-request', {
+      detail: { startPaused },
+    }),
+  );
 }
 
 export function requestRewardedRevive(): void {

@@ -104,9 +104,23 @@ const GameCanvas = lazy(async () => {
 });
 
 type TutorialSide = 'left' | 'right' | null;
+type TutorialStep =
+  | 'controls'
+  | 'shop'
+  | 'talents'
+  | 'tree'
+  | 'ultimate-control'
+  | 'ultimate-endurance'
+  | 'ultimate-talents'
+  | null;
 type MainMenuButton = 'play' | 'shop' | 'tutorial';
 type ShopTab = 'accessories' | 'talents' | 'items' | 'watermelons';
 type TalentTreeTab = 'control' | 'endurance' | 'talents';
+interface AdAudioSnapshot {
+  menuMusicWasPlaying: boolean;
+  gameMusicWasPlaying: boolean;
+  interfaceAudioWasRunning: boolean;
+}
 type SelectedControlTalent =
   | {
       kind: 'talent';
@@ -194,13 +208,13 @@ const SHOP_OBJECT_SLOTS: ReadonlyArray<{
     id: 'life-vial',
     title: 'Fiole de vie',
     icon: '/assets/objets/fioleVie.png',
-    price: 50,
+    price: 10,
   },
   {
     id: 'watermelon-magnet',
-    title: 'Aimant a pasteques',
+    title: 'Aimant à pastèque',
     icon: '/assets/objets/aimant.png',
-    price: 40,
+    price: 5,
   },
 ] as const;
 
@@ -314,11 +328,14 @@ export default function App(): React.JSX.Element {
   const [playerDeathReason, setPlayerDeathReason] =
     useState<PlayerDeathReason>('default');
   const [hasMovedThisRun, setHasMovedThisRun] = useState(false);
+  const [isGamePaused, setIsGamePaused] = useState(false);
   const [hasUsedRewardedRevive, setHasUsedRewardedRevive] = useState(false);
   const [rewardedReviveError, setRewardedReviveError] = useState(false);
   const [pendingRewardedAd, setPendingRewardedAd] = useState<
     'revive' | 'watermelons' | null
   >(null);
+  const [isQuickWatermelonPending, setIsQuickWatermelonPending] =
+    useState(false);
   const [isInterstitialPending, setIsInterstitialPending] = useState(false);
   const deathsSinceInterstitialRef = useRef(0);
   const nextInterstitialDeathRef = useRef(Math.random() < 0.5 ? 5 : 6);
@@ -326,6 +343,7 @@ export default function App(): React.JSX.Element {
 
   const [showControlTutorial, setShowControlTutorial] = useState(true);
   const [tutorialSide, setTutorialSide] = useState<TutorialSide>(null);
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>(null);
   const tutorialAcknowledgedRef = useRef(false);
 
   const [isShopOpen, setIsShopOpen] = useState(false);
@@ -397,6 +415,52 @@ export default function App(): React.JSX.Element {
     music.pause();
     music.currentTime = 0;
     void music.play().catch(() => undefined);
+  };
+
+  const pauseAppAudioForAd = async (): Promise<AdAudioSnapshot> => {
+    const menuMusic = menuMusicRef.current;
+    const gameMusic = gameMusicRef.current;
+    const audioContext = interfaceAudioContextRef.current;
+    const snapshot: AdAudioSnapshot = {
+      menuMusicWasPlaying: Boolean(menuMusic && !menuMusic.paused),
+      gameMusicWasPlaying: Boolean(gameMusic && !gameMusic.paused),
+      interfaceAudioWasRunning: audioContext?.state === 'running',
+    };
+
+    menuMusic?.pause();
+    gameMusic?.pause();
+
+    if (snapshot.interfaceAudioWasRunning && audioContext) {
+      await audioContext.suspend().catch(() => undefined);
+    }
+
+    return snapshot;
+  };
+
+  const resumeAppAudioAfterAd = async (
+    snapshot: AdAudioSnapshot,
+    restoreMusic: boolean,
+  ): Promise<void> => {
+    const audioContext = interfaceAudioContextRef.current;
+
+    if (
+      snapshot.interfaceAudioWasRunning &&
+      audioContext?.state === 'suspended'
+    ) {
+      await audioContext.resume().catch(() => undefined);
+    }
+
+    if (!restoreMusic) {
+      return;
+    }
+
+    if (snapshot.menuMusicWasPlaying) {
+      void menuMusicRef.current?.play().catch(() => undefined);
+    }
+
+    if (snapshot.gameMusicWasPlaying) {
+      void gameMusicRef.current?.play().catch(() => undefined);
+    }
   };
 
   const getInterfaceAudioContext = (): AudioContext => {
@@ -503,6 +567,7 @@ export default function App(): React.JSX.Element {
     const onPlayerDied = (event: Event): void => {
       const { reason } = (event as CustomEvent<PlayerDiedDetail>).detail;
       setPlayerDeathReason(reason);
+      setIsGamePaused(false);
 
       const gameMusic = gameMusicRef.current;
 
@@ -525,10 +590,10 @@ export default function App(): React.JSX.Element {
 
     const onRewardedRevived = (): void => {
       setIsGameOver(false);
+      setIsGamePaused(true);
       setPlayerDeathReason('default');
       setFallSeconds(null);
       setRewardedReviveError(false);
-      startGameMusic();
     };
 
     const onMovementStarted = (): void => {
@@ -652,7 +717,10 @@ export default function App(): React.JSX.Element {
       setTutorialSide(side);
 
       hideTimer = window.setTimeout(() => {
+        requestGamePause();
+        setFallSeconds(null);
         setShowControlTutorial(false);
+        setTutorialStep('shop');
       }, 750);
     };
 
@@ -751,6 +819,7 @@ export default function App(): React.JSX.Element {
     setShield(0);
     setMaxShield(0);
     setHasMovedThisRun(false);
+    setIsGamePaused(false);
     setHasUsedRewardedRevive(false);
     setRewardedReviveError(false);
   };
@@ -760,6 +829,7 @@ export default function App(): React.JSX.Element {
     tutorialAcknowledgedRef.current = !withTutorial;
     setTutorialSide(null);
     setShowControlTutorial(withTutorial);
+    setTutorialStep(withTutorial ? 'controls' : null);
     setIsMainMenuOpen(false);
   };
 
@@ -772,7 +842,11 @@ export default function App(): React.JSX.Element {
     }
 
     playInterfaceSound(
-      button === 'play' ? MENU_PLAY_SOUND_PATH : MENU_BUTTON_SOUND_PATH,
+      button === 'play'
+        ? MENU_PLAY_SOUND_PATH
+        : button === 'shop'
+          ? SHOP_MAIN_TAB_SOUND_PATH
+          : MENU_BUTTON_SOUND_PATH,
     );
 
     if (button === 'play') {
@@ -790,6 +864,10 @@ export default function App(): React.JSX.Element {
   const selectShopTab = (tab: ShopTab): void => {
     playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
     setSelectedShopTab(tab);
+
+    if (tab === 'talents' && tutorialStep === 'talents') {
+      setTutorialStep('tree');
+    }
   };
 
   const selectShopCategory = (category: ShopFilterCategory): void => {
@@ -807,24 +885,43 @@ export default function App(): React.JSX.Element {
       return;
     }
 
+    let shouldStartPaused = false;
+
     if (interstitialDueRef.current) {
       setIsInterstitialPending(true);
-      const wasShown = await showInterstitialAd();
-      setIsInterstitialPending(false);
+      requestGamePause();
+      const audioSnapshot = await pauseAppAudioForAd();
+      let wasShown = false;
+
+      try {
+        wasShown = await showInterstitialAd();
+      } finally {
+        await resumeAppAudioAfterAd(audioSnapshot, false);
+        setIsInterstitialPending(false);
+      }
 
       if (wasShown) {
+        shouldStartPaused = true;
         interstitialDueRef.current = false;
         deathsSinceInterstitialRef.current = 0;
         nextInterstitialDeathRef.current = Math.random() < 0.5 ? 5 : 6;
       }
     }
 
-    startGameMusic();
+    if (!shouldStartPaused) {
+      startGameMusic();
+    }
+
     resetRunState();
-    requestRestart();
+    setIsGamePaused(shouldStartPaused);
+    requestRestart(shouldStartPaused);
   };
 
-  const openShop = async (): Promise<void> => {
+  const openShop = async (playSound = true): Promise<void> => {
+    if (playSound) {
+      playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
+    }
+
     setShopNotice(null);
     setSelectedShopTab('accessories');
     setSelectedTalentTreeTab('control');
@@ -837,12 +934,18 @@ export default function App(): React.JSX.Element {
     }
 
     setIsShopOpen(true);
+
+    if (tutorialStep === 'shop') {
+      setTutorialStep('talents');
+    }
+
     const profile = await loadLatestPlayerProfile();
     setPlayerProfile(profile);
     emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
   };
 
   const closeShop = (): void => {
+    playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
     setShopNotice(null);
     setSelectedControlTalent(null);
     setIsControlTalentSheetClosing(false);
@@ -850,8 +953,47 @@ export default function App(): React.JSX.Element {
     setIsEnduranceTalentSheetClosing(false);
     setIsShopOpen(false);
 
+    if (
+      tutorialStep === 'talents' ||
+      tutorialStep === 'tree' ||
+      tutorialStep === 'ultimate-control' ||
+      tutorialStep === 'ultimate-endurance' ||
+      tutorialStep === 'ultimate-talents'
+    ) {
+      setTutorialStep('shop');
+    }
+
     if (!isGameOver && !isMainMenuOpen) {
       requestGameResume();
+    }
+  };
+
+  const pauseGame = (): void => {
+    if (isGamePaused || isGameOver || isShopOpen || isMainMenuOpen) {
+      return;
+    }
+
+    playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
+    gameMusicRef.current?.pause();
+    requestGamePause();
+    setIsGamePaused(true);
+  };
+
+  const resumeGame = (): void => {
+    if (!isGamePaused || isGameOver || isShopOpen || isMainMenuOpen) {
+      return;
+    }
+
+    playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
+    requestGameResume();
+    setIsGamePaused(false);
+
+    const gameMusic = gameMusicRef.current;
+
+    if (gameMusic) {
+      void gameMusic.play().catch(() => undefined);
+    } else {
+      startGameMusic();
     }
   };
 
@@ -864,7 +1006,15 @@ export default function App(): React.JSX.Element {
     setRewardedReviveError(false);
 
     try {
-      const rewardEarned = await showRewardedAd();
+      requestGamePause();
+      const audioSnapshot = await pauseAppAudioForAd();
+      let rewardEarned = false;
+
+      try {
+        rewardEarned = await showRewardedAd();
+      } finally {
+        await resumeAppAudioAfterAd(audioSnapshot, false);
+      }
 
       if (!rewardEarned) {
         setRewardedReviveError(true);
@@ -887,7 +1037,17 @@ export default function App(): React.JSX.Element {
     setShopNotice(null);
 
     try {
-      const rewardEarned = await showRewardedAd();
+      if (!isMainMenuOpen) {
+        requestGamePause();
+      }
+      const audioSnapshot = await pauseAppAudioForAd();
+      let rewardEarned = false;
+
+      try {
+        rewardEarned = await showRewardedAd();
+      } finally {
+        await resumeAppAudioAfterAd(audioSnapshot, true);
+      }
 
       if (!rewardEarned) {
         playInterfaceSound(SHOP_ERROR_SOUND_PATH);
@@ -901,6 +1061,24 @@ export default function App(): React.JSX.Element {
       setShopNotice('+5 pastèques !');
     } finally {
       setPendingRewardedAd(null);
+    }
+  };
+
+  const handleQuickWatermelons = async (): Promise<void> => {
+    if (isQuickWatermelonPending) {
+      return;
+    }
+
+    setIsQuickWatermelonPending(true);
+    setShopNotice(null);
+
+    try {
+      const profile = await addWatermelons(100);
+      setPlayerProfile(profile);
+      playInterfaceSound(SHOP_BUY_SOUND_PATH);
+      setShopNotice('+100 pastèques !');
+    } finally {
+      setIsQuickWatermelonPending(false);
     }
   };
 
@@ -983,7 +1161,7 @@ export default function App(): React.JSX.Element {
       if (!isShopObjectActive(playerProfile, item.id)) {
         if (playerProfile.watermelons < item.price) {
           playInterfaceSound(SHOP_ERROR_SOUND_PATH);
-          setShopNotice('Pas assez de pasteques pour cet objet.');
+          setShopNotice('Pas assez de pastèques pour cet objet.');
           return;
         }
 
@@ -994,7 +1172,7 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pasteques pour cet objet.');
+        setShopNotice('Pas assez de pastèques pour cet objet.');
         return;
       }
 
@@ -1015,7 +1193,7 @@ export default function App(): React.JSX.Element {
     pack: (typeof WATERMELON_PACKS)[number],
   ): void => {
     playInterfaceSound(SHOP_BUY_SOUND_PATH);
-    setShopNotice(`Paiement bientot disponible : ${pack.amount} pasteques.`);
+    setShopNotice(`Paiement bientôt disponible : ${pack.amount} pastèques.`);
   };
 
   const selectControlTalent = (target: SelectedControlTalent): void => {
@@ -1159,7 +1337,7 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pasteques pour cette competence.');
+        setShopNotice('Pas assez de pastèques pour cette compétence.');
         return;
       }
 
@@ -1235,7 +1413,7 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pasteques pour cette competence.');
+        setShopNotice('Pas assez de pastèques pour cette compétence.');
         return;
       }
 
@@ -1311,7 +1489,7 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pasteques pour cette competence.');
+        setShopNotice('Pas assez de pastèques pour cette compétence.');
         return;
       }
 
@@ -1532,6 +1710,55 @@ export default function App(): React.JSX.Element {
       })()
     : null;
 
+  const ultimateTutorial =
+    tutorialStep === 'ultimate-control'
+      ? {
+          step: '1 / 3',
+          tree: 'CONTRÔLE',
+          title: CONTROL_MASTER_TALENT.title,
+          icon: CONTROL_MASTER_TALENT.icon,
+          description:
+            'Débloque le meilleur contrôle possible pour toutes les compétences.',
+          buttonLabel: 'VOIR PHÉNIX',
+        }
+      : tutorialStep === 'ultimate-endurance'
+        ? {
+            step: '2 / 3',
+            tree: 'ENDURANCE',
+            title: ENDURANCE_PHOENIX_TALENT.title,
+            icon: ENDURANCE_PHOENIX_TALENT.icon,
+            description:
+              'Une fois par partie, le Dodo renaît là où il est mort avec toutes ses vies et son bouclier.',
+            buttonLabel: 'VOIR FESTIN',
+          }
+        : tutorialStep === 'ultimate-talents'
+          ? {
+              step: '3 / 3',
+              tree: 'TALENTS',
+              title: BLUE_FEAST_TALENT.title,
+              icon: BLUE_FEAST_TALENT.icon,
+              description:
+                'Attire toutes les pastèques visibles à l’écran directement vers le Dodo.',
+              buttonLabel: 'TERMINER',
+            }
+          : null;
+
+  const advanceUltimateTutorial = (): void => {
+    if (tutorialStep === 'ultimate-control') {
+      setSelectedTalentTreeTab('endurance');
+      setTutorialStep('ultimate-endurance');
+      return;
+    }
+
+    if (tutorialStep === 'ultimate-endurance') {
+      setSelectedTalentTreeTab('talents');
+      setTutorialStep('ultimate-talents');
+      return;
+    }
+
+    setTutorialStep(null);
+  };
+
   return (
     <main className="app-shell">
       {!isMainMenuOpen && (
@@ -1560,7 +1787,9 @@ export default function App(): React.JSX.Element {
                 clickedMainMenuButton === 'shop' ? ' is-clicked' : ''
               }`}
               aria-label="Boutique"
-              onClick={() => handleMainMenuButtonClick('shop', openShop)}
+              onClick={() =>
+                handleMainMenuButtonClick('shop', () => openShop(false))
+              }
             />
             <button
               type="button"
@@ -1633,8 +1862,8 @@ export default function App(): React.JSX.Element {
           aria-label="Tutoriel des commandes"
         >
           <div className="control-tutorial__heading">
-            <strong>TOUCHE UN CÔTÉ</strong>
-            <span>Une pression fait battre une aile</span>
+            <strong>MAINTIENS UN CÔTÉ</strong>
+            <span>Maintiens les deux côtés pour voler droit</span>
           </div>
 
           <div className="control-tutorial__buttons">
@@ -1650,7 +1879,7 @@ export default function App(): React.JSX.Element {
                 ←
               </span>
               <strong>GAUCHE</strong>
-              <small>Le Dodo tourne à gauche</small>
+              <small>Maintiens pour tourner à gauche</small>
             </div>
 
             <div
@@ -1665,11 +1894,27 @@ export default function App(): React.JSX.Element {
                 →
               </span>
               <strong>DROITE</strong>
-              <small>Le Dodo tourne à droite</small>
+              <small>Maintiens pour tourner à droite</small>
             </div>
           </div>
         </section>
       )}
+
+      {tutorialStep === 'shop' &&
+        !isMainMenuOpen &&
+        !isGameOver &&
+        !isShopOpen && (
+          <section className="shop-tutorial-prompt" aria-live="polite">
+            <div className="shop-tutorial-prompt__card">
+              <span>ÉTAPE 2</span>
+              <strong>DÉCOUVRE LA BOUTIQUE</strong>
+              <p>Touche le bouton Boutique pour améliorer ton Dodo.</p>
+            </div>
+            <span className="shop-tutorial-prompt__arrow" aria-hidden="true">
+              ↘
+            </span>
+          </section>
+        )}
 
       {fallSeconds !== null && !isMainMenuOpen && !isGameOver && (
         <div className="fall-warning">
@@ -1678,13 +1923,49 @@ export default function App(): React.JSX.Element {
         </div>
       )}
 
-      {!isMainMenuOpen && !isGameOver && !isShopOpen && !hasMovedThisRun && (
-        <button
-          type="button"
-          className="floating-shop-button"
-          aria-label="Ouvrir la boutique"
-          onClick={() => void openShop()}
-        />
+      {!isMainMenuOpen &&
+        !isGameOver &&
+        !isShopOpen &&
+        tutorialStep !== 'controls' &&
+        (!hasMovedThisRun || tutorialStep === 'shop') && (
+          <button
+            type="button"
+            className={`floating-shop-button${
+              tutorialStep === 'shop' ? ' is-tutorial-target' : ''
+            }`}
+            aria-label="Ouvrir la boutique"
+            onClick={() => void openShop()}
+          />
+        )}
+
+      {!isMainMenuOpen &&
+        !isGameOver &&
+        !isShopOpen &&
+        hasMovedThisRun &&
+        tutorialStep === null &&
+        !isGamePaused && (
+          <button
+            type="button"
+            className="floating-pause-button"
+            aria-label="Mettre le jeu en pause"
+            onClick={pauseGame}
+          />
+        )}
+
+      {!isMainMenuOpen && !isGameOver && !isShopOpen && isGamePaused && (
+        <section
+          className="game-pause"
+          role="dialog"
+          aria-modal="true"
+          onClick={resumeGame}
+        >
+          <div className="game-pause__card">
+            <span className="game-pause__icon" aria-hidden="true" />
+            <h2>PAUSE</h2>
+            <p>Touche l’écran pour continuer.</p>
+            <button type="button">CONTINUER</button>
+          </div>
+        </section>
       )}
 
       {!isMainMenuOpen && isGameOver && !isShopOpen && (
@@ -1750,7 +2031,11 @@ export default function App(): React.JSX.Element {
       {isShopOpen && (
         <section className="shop-overlay" role="dialog" aria-modal="true">
           <div
-            className={`shop-panel shop-panel--${selectedShopTab}`}
+            className={`shop-panel shop-panel--${selectedShopTab}${
+              tutorialStep === 'talents'
+                ? ' shop-panel--tutorial-talents'
+                : ''
+            }`}
           >
             <button
               type="button"
@@ -1770,6 +2055,15 @@ export default function App(): React.JSX.Element {
                   alt=""
                   aria-hidden="true"
                 />
+                <button
+                  type="button"
+                  className="shop-quick-watermelon-button"
+                  aria-label="Ajouter rapidement 100 pastèques"
+                  disabled={isQuickWatermelonPending}
+                  onClick={() => void handleQuickWatermelons()}
+                >
+                  {isQuickWatermelonPending ? '...' : '+100'}
+                </button>
                 {selectedShopTab === 'watermelons' && (
                   <button
                     type="button"
@@ -1812,6 +2106,8 @@ export default function App(): React.JSX.Element {
                   aria-selected={selectedShopTab === 'talents'}
                   className={`shop-main-tab shop-main-tab--talents${
                     selectedShopTab === 'talents' ? ' is-active' : ''
+                  }${
+                    tutorialStep === 'talents' ? ' is-tutorial-target' : ''
                   }`}
                   onClick={() => selectShopTab('talents')}
                 >
@@ -1871,6 +2167,17 @@ export default function App(): React.JSX.Element {
                 </div>
               </div>
             </header>
+
+            {tutorialStep === 'talents' && (
+              <section className="talent-tutorial-prompt" aria-live="polite">
+                <span>ÉTAPE 3</span>
+                <strong>OUVRE L’ARBRE DE COMPÉTENCES</strong>
+                <p>Touche l’onglet Talents qui clignote.</p>
+                <span className="talent-tutorial-prompt__arrow" aria-hidden="true">
+                  ↑
+                </span>
+              </section>
+            )}
 
             {shopNotice && (
               <div className="shop-notice" role="status">
@@ -2086,7 +2393,11 @@ export default function App(): React.JSX.Element {
                           type="button"
                           className={`control-talent-node control-talent-node--master${
                             controlTalentState.master ? ' is-owned' : ''
-                          }${!allControlTalentsMaxed ? ' is-locked' : ''}`}
+                          }${!allControlTalentsMaxed ? ' is-locked' : ''}${
+                            tutorialStep === 'ultimate-control'
+                              ? ' is-tutorial-ultimate'
+                              : ''
+                          }`}
                           style={getTalentNodePositionStyle(
                             CONTROL_MASTER_NODE_POSITION,
                           )}
@@ -2231,7 +2542,11 @@ export default function App(): React.JSX.Element {
                           type="button"
                           className={`endurance-talent-node endurance-talent-node--phoenix${
                             enduranceTalentState.phoenix ? ' is-owned' : ''
-                          }${!allEnduranceTalentsMaxed ? ' is-locked' : ''}`}
+                          }${!allEnduranceTalentsMaxed ? ' is-locked' : ''}${
+                            tutorialStep === 'ultimate-endurance'
+                              ? ' is-tutorial-ultimate'
+                              : ''
+                          }`}
                           style={getTalentNodePositionStyle(
                             ENDURANCE_PHOENIX_NODE_POSITION,
                           )}
@@ -2395,7 +2710,11 @@ export default function App(): React.JSX.Element {
                           type="button"
                           className={`blue-talent-node blue-talent-node--feast${
                             blueTalentState.feast ? ' is-owned' : ''
-                          }${!allBlueTalentsMaxed ? ' is-locked' : ''}`}
+                          }${!allBlueTalentsMaxed ? ' is-locked' : ''}${
+                            tutorialStep === 'ultimate-talents'
+                              ? ' is-tutorial-ultimate'
+                              : ''
+                          }`}
                           style={getTalentNodePositionStyle(
                             BLUE_FEAST_NODE_POSITION,
                           )}
@@ -2544,6 +2863,74 @@ export default function App(): React.JSX.Element {
               )}
             </div>
 
+            {tutorialStep === 'tree' && selectedShopTab === 'talents' && (
+              <section
+                className="talent-tree-tutorial"
+                role="dialog"
+                aria-label="Tutoriel de l’arbre de compétences"
+              >
+                <div className="talent-tree-tutorial__card">
+                  <span className="talent-tree-tutorial__eyebrow">
+                    ARBRE DE COMPÉTENCES
+                  </span>
+                  <h2>FAIS GRANDIR TON DODO</h2>
+                  <p>
+                    Dépense tes pastèques pour débloquer les compétences, niveau
+                    après niveau.
+                  </p>
+                  <ul>
+                    <li>
+                      <strong>Contrôle</strong> améliore le vol.
+                    </li>
+                    <li>
+                      <strong>Endurance</strong> aide à survivre.
+                    </li>
+                    <li>
+                      <strong>Talents</strong> augmente tes récompenses.
+                    </li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTalentTreeTab('control');
+                      setTutorialStep('ultimate-control');
+                    }}
+                  >
+                    VOIR LES COMPÉTENCES ULTIMES
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {ultimateTutorial && selectedShopTab === 'talents' && (
+              <section
+                className="ultimate-tutorial"
+                role="dialog"
+                aria-label={`Tutoriel de la compétence ultime ${ultimateTutorial.title}`}
+              >
+                <div className="ultimate-tutorial__card">
+                  <img
+                    src={ultimateTutorial.icon}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <div className="ultimate-tutorial__copy">
+                    <span>
+                      ULTIME {ultimateTutorial.tree} · {ultimateTutorial.step}
+                    </span>
+                    <h2>{ultimateTutorial.title}</h2>
+                    <p>{ultimateTutorial.description}</p>
+                    <small>
+                      Débloque tous les niveaux de cet arbre pour pouvoir
+                      l’acheter.
+                    </small>
+                  </div>
+                  <button type="button" onClick={advanceUltimateTutorial}>
+                    {ultimateTutorial.buttonLabel}
+                  </button>
+                </div>
+              </section>
+            )}
           </div>
         </section>
       )}

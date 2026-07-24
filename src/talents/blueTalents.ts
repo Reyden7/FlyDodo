@@ -49,17 +49,17 @@ export const BLUE_TALENT_MAX_LEVEL_BY_ID = {
   powerTakeoff: 1,
 } as const satisfies Record<BlueTalentId, number>;
 
-export const BLUE_FEAST_COST = 180;
+export const BLUE_FEAST_COST = 100;
 
 export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'watermelonMagnet',
-    title: 'Aimant a pasteque',
+    title: 'Aimant à pastèque',
     icon: '/assets/competences/Talents/aimantPasteque.png',
     description:
-      "Augmente le rayon d'attraction de l'objet aimant a pasteque.",
+      "Augmente le rayon d'attraction de l'objet aimant à pastèque.",
     levels: [150, 300, 500],
-    costs: [35, 55, 80],
+    costs: [6, 12, 40],
     statLabel: 'Rayon',
   },
   {
@@ -67,9 +67,9 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     title: 'Multiplicateur fruite',
     icon: '/assets/competences/Talents/multiplicateurFruit.png',
     description:
-      'Ajoute des pasteques bonus a chaque pasteque ramassee par le dodo.',
+      'Ajoute des pastèques bonus à chaque pastèque ramassée par le dodo.',
     levels: [1, 2, 3],
-    costs: [35, 55, 80],
+    costs: [10, 25, 35],
     statLabel: 'Bonus',
   },
   {
@@ -79,7 +79,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     description:
       'Permet au dodo de se poser sur les branches du niveau Forest en arrivant par le dessus.',
     levels: [1],
-    costs: [70],
+    costs: [10],
     statLabel: 'Pose',
   },
   {
@@ -87,9 +87,9 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     title: 'Detecteur de fruit',
     icon: '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
     description:
-      'Ajoute un bouton qui affiche une fleche vers la prochaine pasteque.',
+      'Ajoute un bouton qui affiche une fleche vers la prochaine pastèque.',
     levels: [1],
-    costs: [65],
+    costs: [5],
     statLabel: 'Radar',
   },
   {
@@ -97,9 +97,9 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     title: 'Reaction en chaine',
     icon: '/assets/competences/Talents/reactionEnChaine.png',
     description:
-      "Multiplie les prochaines pasteques par 2 apres deux collectes d'affilee sans en manquer.",
+      "Multiplie les prochaines pastèques par 2 apres deux collectes d'affilee sans en manquer.",
     levels: [1],
-    costs: [80],
+    costs: [25],
     statLabel: 'Combo',
   },
   {
@@ -109,7 +109,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
     description:
       "Double la puissance du premier battement quand le dodo decolle depuis une branche.",
     levels: [1],
-    costs: [90],
+    costs: [35],
     statLabel: 'Depart',
     requirement: {
       talentId: 'perch',
@@ -124,7 +124,7 @@ export const BLUE_FEAST_TALENT = {
   title: 'Festin',
   icon: '/assets/competences/Talents/festin.png',
   description:
-    "Attire toutes les pasteques visibles a l'ecran directement vers le dodo.",
+    "Attire toutes les pastèques visibles a l'ecran directement vers le dodo.",
   cost: BLUE_FEAST_COST,
 } as const;
 

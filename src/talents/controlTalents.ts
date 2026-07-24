@@ -26,9 +26,9 @@ export interface ControlTalentDefinition {
 
 export const CONTROL_TALENT_MAX_LEVEL = 4;
 
-export const CONTROL_TALENT_LEVEL_COSTS = [20, 35, 55, 80] as const;
+export const CONTROL_TALENT_LEVEL_COSTS = [5, 10, 30, 40] as const;
 
-export const CONTROL_MASTER_COST = 150;
+export const CONTROL_MASTER_COST = 100;
 
 export const CONTROL_MASTER_VALUES: ControlTalentStats = {
   flapUpwardImpulse: 210,

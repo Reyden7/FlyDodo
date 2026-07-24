@@ -523,6 +523,236 @@ button {
   filter: drop-shadow(0 4px 5px rgb(35 68 84 / 22%));
 }
 
+.floating-shop-button.is-tutorial-target {
+  z-index: 20;
+  border-radius: 50%;
+  animation: tutorial-target-pulse 1.15s ease-in-out infinite;
+}
+
+.shop-tutorial-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  color: white;
+  background: rgb(3 20 35 / 55%);
+  pointer-events: none;
+  animation: tutorial-appear 260ms ease-out both;
+}
+
+.shop-tutorial-prompt__card {
+  position: absolute;
+  right: 20px;
+  bottom: 132px;
+  display: grid;
+  width: min(78vw, 310px);
+  gap: 4px;
+  padding: 17px 19px;
+  border: 3px solid #f7cb51;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgb(42 105 148 / 97%), rgb(15 52 84 / 98%));
+  box-shadow:
+    0 7px 0 #7e5114,
+    0 18px 32px rgb(0 0 0 / 35%);
+  text-align: center;
+}
+
+.shop-tutorial-prompt__card span,
+.talent-tutorial-prompt > span:first-child,
+.talent-tree-tutorial__eyebrow {
+  color: #ffe47b;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.shop-tutorial-prompt__card strong,
+.talent-tutorial-prompt strong {
+  font-size: 1rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+}
+
+.shop-tutorial-prompt__card p,
+.talent-tutorial-prompt p {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.shop-tutorial-prompt__arrow {
+  position: absolute;
+  right: 80px;
+  bottom: 84px;
+  color: #ffe47b;
+  font-size: 2.8rem;
+  font-weight: 1000;
+  filter: drop-shadow(0 3px 1px rgb(55 32 4 / 55%));
+  animation: tutorial-arrow-bounce 700ms ease-in-out infinite alternate;
+}
+
+.floating-pause-button {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(26px, calc(env(safe-area-inset-bottom) + 26px));
+  z-index: 16;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border: 4px solid #f6ca57;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 25%, rgb(255 255 255 / 32%), transparent 30%),
+    linear-gradient(180deg, #2f8fc5, #14527f 75%, #0d3a60);
+  box-shadow:
+    inset 0 0 0 3px #7a470f,
+    0 5px 0 #6e3e0c,
+    0 9px 14px rgb(12 38 60 / 34%);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.floating-pause-button::before,
+.floating-pause-button::after {
+  position: absolute;
+  top: 16px;
+  width: 8px;
+  height: 24px;
+  border: 2px solid #673a08;
+  border-radius: 3px;
+  background: #ffe47b;
+  content: "";
+}
+
+.floating-pause-button::before {
+  left: 15px;
+}
+
+.floating-pause-button::after {
+  right: 15px;
+}
+
+.floating-pause-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 0 0 3px #7a470f,
+    0 3px 0 #6e3e0c,
+    0 5px 9px rgb(12 38 60 / 28%);
+}
+
+.game-pause {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(4 18 31 / 58%);
+  backdrop-filter: blur(5px);
+  cursor: pointer;
+  animation: game-over-backdrop-appear 180ms ease-out both;
+}
+
+.game-pause__card {
+  display: grid;
+  width: min(82vw, 330px);
+  place-items: center;
+  gap: 10px;
+  padding: 26px 28px 30px;
+  border: 5px solid #d28a24;
+  border-radius: 24px;
+  color: #482006;
+  background:
+    linear-gradient(rgb(255 241 190 / 88%), rgb(255 221 137 / 88%)),
+    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+  box-shadow:
+    inset 0 0 0 3px #fff1ae,
+    0 8px 0 #6d3b0c,
+    0 22px 40px rgb(0 0 0 / 38%);
+  text-align: center;
+  animation: tutorial-appear 220ms ease-out both;
+}
+
+.game-pause__icon {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border: 4px solid #f6ca57;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2f8fc5, #14527f);
+  box-shadow:
+    inset 0 0 0 3px #7a470f,
+    0 4px 0 #6e3e0c;
+}
+
+.game-pause__icon::before,
+.game-pause__icon::after {
+  position: absolute;
+  top: 13px;
+  width: 8px;
+  height: 22px;
+  border: 2px solid #673a08;
+  border-radius: 3px;
+  background: #ffe47b;
+  content: "";
+}
+
+.game-pause__icon::before {
+  left: 13px;
+}
+
+.game-pause__icon::after {
+  right: 13px;
+}
+
+.game-pause__card h2 {
+  margin: 2px 0 0;
+  color: #ffb719;
+  font-size: clamp(2.1rem, 11vw, 3rem);
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow:
+    0 3px 0 #f27b05,
+    -2px -2px 0 #123e66,
+    2px -2px 0 #123e66,
+    -2px 2px 0 #123e66,
+    2px 2px 0 #123e66;
+}
+
+.game-pause__card p {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 850;
+}
+
+.game-pause__card button {
+  width: min(100%, 230px);
+  min-height: 52px;
+  padding: 8px 20px 11px;
+  border: 3px solid #315f12;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(180deg, #8bd437, #42900f 78%, #2d6f0b);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 35%),
+    0 5px 0 #234f0a,
+    0 9px 14px rgb(58 30 5 / 20%);
+  font-size: 1.15rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 1px rgb(21 62 7 / 75%);
+  cursor: pointer;
+}
+
+.game-pause__card button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 3px 0 #234f0a,
+    0 5px 9px rgb(58 30 5 / 16%);
+}
+
 .game-over {
   position: absolute;
   inset: 0;
@@ -790,6 +1020,39 @@ button {
   }
 }
 
+@keyframes tutorial-target-pulse {
+  from {
+    filter:
+      drop-shadow(0 0 0 rgb(255 227 104 / 0%))
+      drop-shadow(0 7px 7px rgb(35 68 84 / 26%));
+    transform: scale(1);
+  }
+  to {
+    filter:
+      drop-shadow(0 0 13px rgb(255 227 104 / 100%))
+      drop-shadow(0 7px 7px rgb(35 68 84 / 26%));
+    transform: scale(1.08);
+  }
+}
+
+@keyframes tutorial-arrow-bounce {
+  from {
+    transform: translateY(-3px);
+  }
+  to {
+    transform: translateY(5px);
+  }
+}
+
+@keyframes ultimate-tutorial-pulse {
+  from {
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    transform: translateX(-50%) scale(1.1);
+  }
+}
+
 @keyframes tap-ripple {
   0% {
     opacity: 0;
@@ -986,6 +1249,45 @@ button {
   cursor: pointer;
   filter: drop-shadow(0 4px 2px rgb(55 27 5 / 22%));
   -webkit-tap-highlight-color: transparent;
+}
+
+.shop-main-tab.is-tutorial-target {
+  position: relative;
+  z-index: 8;
+  border-radius: 13px;
+  outline: 3px solid #ffe47b;
+  outline-offset: 4px;
+  box-shadow:
+    0 0 0 7px rgb(255 228 123 / 18%),
+    0 0 24px rgb(255 214 73 / 90%);
+  animation: tutorial-target-pulse 1.15s ease-in-out infinite;
+}
+
+.shop-panel--tutorial-talents .shop-header {
+  z-index: 8;
+}
+
+.talent-tutorial-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-content: start center;
+  gap: 5px;
+  padding: 245px 24px 24px;
+  color: white;
+  background: rgb(4 20 33 / 64%);
+  text-align: center;
+  pointer-events: none;
+  animation: tutorial-appear 240ms ease-out both;
+}
+
+.talent-tutorial-prompt__arrow {
+  color: #ffe47b !important;
+  font-size: 2.35rem !important;
+  line-height: 1;
+  filter: drop-shadow(0 3px 1px rgb(55 32 4 / 55%));
+  animation: tutorial-arrow-bounce 700ms ease-in-out infinite alternate;
 }
 
 .shop-main-tab--accessories {
@@ -1217,6 +1519,40 @@ button {
   font-size: 1.16rem;
   font-weight: 1000;
   line-height: 1;
+}
+
+.shop-quick-watermelon-button {
+  position: absolute;
+  bottom: -16px;
+  left: 4px;
+  z-index: 4;
+  min-width: 43px;
+  height: 22px;
+  padding: 0 7px 1px;
+  border: 2px solid #fff2b8;
+  border-radius: 999px;
+  color: white;
+  background: linear-gradient(180deg, #8bd437, #3d8d0d);
+  box-shadow:
+    0 2px 0 #245707,
+    0 4px 8px rgb(0 0 0 / 25%);
+  font-size: 0.68rem;
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shop-quick-watermelon-button:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 #245707,
+    0 2px 5px rgb(0 0 0 / 22%);
+}
+
+.shop-quick-watermelon-button:disabled {
+  cursor: wait;
+  filter: saturate(0.55);
+  opacity: 0.78;
 }
 
 .shop-reward-watermelon-button {
@@ -1605,6 +1941,216 @@ button {
  
 }
 
+.talent-tree-tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: end center;
+  padding:
+    24px
+    max(18px, env(safe-area-inset-right))
+    max(28px, calc(env(safe-area-inset-bottom) + 20px))
+    max(18px, env(safe-area-inset-left));
+  background: rgb(3 18 31 / 48%);
+  backdrop-filter: blur(2px);
+  animation: tutorial-appear 260ms ease-out both;
+}
+
+.talent-tree-tutorial__card {
+  display: grid;
+  width: min(100%, 390px);
+  gap: 8px;
+  padding: 20px 22px 22px;
+  border: 4px solid #d28a24;
+  border-radius: 23px;
+  color: #482006;
+  background:
+    linear-gradient(rgb(255 241 190 / 94%), rgb(255 221 137 / 96%)),
+    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+  box-shadow:
+    inset 0 0 0 3px #fff1ae,
+    0 7px 0 #6d3b0c,
+    0 22px 40px rgb(0 0 0 / 42%);
+  text-align: center;
+}
+
+.talent-tree-tutorial__card h2 {
+  margin: 0;
+  color: #174e77;
+  font-size: clamp(1.15rem, 5vw, 1.45rem);
+  font-weight: 1000;
+  letter-spacing: 0.025em;
+}
+
+.talent-tree-tutorial__card p {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.28;
+}
+
+.talent-tree-tutorial__card ul {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 4px;
+  padding: 0;
+  font-size: 0.79rem;
+  line-height: 1.22;
+  list-style: none;
+}
+
+.talent-tree-tutorial__card li strong {
+  color: #16618f;
+}
+
+.talent-tree-tutorial__card button {
+  width: min(100%, 245px);
+  min-height: 50px;
+  margin: 2px auto 0;
+  padding: 8px 18px 11px;
+  border: 3px solid #315f12;
+  border-radius: 12px;
+  color: white;
+  background: linear-gradient(180deg, #8bd437, #42900f 78%, #2d6f0b);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 35%),
+    0 5px 0 #234f0a;
+  font-size: 1rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.talent-tree-tutorial__card button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 3px 0 #234f0a;
+}
+
+.ultimate-tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: end center;
+  padding:
+    18px
+    max(12px, env(safe-area-inset-right))
+    max(14px, calc(env(safe-area-inset-bottom) + 10px))
+    max(12px, env(safe-area-inset-left));
+  pointer-events: none;
+  animation: tutorial-appear 240ms ease-out both;
+}
+
+.ultimate-tutorial__card {
+  display: grid;
+  width: min(100%, 430px);
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 7px 11px;
+  align-items: center;
+  padding: 12px 13px 14px;
+  border: 3px solid #e3b93f;
+  border-radius: 18px;
+  color: #fff5bd;
+  background:
+    linear-gradient(180deg, rgb(62 73 15 / 97%), rgb(37 48 9 / 98%)),
+    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+  box-shadow:
+    inset 0 0 0 2px rgb(255 244 170 / 45%),
+    0 6px 0 #5e3b09,
+    0 18px 34px rgb(0 0 0 / 42%);
+  pointer-events: auto;
+}
+
+.ultimate-tutorial__card > img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 7px rgb(255 225 91 / 65%));
+}
+
+.ultimate-tutorial__copy {
+  min-width: 0;
+  text-align: left;
+}
+
+.ultimate-tutorial__copy > span {
+  color: #ffe36e;
+  font-size: 0.62rem;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+}
+
+.ultimate-tutorial__copy h2 {
+  margin: 1px 0 2px;
+  color: white;
+  font-size: 1.08rem;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.ultimate-tutorial__copy p {
+  margin: 0;
+  font-size: 0.73rem;
+  font-weight: 800;
+  line-height: 1.18;
+}
+
+.ultimate-tutorial__copy small {
+  display: block;
+  margin-top: 4px;
+  color: #ffe994;
+  font-size: 0.64rem;
+  font-weight: 850;
+  line-height: 1.16;
+}
+
+.ultimate-tutorial__card button {
+  grid-column: 1 / -1;
+  width: min(100%, 245px);
+  min-height: 42px;
+  margin: 2px auto 0;
+  padding: 7px 15px 9px;
+  border: 3px solid #315f12;
+  border-radius: 11px;
+  color: white;
+  background: linear-gradient(180deg, #8bd437, #42900f 78%, #2d6f0b);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 35%),
+    0 4px 0 #234f0a;
+  font-size: 0.88rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.ultimate-tutorial__card button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 30%),
+    0 2px 0 #234f0a;
+}
+
+.control-talent-node.is-tutorial-ultimate,
+.endurance-talent-node.is-tutorial-ultimate,
+.blue-talent-node.is-tutorial-ultimate {
+  z-index: 11;
+  animation: ultimate-tutorial-pulse 900ms ease-in-out infinite alternate;
+}
+
+.control-talent-node.is-tutorial-ultimate img,
+.endurance-talent-node.is-tutorial-ultimate img,
+.blue-talent-node.is-tutorial-ultimate img {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 5px #fff6af)
+    drop-shadow(0 0 14px #ffd21f)
+    saturate(1.12)
+    brightness(1.08);
+}
+
 .talent-tree-panel::before {
   
 }
@@ -1960,6 +2506,17 @@ button {
 .blue-talent-node.is-locked img {
   opacity: 0.52;
   filter: grayscale(0.72) brightness(0.62);
+}
+
+.control-talent-node.is-tutorial-ultimate.is-locked img,
+.endurance-talent-node.is-tutorial-ultimate.is-locked img,
+.blue-talent-node.is-tutorial-ultimate.is-locked img {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 5px #fff6af)
+    drop-shadow(0 0 14px #ffd21f)
+    saturate(1.12)
+    brightness(1.08);
 }
 
 .blue-talent-node:active img {

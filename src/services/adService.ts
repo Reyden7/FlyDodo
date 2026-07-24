@@ -4,7 +4,6 @@ const ANDROID_TEST_INTERSTITIAL_ID =
   'ca-app-pub-3940256099942544/1033173712';
 const ANDROID_TEST_REWARDED_ID =
   'ca-app-pub-3940256099942544/5224354917';
-const REWARDED_AD_TIMEOUT_MS = 120_000;
 
 const configuredInterstitialId =
   import.meta.env.VITE_ADMOB_ANDROID_INTERSTITIAL_ID?.trim();
@@ -72,14 +71,50 @@ export async function showInterstitialAd(): Promise<boolean> {
       return false;
     }
 
-    const { AdMob } = await import('@capacitor-community/admob');
+    const { AdMob, InterstitialAdPluginEvents } = await import(
+      '@capacitor-community/admob'
+    );
     await AdMob.prepareInterstitial({
       adId: interstitialAdId,
       isTesting,
       immersiveMode: true,
     });
-    await AdMob.showInterstitial();
-    return true;
+
+    return await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const listenerHandles: PluginListenerHandle[] = [];
+
+      const finish = (wasDismissed: boolean): void => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+
+        for (const handle of listenerHandles) {
+          void handle.remove();
+        }
+
+        resolve(wasDismissed);
+      };
+
+      void Promise.all([
+        AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () =>
+          finish(true),
+        ),
+        AdMob.addListener(InterstitialAdPluginEvents.FailedToShow, () =>
+          finish(false),
+        ),
+      ])
+        .then((handles) => {
+          listenerHandles.push(...handles);
+
+          // La promesse native se résout dès l'affichage. Seul Dismissed
+          // indique que le joueur a réellement quitté la publicité.
+          void AdMob.showInterstitial().catch(() => finish(false));
+        })
+        .catch(() => finish(false));
+    });
   } catch (error) {
     console.warn('Publicite interstitielle indisponible.', error);
     return false;
@@ -116,7 +151,7 @@ export async function showRewardedAd(): Promise<boolean> {
 
     return await new Promise<boolean>((resolve) => {
       let settled = false;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let rewardEarned = false;
       const listenerHandles: PluginListenerHandle[] = [];
 
       const finish = (rewardEarned: boolean): void => {
@@ -126,10 +161,6 @@ export async function showRewardedAd(): Promise<boolean> {
 
         settled = true;
 
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-        }
-
         for (const handle of listenerHandles) {
           void handle.remove();
         }
@@ -138,17 +169,24 @@ export async function showRewardedAd(): Promise<boolean> {
       };
 
       void Promise.all([
-        AdMob.addListener(RewardAdPluginEvents.Rewarded, () => finish(true)),
-        AdMob.addListener(RewardAdPluginEvents.Dismissed, () => finish(false)),
+        AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
+          rewardEarned = true;
+        }),
+        AdMob.addListener(RewardAdPluginEvents.Dismissed, () =>
+          finish(rewardEarned),
+        ),
         AdMob.addListener(RewardAdPluginEvents.FailedToShow, () => finish(false)),
       ])
         .then((handles) => {
           listenerHandles.push(...handles);
-          timeoutId = setTimeout(() => finish(false), REWARDED_AD_TIMEOUT_MS);
 
-          // Sur Android, cette promesse ne se resout que si la recompense est gagnee.
+          // Sur Android, cette promesse se résout quand la récompense est
+          // gagnée, avant que la publicité soit fermée. On mémorise donc le
+          // gain, puis on attend obligatoirement l'événement Dismissed.
           void AdMob.showRewardVideoAd()
-            .then(() => finish(true))
+            .then(() => {
+              rewardEarned = true;
+            })
             .catch(() => finish(false));
         })
         .catch(() => finish(false));
