@@ -8,6 +8,26 @@ import {
   type CSSProperties,
 } from 'react';
 import {
+  AUDIO_CHANNELS,
+  getAudioSettings,
+  setAudioChannelVolume,
+  subscribeAudioSettings,
+  type AudioChannel,
+  type AudioSettings,
+} from './audio/audioSettings';
+import {
+  APP_LANGUAGES,
+  getAppLanguage,
+  setAppLanguage,
+  subscribeAppLanguage,
+  translate,
+  type AppLanguage,
+} from './i18n/i18n';
+import {
+  localizeShopItemTitle,
+  localizeTalent,
+} from './i18n/entityTranslations';
+import {
   emitCosmeticEquipped,
   emitShopObjectsUpdated,
   emitTalentsUpdated,
@@ -226,12 +246,12 @@ const WATERMELON_PACKS: ReadonlyArray<{
   pile: number;
   src:string;
 }> = [
-  { id: 'small', title: 'Petit sac', amount: '500', price: '2,29 €', pile: 1, src:"/assets/shopPasteque/petitSac.png" },
-  { id: 'medium', title: 'Sac moyen', amount: '1 200', price: '4,49 €', pile: 1 , src:"/assets/shopPasteque/sacMoyen.png"},
-  { id: 'large', title: 'Grand sac', amount: '2 800', price: '8,99 €', pile: 1, src:"/assets/shopPasteque/GrandSac.png" },
-  { id: 'chest', title: 'Coffre de pastèques', amount: '6 000', price: '17,99 €', pile: 1, src:"/assets/shopPasteque/Coffre.png" },
-  { id: 'barrel', title: 'Tonneau de pastèques', amount: '12 000', price: '32,99 €', pile: 1 , src:"/assets/shopPasteque/Tonneau.png"},
-  { id: 'mountain', title: 'Montagne de pastèques', amount: '25 000', price: '64,99 €', pile: 1, src:"/assets/shopPasteque/Montagne.png" },
+  { id: 'small', title: 'Petit sac', amount: '5', price: '2,29 €', pile: 1, src:"/assets/shopPasteque/petitSac.png" },
+  { id: 'medium', title: 'Sac moyen', amount: '10', price: '4,49 €', pile: 1 , src:"/assets/shopPasteque/sacMoyen.png"},
+  { id: 'large', title: 'Grand sac', amount: '15', price: '8,99 €', pile: 1, src:"/assets/shopPasteque/GrandSac.png" },
+  { id: 'chest', title: 'Coffre de pastèques', amount: '50', price: '17,99 €', pile: 1, src:"/assets/shopPasteque/Coffre.png" },
+  { id: 'barrel', title: 'Tonneau de pastèques', amount: '75', price: '32,99 €', pile: 1 , src:"/assets/shopPasteque/Tonneau.png"},
+  { id: 'mountain', title: 'Montagne de pastèques', amount: '150', price: '64,99 €', pile: 1, src:"/assets/shopPasteque/Montagne.png" },
 ] as const;
 
 function isShopObjectActive(
@@ -309,6 +329,144 @@ function SurvivalIconRow({
   );
 }
 
+function AudioOptionsPanel({
+  settings,
+  language,
+  onClose,
+}: {
+  settings: AudioSettings;
+  language: AppLanguage;
+  onClose: () => void;
+}): React.JSX.Element {
+  const t = (
+    key: string,
+    variables?: Record<string, string | number>,
+  ): string => translate(key, variables, language);
+  const lastAudibleVolumeRef = useRef<Record<AudioChannel, number>>(
+    AUDIO_CHANNELS.reduce<Record<AudioChannel, number>>(
+      (volumes, { id }) => {
+        volumes[id] = settings[id] > 0 ? settings[id] : 1;
+        return volumes;
+      },
+      {} as Record<AudioChannel, number>,
+    ),
+  );
+
+  const updateVolume = (channel: AudioChannel, volume: number): void => {
+    if (volume > 0) {
+      lastAudibleVolumeRef.current[channel] = volume;
+    }
+    setAudioChannelVolume(channel, volume);
+  };
+
+  const toggleMute = (channel: AudioChannel): void => {
+    const currentVolume = settings[channel];
+    updateVolume(
+      channel,
+      currentVolume > 0
+        ? 0
+        : Math.max(0.05, lastAudibleVolumeRef.current[channel] ?? 1),
+    );
+  };
+
+  return (
+    <section
+      className="audio-options"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="audio-options-title"
+      onClick={onClose}
+    >
+      <div
+        className="audio-options__panel"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="audio-options__header">
+          <span className="audio-options__gear" aria-hidden="true">
+            ⚙
+          </span>
+          <h2 id="audio-options-title">{t('options.title')}</h2>
+          <button
+            type="button"
+            className="audio-options__close"
+            aria-label={t('options.close')}
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="audio-options__channels">
+          <div className="audio-options__language">
+            <label htmlFor="app-language">{t('options.language')}</label>
+            <select
+              id="app-language"
+              value={language}
+              onChange={(event) =>
+                setAppLanguage(event.currentTarget.value as AppLanguage)
+              }
+            >
+              {APP_LANGUAGES.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {AUDIO_CHANNELS.map(({ id }) => {
+            const label = t(`audio.${id}`);
+            const volume = settings[id];
+            const isMuted = volume <= 0;
+
+            return (
+              <div className="audio-options__channel" key={id}>
+                <label htmlFor={`audio-volume-${id}`}>{label}</label>
+                <button
+                  type="button"
+                  className={`audio-options__mute${
+                    isMuted ? ' is-muted' : ''
+                  }`}
+                  aria-label={t(isMuted ? 'audio.unmute' : 'audio.mute', {
+                    label,
+                  })}
+                  aria-pressed={isMuted}
+                  onClick={() => toggleMute(id)}
+                >
+                  <img
+                    src={
+                      isMuted
+                        ? '/assets/ui/volume-barré.png'
+                        : '/assets/ui/volume.png'
+                    }
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </button>
+                <input
+                  id={`audio-volume-${id}`}
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  style={{ '--audio-volume': `${volume * 100}%` } as CSSProperties}
+                  aria-label={t('audio.volume', { label })}
+                  aria-valuetext={`${Math.round(volume * 100)} %`}
+                  onChange={(event) =>
+                    updateVolume(id, Number(event.currentTarget.value))
+                  }
+                />
+                <output>{Math.round(volume * 100)}%</output>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App(): React.JSX.Element {
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
   const [clickedMainMenuButton, setClickedMainMenuButton] =
@@ -326,6 +484,10 @@ export default function App(): React.JSX.Element {
   const [fallSeconds, setFallSeconds] = useState<number | null>(null);
   const [warningReason, setWarningReason] = useState<'fall' | 'side'>('fall');
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isAudioOptionsOpen, setIsAudioOptionsOpen] = useState(false);
+  const [audioSettings, setAudioSettings] =
+    useState<AudioSettings>(getAudioSettings);
+  const [language, setLanguage] = useState<AppLanguage>(getAppLanguage);
   const [playerDeathReason, setPlayerDeathReason] =
     useState<PlayerDeathReason>('default');
   const [hasMovedThisRun, setHasMovedThisRun] = useState(false);
@@ -381,10 +543,15 @@ export default function App(): React.JSX.Element {
   const blueTalentSheetCloseTimerRef = useRef<number | null>(null);
   const menuMusicRef = useRef<HTMLAudioElement | null>(null);
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
+  const audioSettingsRef = useRef(audioSettings);
   const menuPopTimersRef = useRef<number[]>([]);
   const mainMenuActionTimerRef = useRef<number | null>(null);
   const interfaceAudioContextRef = useRef<AudioContext | null>(null);
   const reversedEquipSoundBufferRef = useRef<AudioBuffer | null>(null);
+  const t = (
+    key: string,
+    variables?: Record<string, string | number>,
+  ): string => translate(key, variables, language);
 
   const filteredShopItems = useMemo(
     () =>
@@ -398,7 +565,7 @@ export default function App(): React.JSX.Element {
 
   const playInterfaceSound = (src: string, volume = 1): void => {
     const sound = new Audio(src);
-    sound.volume = volume;
+    sound.volume = volume * audioSettingsRef.current.interface;
     void sound.play().catch(() => undefined);
   };
 
@@ -409,10 +576,11 @@ export default function App(): React.JSX.Element {
       music = new Audio(GAME_MUSIC_PATH);
       music.loop = true;
       music.preload = 'auto';
-      music.volume = GAME_MUSIC_VOLUME;
+      music.volume = GAME_MUSIC_VOLUME * audioSettingsRef.current.music;
       gameMusicRef.current = music;
     }
 
+    music.volume = GAME_MUSIC_VOLUME * audioSettingsRef.current.music;
     music.pause();
     music.currentTime = 0;
     void music.play().catch(() => undefined);
@@ -516,7 +684,7 @@ export default function App(): React.JSX.Element {
 
       const source = context.createBufferSource();
       const gain = context.createGain();
-      gain.gain.value = 1;
+      gain.gain.value = audioSettingsRef.current.interface;
       source.buffer = reversedEquipSoundBufferRef.current;
       source.connect(gain);
       gain.connect(context.destination);
@@ -525,6 +693,39 @@ export default function App(): React.JSX.Element {
       playInterfaceSound(SHOP_EQUIP_SOUND_PATH);
     }
   };
+
+  useEffect(
+    () =>
+      subscribeAudioSettings((settings) => {
+        audioSettingsRef.current = settings;
+        setAudioSettings(settings);
+      }),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeAppLanguage((nextLanguage) => {
+        setLanguage(nextLanguage);
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  useEffect(() => {
+    audioSettingsRef.current = audioSettings;
+
+    if (menuMusicRef.current) {
+      menuMusicRef.current.volume = 0.72 * audioSettings.music;
+    }
+
+    if (gameMusicRef.current) {
+      gameMusicRef.current.volume = GAME_MUSIC_VOLUME * audioSettings.music;
+    }
+  }, [audioSettings]);
 
   useEffect(() => {
     void initializeAds();
@@ -636,9 +837,9 @@ export default function App(): React.JSX.Element {
 
     music.loop = false;
     music.preload = 'auto';
-    music.volume = 0.72;
+    music.volume = 0.72 * audioSettingsRef.current.music;
     popSound.preload = 'auto';
-    popSound.volume = 1;
+    popSound.volume = audioSettingsRef.current.interface;
     menuMusicRef.current = music;
 
     const clearPopTimers = (): void => {
@@ -654,7 +855,7 @@ export default function App(): React.JSX.Element {
 
     const playPopSound = (): void => {
       const pop = popSound.cloneNode(true) as HTMLAudioElement;
-      pop.volume = popSound.volume;
+      pop.volume = audioSettingsRef.current.interface;
       pop.currentTime = 0;
       void pop.play().catch(() => undefined);
     };
@@ -863,6 +1064,16 @@ export default function App(): React.JSX.Element {
     }, MAIN_MENU_CLICK_DELAY_MS);
   };
 
+  const openAudioOptions = (): void => {
+    playInterfaceSound(MENU_BUTTON_SOUND_PATH);
+    setIsAudioOptionsOpen(true);
+  };
+
+  const closeAudioOptions = (): void => {
+    playInterfaceSound(MENU_BUTTON_SOUND_PATH, 0.7);
+    setIsAudioOptionsOpen(false);
+  };
+
   const selectShopTab = (tab: ShopTab): void => {
     playInterfaceSound(SHOP_MAIN_TAB_SOUND_PATH);
     setSelectedShopTab(tab);
@@ -1053,14 +1264,14 @@ export default function App(): React.JSX.Element {
 
       if (!rewardEarned) {
         playInterfaceSound(SHOP_ERROR_SOUND_PATH);
-        setShopNotice('Regarde la publicité jusqu’au bout pour gagner +5.');
+        setShopNotice(t('notice.watchAd'));
         return;
       }
 
       const profile = await addWatermelons(5);
       setPlayerProfile(profile);
       playInterfaceSound(SHOP_BUY_SOUND_PATH);
-      setShopNotice('+5 pastèques !');
+      setShopNotice(t('notice.watermelons5'));
     } finally {
       setPendingRewardedAd(null);
     }
@@ -1078,7 +1289,7 @@ export default function App(): React.JSX.Element {
       const profile = await addWatermelons(100);
       setPlayerProfile(profile);
       playInterfaceSound(SHOP_BUY_SOUND_PATH);
-      setShopNotice('+100 pastèques !');
+      setShopNotice(t('notice.watermelons100'));
     } finally {
       setIsQuickWatermelonPending(false);
     }
@@ -1098,7 +1309,7 @@ export default function App(): React.JSX.Element {
       if (!isOwned) {
         if (playerProfile.watermelons < item.price) {
           playInterfaceSound(SHOP_ERROR_SOUND_PATH);
-          setShopNotice('Pas assez de pastèques pour cet accessoire.');
+          setShopNotice(t('notice.notEnoughAccessory'));
           return;
         }
 
@@ -1107,11 +1318,13 @@ export default function App(): React.JSX.Element {
         setPlayerProfile(result.profile);
 
         if (result.status === 'not-enough-watermelons') {
-          setShopNotice('Pas assez de pastèques pour cet accessoire.');
+          setShopNotice(t('notice.notEnoughAccessory'));
           return;
         }
 
-        setShopNotice(`${item.title} acheté !`);
+        setShopNotice(t('notice.itemBought', {
+          name: localizeShopItemTitle(item.id, item.title, language),
+        }));
         return;
       }
 
@@ -1127,7 +1340,9 @@ export default function App(): React.JSX.Element {
             category: item.category,
             itemId: null,
           });
-          setShopNotice(`${item.title} déséquipé !`);
+          setShopNotice(t('notice.itemUnequipped', {
+            name: localizeShopItemTitle(item.id, item.title, language),
+          }));
         }
 
         return;
@@ -1142,7 +1357,9 @@ export default function App(): React.JSX.Element {
           category: item.category,
           itemId: item.id,
         });
-        setShopNotice(`${item.title} équipé !`);
+        setShopNotice(t('notice.itemEquipped', {
+          name: localizeShopItemTitle(item.id, item.title, language),
+        }));
       }
     } finally {
       setPendingItemId(null);
@@ -1163,7 +1380,7 @@ export default function App(): React.JSX.Element {
       if (!isShopObjectActive(playerProfile, item.id)) {
         if (playerProfile.watermelons < item.price) {
           playInterfaceSound(SHOP_ERROR_SOUND_PATH);
-          setShopNotice('Pas assez de pastèques pour cet objet.');
+          setShopNotice(t('notice.notEnoughObject'));
           return;
         }
 
@@ -1174,18 +1391,22 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pastèques pour cet objet.');
+        setShopNotice(t('notice.notEnoughObject'));
         return;
       }
 
       if (result.status === 'already-owned') {
         emitShopObjectsUpdated({ shopObjects: result.profile.shopObjects });
-        setShopNotice(`${item.title} deja actif.`);
+        setShopNotice(t('notice.objectActive', {
+          name: t(`shop.object.${item.id}`),
+        }));
         return;
       }
 
       emitShopObjectsUpdated({ shopObjects: result.profile.shopObjects });
-      setShopNotice(`${item.title} achete !`);
+      setShopNotice(t('notice.itemBought', {
+        name: t(`shop.object.${item.id}`),
+      }));
     } finally {
       setPendingShopObjectId(null);
     }
@@ -1195,7 +1416,7 @@ export default function App(): React.JSX.Element {
     pack: (typeof WATERMELON_PACKS)[number],
   ): void => {
     playInterfaceSound(SHOP_BUY_SOUND_PATH);
-    setShopNotice(`Paiement bientôt disponible : ${pack.amount} pastèques.`);
+    setShopNotice(t('shop.paymentSoon', { amount: pack.amount }));
   };
 
   const selectControlTalent = (target: SelectedControlTalent): void => {
@@ -1339,23 +1560,23 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pastèques pour cette compétence.');
+        setShopNotice(t('notice.notEnoughTalent'));
         return;
       }
 
       if (result.status === 'locked') {
-        setShopNotice('Debloque tous les niveaux Controle avant Maitre.');
+        setShopNotice(t('notice.unlockControl'));
         return;
       }
 
       if (result.status === 'already-maxed') {
-        setShopNotice('Cette competence est deja au maximum.');
+        setShopNotice(t('notice.talentMax'));
         return;
       }
 
       playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
-      setShopNotice('Competence debloquee !');
+      setShopNotice(t('notice.talentUnlocked'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1383,12 +1604,12 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status !== 'refunded') {
-        setShopNotice('Tu dois rembourser le dernier niveau achete.');
+        setShopNotice(t('notice.refundLast'));
         return;
       }
 
       emitTalentsUpdated();
-      setShopNotice('Competence remboursee.');
+      setShopNotice(t('notice.talentRefunded'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1415,23 +1636,23 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pastèques pour cette compétence.');
+        setShopNotice(t('notice.notEnoughTalent'));
         return;
       }
 
       if (result.status === 'locked') {
-        setShopNotice('Cette competence est encore verrouillee.');
+        setShopNotice(t('notice.talentLocked'));
         return;
       }
 
       if (result.status === 'already-maxed') {
-        setShopNotice('Cette competence est deja au maximum.');
+        setShopNotice(t('notice.talentMax'));
         return;
       }
 
       playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
-      setShopNotice('Competence achetee !');
+      setShopNotice(t('notice.talentBought'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1459,12 +1680,12 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status !== 'refunded') {
-        setShopNotice('Cette competence bloque une autre competence achetee.');
+        setShopNotice(t('notice.talentBlocks'));
         return;
       }
 
       emitTalentsUpdated();
-      setShopNotice('Competence remboursee.');
+      setShopNotice(t('notice.talentRefunded'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1491,23 +1712,23 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status === 'not-enough-watermelons') {
-        setShopNotice('Pas assez de pastèques pour cette compétence.');
+        setShopNotice(t('notice.notEnoughTalent'));
         return;
       }
 
       if (result.status === 'locked') {
-        setShopNotice('Cette competence est encore verrouillee.');
+        setShopNotice(t('notice.talentLocked'));
         return;
       }
 
       if (result.status === 'already-maxed') {
-        setShopNotice('Cette competence est deja au maximum.');
+        setShopNotice(t('notice.talentMax'));
         return;
       }
 
       playInterfaceSound(TALENT_UNLOCKED_SOUND_PATH);
       emitTalentsUpdated();
-      setShopNotice('Competence achetee !');
+      setShopNotice(t('notice.talentBought'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1537,12 +1758,12 @@ export default function App(): React.JSX.Element {
       setPlayerProfile(result.profile);
 
       if (result.status !== 'refunded') {
-        setShopNotice('Cette competence bloque une autre competence achetee.');
+        setShopNotice(t('notice.talentBlocks'));
         return;
       }
 
       emitTalentsUpdated();
-      setShopNotice('Competence remboursee.');
+      setShopNotice(t('notice.talentRefunded'));
     } finally {
       setPendingTalentAction(null);
     }
@@ -1555,11 +1776,21 @@ export default function App(): React.JSX.Element {
   const selectedControlTalentDetails = selectedControlTalent
     ? (() => {
         if (selectedControlTalent.kind === 'master') {
+          const copy = localizeTalent(
+            'control',
+            'master',
+            CONTROL_MASTER_TALENT,
+            language,
+          );
           return {
-            title: CONTROL_MASTER_TALENT.title,
+            title: copy.title,
             icon: CONTROL_MASTER_TALENT.icon,
-            levelLabel: controlTalentState.master ? 'Ultime debloque' : 'Ultime',
-            description: CONTROL_MASTER_TALENT.description,
+            levelLabel: t(
+              controlTalentState.master
+                ? 'common.ultimateUnlocked'
+                : 'common.ultimate',
+            ),
+            description: copy.description,
             price: CONTROL_MASTER_TALENT.cost,
             refund: Math.floor(CONTROL_MASTER_TALENT.cost / 2),
             isOwned: controlTalentState.master,
@@ -1569,6 +1800,12 @@ export default function App(): React.JSX.Element {
         }
 
         const definition = getControlTalentDefinition(selectedControlTalent.id);
+        const copy = localizeTalent(
+          'control',
+          definition.id,
+          definition,
+          language,
+        );
         const currentLevel = controlTalentState.levels[selectedControlTalent.id];
         const targetLevel = selectedControlTalent.level;
         const isOwned = currentLevel >= targetLevel;
@@ -1581,12 +1818,12 @@ export default function App(): React.JSX.Element {
         const price = definition.costs[targetLevel - 1] ?? 0;
 
         return {
-          title: definition.title,
+          title: copy.title,
           icon: definition.icon,
-          levelLabel: `Niveau ${targetLevel}`,
-          description: `${definition.description} Valeur: ${
-            definition.levels[targetLevel - 1]
-          }.`,
+          levelLabel: t('common.level', { value: targetLevel }),
+          description: `${copy.description} ${t('common.value', {
+            value: definition.levels[targetLevel - 1],
+          })}`,
           price,
           refund: Math.floor(price / 2),
           isOwned,
@@ -1601,13 +1838,21 @@ export default function App(): React.JSX.Element {
   const selectedEnduranceTalentDetails = selectedEnduranceTalent
     ? (() => {
         if (selectedEnduranceTalent.kind === 'phoenix') {
+          const copy = localizeTalent(
+            'endurance',
+            'phoenix',
+            ENDURANCE_PHOENIX_TALENT,
+            language,
+          );
           return {
-            title: ENDURANCE_PHOENIX_TALENT.title,
+            title: copy.title,
             icon: ENDURANCE_PHOENIX_TALENT.icon,
-            levelLabel: enduranceTalentState.phoenix
-              ? 'Ultime debloque'
-              : 'Ultime',
-            description: ENDURANCE_PHOENIX_TALENT.description,
+            levelLabel: t(
+              enduranceTalentState.phoenix
+                ? 'common.ultimateUnlocked'
+                : 'common.ultimate',
+            ),
+            description: copy.description,
             price: ENDURANCE_PHOENIX_TALENT.cost,
             refund: Math.floor(ENDURANCE_PHOENIX_TALENT.cost / 2),
             isOwned: enduranceTalentState.phoenix,
@@ -1617,6 +1862,12 @@ export default function App(): React.JSX.Element {
         }
 
         const definition = getEnduranceTalentDefinition(selectedEnduranceTalent.id);
+        const copy = localizeTalent(
+          'endurance',
+          definition.id,
+          definition,
+          language,
+        );
         const currentLevel = enduranceTalentState.levels[selectedEnduranceTalent.id];
         const targetLevel = selectedEnduranceTalent.level;
         const isOwned = enduranceTalentState.phoenix || currentLevel >= targetLevel;
@@ -1639,14 +1890,16 @@ export default function App(): React.JSX.Element {
           currentLevel + 1 === targetLevel;
         const price = definition.costs[targetLevel - 1] ?? 0;
         const lockedText = definition.requirement
-          ? ` Requis: ${definition.requirement.label}.`
+          ? ` ${t('common.required', {
+              value: definition.requirement.label,
+            })}`
           : '';
 
         return {
-          title: definition.title,
+          title: copy.title,
           icon: definition.icon,
-          levelLabel: `Niveau ${targetLevel}`,
-          description: `${definition.description} ${definition.statLabel}: ${
+          levelLabel: t('common.level', { value: targetLevel }),
+          description: `${copy.description} ${definition.statLabel}: ${
             definition.levels[targetLevel - 1]
           }.${!isUnlocked ? lockedText : ''}`,
           price,
@@ -1662,11 +1915,21 @@ export default function App(): React.JSX.Element {
   const selectedBlueTalentDetails = selectedBlueTalent
     ? (() => {
         if (selectedBlueTalent.kind === 'feast') {
+          const copy = localizeTalent(
+            'blue',
+            'feast',
+            BLUE_FEAST_TALENT,
+            language,
+          );
           return {
-            title: BLUE_FEAST_TALENT.title,
+            title: copy.title,
             icon: BLUE_FEAST_TALENT.icon,
-            levelLabel: blueTalentState.feast ? 'Ultime debloque' : 'Ultime',
-            description: BLUE_FEAST_TALENT.description,
+            levelLabel: t(
+              blueTalentState.feast
+                ? 'common.ultimateUnlocked'
+                : 'common.ultimate',
+            ),
+            description: copy.description,
             price: BLUE_FEAST_TALENT.cost,
             refund: Math.floor(BLUE_FEAST_TALENT.cost / 2),
             isOwned: blueTalentState.feast,
@@ -1676,6 +1939,12 @@ export default function App(): React.JSX.Element {
         }
 
         const definition = getBlueTalentDefinition(selectedBlueTalent.id);
+        const copy = localizeTalent(
+          'blue',
+          definition.id,
+          definition,
+          language,
+        );
         const currentLevel = blueTalentState.levels[selectedBlueTalent.id];
         const targetLevel = selectedBlueTalent.level;
         const isUnlocked = isBlueTalentUnlocked(blueTalentState, definition);
@@ -1697,10 +1966,10 @@ export default function App(): React.JSX.Element {
             : '';
 
         return {
-          title: definition.title,
+          title: copy.title,
           icon: definition.icon,
-          levelLabel: `Niveau ${targetLevel}`,
-          description: `${definition.description} ${definition.statLabel}: ${
+          levelLabel: t('common.level', { value: targetLevel }),
+          description: `${copy.description} ${definition.statLabel}: ${
             definition.levels[targetLevel - 1]
           }.${lockText}`,
           price,
@@ -1716,32 +1985,44 @@ export default function App(): React.JSX.Element {
     tutorialStep === 'ultimate-control'
       ? {
           step: '1 / 3',
-          tree: 'CONTRÔLE',
-          title: CONTROL_MASTER_TALENT.title,
+          tree: t('talent.tab.control').toUpperCase(),
+          title: localizeTalent(
+            'control',
+            'master',
+            CONTROL_MASTER_TALENT,
+            language,
+          ).title,
           icon: CONTROL_MASTER_TALENT.icon,
-          description:
-            'Débloque le meilleur contrôle possible pour toutes les compétences.',
-          buttonLabel: 'VOIR PHÉNIX',
+          description: t('talent.ultimateControlHelp'),
+          buttonLabel: t('talent.seePhoenix'),
         }
       : tutorialStep === 'ultimate-endurance'
         ? {
             step: '2 / 3',
-            tree: 'ENDURANCE',
-            title: ENDURANCE_PHOENIX_TALENT.title,
+            tree: t('talent.tab.endurance').toUpperCase(),
+            title: localizeTalent(
+              'endurance',
+              'phoenix',
+              ENDURANCE_PHOENIX_TALENT,
+              language,
+            ).title,
             icon: ENDURANCE_PHOENIX_TALENT.icon,
-            description:
-              'Une fois par partie, le Dodo renaît là où il est mort avec toutes ses vies et son bouclier.',
-            buttonLabel: 'VOIR FESTIN',
+            description: t('talent.ultimateEnduranceHelp'),
+            buttonLabel: t('talent.seeFeast'),
           }
         : tutorialStep === 'ultimate-talents'
           ? {
               step: '3 / 3',
-              tree: 'TALENTS',
-              title: BLUE_FEAST_TALENT.title,
+              tree: t('talent.tab.talents').toUpperCase(),
+              title: localizeTalent(
+                'blue',
+                'feast',
+                BLUE_FEAST_TALENT,
+                language,
+              ).title,
               icon: BLUE_FEAST_TALENT.icon,
-              description:
-                'Attire toutes les pastèques visibles à l’écran directement vers le Dodo.',
-              buttonLabel: 'TERMINER',
+              description: t('talent.ultimateRewardHelp'),
+              buttonLabel: t('talent.finish'),
             }
           : null;
 
@@ -1770,7 +2051,7 @@ export default function App(): React.JSX.Element {
       )}
 
       {isMainMenuOpen && (
-        <section className="main-menu" aria-label="Menu principal">
+        <section className="main-menu" aria-label={t('main.menu')}>
           <div className="main-menu__title" aria-label="FlyDodo!" />
 
           <button
@@ -1778,7 +2059,7 @@ export default function App(): React.JSX.Element {
             className={`main-menu__button main-menu__button--play${
               clickedMainMenuButton === 'play' ? ' is-clicked' : ''
             }`}
-            aria-label="Jouer"
+            aria-label={t('main.play')}
             onClick={() => handleMainMenuButtonClick('play', () => startGame(false))}
           />
 
@@ -1788,7 +2069,7 @@ export default function App(): React.JSX.Element {
               className={`main-menu__button main-menu__button--shop${
                 clickedMainMenuButton === 'shop' ? ' is-clicked' : ''
               }`}
-              aria-label="Boutique"
+              aria-label={t('main.shop')}
               onClick={() =>
                 handleMainMenuButtonClick('shop', () => openShop(false))
               }
@@ -1798,18 +2079,27 @@ export default function App(): React.JSX.Element {
               className={`main-menu__button main-menu__button--tutorial${
                 clickedMainMenuButton === 'tutorial' ? ' is-clicked' : ''
               }`}
-              aria-label="Tutoriel"
+              aria-label={t('main.tutorial')}
               onClick={() => handleMainMenuButtonClick('tutorial', () => startGame(true))}
             />
           </div>
+
+          <button
+            type="button"
+            className="main-menu__options-button"
+            aria-label={t('options.open')}
+            onClick={openAudioOptions}
+          >
+            <span aria-hidden="true">⚙</span>
+          </button>
         </section>
       )}
 
       {!isMainMenuOpen && (
-        <section className="hud" aria-label="Informations de jeu">
+        <section className="hud" aria-label={t('hud.gameInfo')}>
           <div className="hud__left-column">
             <div className="hud-pill hud-pill--speed">
-              <span>VITESSE</span>
+              <span>{t('hud.speed')}</span>
               <strong>{speed} m/s</strong>
             </div>
 
@@ -1818,14 +2108,16 @@ export default function App(): React.JSX.Element {
                 newRecord ? ' hud-pill--new-record' : ''
               }`}
             >
-              <span>{newRecord ? 'NOUVEAU RECORD' : 'ALTITUDE'}</span>
+              <span>
+                {t(newRecord ? 'hud.newRecord' : 'hud.altitude')}
+              </span>
               <strong>{altitude} m</strong>
             </div>
 
           </div>
 
           <div className="hud-pill hud-pill--watermelons">
-            <span>PASTÈQUES</span>
+            <span>{t('hud.watermelons')}</span>
             <strong key={watermelons} className="hud-pill__watermelon-count">
               {watermelons}
             </strong>
@@ -1834,7 +2126,7 @@ export default function App(): React.JSX.Element {
           <div className="survival-icons">
             <div className="survival-icons__life-row">
               <SurvivalIconRow
-                label="Vie"
+                label={t('common.life')}
                 current={visibleHeartCount}
                 max={visibleHeartMax}
                 fullSrc="/assets/ui/vie/1.png"
@@ -1850,7 +2142,7 @@ export default function App(): React.JSX.Element {
               )}
             </div>
             <SurvivalIconRow
-              label="Bouclier"
+              label={t('common.shield')}
               current={shield}
               max={maxShield}
               fullSrc="/assets/ui/bouclier/1.png"
@@ -1867,11 +2159,11 @@ export default function App(): React.JSX.Element {
               ? ` control-tutorial--confirmed-${tutorialSide}`
               : ''
           }`}
-          aria-label="Tutoriel des commandes"
+          aria-label={t('tutorial.controls')}
         >
           <div className="control-tutorial__heading">
-            <strong>MAINTIENS UN CÔTÉ</strong>
-            <span>Maintiens les deux côtés pour voler droit</span>
+            <strong>{t('tutorial.holdSide')}</strong>
+            <span>{t('tutorial.holdBoth')}</span>
           </div>
 
           <div className="control-tutorial__buttons">
@@ -1886,8 +2178,8 @@ export default function App(): React.JSX.Element {
               <span className="control-button__arrow" aria-hidden="true">
                 ←
               </span>
-              <strong>GAUCHE</strong>
-              <small>Maintiens pour tourner à gauche</small>
+              <strong>{t('tutorial.left')}</strong>
+              <small>{t('tutorial.leftHelp')}</small>
             </div>
 
             <div
@@ -1901,8 +2193,8 @@ export default function App(): React.JSX.Element {
               <span className="control-button__arrow" aria-hidden="true">
                 →
               </span>
-              <strong>DROITE</strong>
-              <small>Maintiens pour tourner à droite</small>
+              <strong>{t('tutorial.right')}</strong>
+              <small>{t('tutorial.rightHelp')}</small>
             </div>
           </div>
         </section>
@@ -1914,9 +2206,9 @@ export default function App(): React.JSX.Element {
         !isShopOpen && (
           <section className="shop-tutorial-prompt" aria-live="polite">
             <div className="shop-tutorial-prompt__card">
-              <span>ÉTAPE 2</span>
-              <strong>DÉCOUVRE LA BOUTIQUE</strong>
-              <p>Touche le bouton Boutique pour améliorer ton Dodo.</p>
+              <span>{t('tutorial.step2')}</span>
+              <strong>{t('tutorial.discoverShop')}</strong>
+              <p>{t('tutorial.shopHelp')}</p>
             </div>
             <span className="shop-tutorial-prompt__arrow" aria-hidden="true">
               ↘
@@ -1926,7 +2218,7 @@ export default function App(): React.JSX.Element {
 
       {fallSeconds !== null && !isMainMenuOpen && !isGameOver && (
         <div className="fall-warning">
-          {warningReason === 'side' ? 'Reviens' : 'Remonte'} !{' '}
+          {t(warningReason === 'side' ? 'warning.return' : 'warning.climb')} !{' '}
           <strong>{fallSeconds}</strong>
         </div>
       )}
@@ -1941,7 +2233,7 @@ export default function App(): React.JSX.Element {
             className={`floating-shop-button${
               tutorialStep === 'shop' ? ' is-tutorial-target' : ''
             }`}
-            aria-label="Ouvrir la boutique"
+            aria-label={t('game.openShop')}
             onClick={() => void openShop()}
           />
         )}
@@ -1955,7 +2247,7 @@ export default function App(): React.JSX.Element {
           <button
             type="button"
             className="floating-pause-button"
-            aria-label="Mettre le jeu en pause"
+            aria-label={t('game.pause')}
             onClick={pauseGame}
           />
         )}
@@ -1969,9 +2261,9 @@ export default function App(): React.JSX.Element {
         >
           <div className="game-pause__card">
             <span className="game-pause__icon" aria-hidden="true" />
-            <h2>PAUSE</h2>
-            <p>Touche l’écran pour continuer.</p>
-            <button type="button">CONTINUER</button>
+            <h2>{t('pause.title')}</h2>
+            <p>{t('pause.help')}</p>
+            <button type="button">{t('pause.continue')}</button>
           </div>
         </section>
       )}
@@ -1979,8 +2271,15 @@ export default function App(): React.JSX.Element {
       {!isMainMenuOpen && isGameOver && !isShopOpen && (
         <section className="game-over" role="dialog" aria-modal="true">
           <div className="game-over__card">
-            <p className="eyebrow">FIN DE L’ASCENSION</p>
-            <h1>Game Over</h1>
+            <button
+              type="button"
+              className="game-over__options-button"
+              aria-label={t('options.open')}
+              onClick={openAudioOptions}
+            >
+              <span aria-hidden="true">⚙</span>
+            </button>
+            <h1>{t('gameOver.title')}</h1>
 
             <img
               className={`game-over__death-visual game-over__death-visual--${playerDeathReason}`}
@@ -1991,11 +2290,13 @@ export default function App(): React.JSX.Element {
 
             <div className="game-over__stats">
               <p className="game-over__score">
-                <span>Altitude :</span>
+                <span>{t('gameOver.altitude')}</span>
                 <strong>{altitude}</strong>
                 <span>m</span>
               </p>
-              <p className="game-over__record">Record : {bestAltitude} m</p>
+              <p className="game-over__record">
+                {t('gameOver.record', { value: bestAltitude })}
+              </p>
             </div>
 
             <div className="game-over__actions">
@@ -2008,10 +2309,10 @@ export default function App(): React.JSX.Element {
                 >
                   <span>
                     {pendingRewardedAd === 'revive'
-                      ? 'PUBLICITÉ...'
+                      ? t('gameOver.ad')
                       : rewardedReviveError
-                        ? 'PUB INDISPONIBLE'
-                        : 'RESSUSCITER (PUB)'}
+                        ? t('gameOver.adUnavailable')
+                        : t('gameOver.revive')}
                   </span>
                 </button>
               )}
@@ -2021,7 +2322,9 @@ export default function App(): React.JSX.Element {
                 disabled={pendingRewardedAd !== null || isInterstitialPending}
                 onClick={() => void restart()}
               >
-                <span>{isInterstitialPending ? 'PUBLICITÉ...' : 'REJOUER'}</span>
+                <span>
+                  {t(isInterstitialPending ? 'gameOver.ad' : 'gameOver.replay')}
+                </span>
               </button>
               <button
                 type="button"
@@ -2029,11 +2332,19 @@ export default function App(): React.JSX.Element {
                 disabled={pendingRewardedAd !== null || isInterstitialPending}
                 onClick={() => void openShop()}
               >
-                <span>BOUTIQUE</span>
+                <span>{t('common.shop')}</span>
               </button>
             </div>
           </div>
         </section>
+      )}
+
+      {isAudioOptionsOpen && (
+        <AudioOptionsPanel
+          settings={audioSettings}
+          language={language}
+          onClose={closeAudioOptions}
+        />
       )}
 
       {isShopOpen && (
@@ -2048,15 +2359,13 @@ export default function App(): React.JSX.Element {
             <button
               type="button"
               className="shop-back-button"
-              aria-label="Retour"
+              aria-label={t('common.back')}
               onClick={closeShop}
             />
 
             <header className="shop-header">
-                <div className="shop-title" aria-label="Boutique">
-                <img src="/assets/ui/title.png" alt="" aria-hidden="true" />
-              </div>
-                <div className="shop-wallet" aria-label="Pastèques disponibles">
+              <h1 className="shop-title">{t('main.shop')}</h1>
+                <div className="shop-wallet" aria-label={t('shop.wallet')}>
                 <strong>{playerProfile.watermelons}</strong>
                 <img
                   src="/assets/collectable/pasteque.png"
@@ -2066,7 +2375,7 @@ export default function App(): React.JSX.Element {
                 <button
                   type="button"
                   className="shop-quick-watermelon-button"
-                  aria-label="Ajouter rapidement 100 pastèques"
+                  aria-label={t('shop.quickAdd')}
                   disabled={isQuickWatermelonPending}
                   onClick={() => void handleQuickWatermelons()}
                 >
@@ -2076,7 +2385,7 @@ export default function App(): React.JSX.Element {
                   <button
                     type="button"
                     className="shop-reward-watermelon-button"
-                    aria-label="Regarder une publicité pour gagner 5 pastèques"
+                    aria-label={t('shop.watchAd')}
                     disabled={pendingRewardedAd !== null}
                     onClick={() => void handleRewardedWatermelons()}
                   >
@@ -2085,7 +2394,7 @@ export default function App(): React.JSX.Element {
                 )}
               </div>
 
-              <div className="shop-tabs" role="tablist" aria-label="Sections boutique">
+              <div className="shop-tabs" role="tablist" aria-label={t('shop.sections')}>
                 <button
                   type="button"
                   role="tab"
@@ -2095,7 +2404,9 @@ export default function App(): React.JSX.Element {
                   }`}
                   onClick={() => selectShopTab('accessories')}
                 >
-                  <span className="visually-hidden">Accessoires</span>
+                  <span className="shop-main-tab__label">
+                    {t('shop.accessories')}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -2106,7 +2417,7 @@ export default function App(): React.JSX.Element {
                   }`}
                   onClick={() => selectShopTab('items')}
                 >
-                  <span className="visually-hidden">Objets</span>
+                  <span className="shop-main-tab__label">{t('shop.items')}</span>
                 </button>
                 <button
                   type="button"
@@ -2119,12 +2430,14 @@ export default function App(): React.JSX.Element {
                   }`}
                   onClick={() => selectShopTab('talents')}
                 >
-                  <span className="visually-hidden">Arbre talents</span>
+                  <span className="shop-main-tab__label">
+                    {t('shop.skillTree')}
+                  </span>
                 </button>
                 <button
                   type="button"
                   role="tab"
-                  aria-label="Pastèques"
+                  aria-label={t('shop.watermelons')}
                   aria-selected={selectedShopTab === 'watermelons'}
                   className={`shop-main-tab shop-main-tab--watermelons${
                     selectedShopTab === 'watermelons' ? ' is-active' : ''
@@ -2136,7 +2449,7 @@ export default function App(): React.JSX.Element {
                     alt=""
                     aria-hidden="true"
                   />
-                  <span>Pastèques</span>
+                  <span>{t('shop.watermelons')}</span>
                 </button>
               </div>
 
@@ -2146,26 +2459,27 @@ export default function App(): React.JSX.Element {
                 }`}
               >
                 {selectedShopTab === 'accessories' && (
-                  <div className="shop-filter" aria-label="Catégories">
+                  <div className="shop-filter" aria-label={t('shop.categories')}>
                   
                     <div className="shop-filter__options">
                     {SHOP_CATEGORY_OPTIONS.map((option) => (
                       <button
                         type="button"
                         key={option.value}
+                        aria-pressed={selectedCategory === option.value}
                         className={`shop-filter__button shop-filter__button--${option.value}${
                           selectedCategory === option.value ? ' is-active' : ''
                         }`}
                         onClick={() => selectShopCategory(option.value)}
                       >
-                        {option.label}
+                        {t(`shop.category.${option.value}`)}
                       </button>
                     ))}
                     </div>
                   </div>
                 )}
 
-                <div className="shop-wallet shop-wallet--toolbar" aria-label="Pastèques disponibles">
+                <div className="shop-wallet shop-wallet--toolbar" aria-label={t('shop.wallet')}>
                   <strong>{playerProfile.watermelons}</strong>
                   <img
                     src="/assets/collectable/pasteque.png"
@@ -2178,9 +2492,9 @@ export default function App(): React.JSX.Element {
 
             {tutorialStep === 'talents' && (
               <section className="talent-tutorial-prompt" aria-live="polite">
-                <span>ÉTAPE 3</span>
-                <strong>OUVRE L’ARBRE DE COMPÉTENCES</strong>
-                <p>Touche l’onglet Talents qui clignote.</p>
+                <span>{t('tutorial.step3')}</span>
+                <strong>{t('tutorial.openSkills')}</strong>
+                <p>{t('tutorial.skillsHelp')}</p>
                 <span className="talent-tutorial-prompt__arrow" aria-hidden="true">
                   ↑
                 </span>
@@ -2207,12 +2521,23 @@ export default function App(): React.JSX.Element {
                   const isPending = pendingItemId === item.id;
                   const cannotAfford =
                     !isOwned && playerProfile.watermelons < item.price;
+                  const localizedTitle = localizeShopItemTitle(
+                    item.id,
+                    item.title,
+                    language,
+                  );
+                  const titleLengthClass =
+                    localizedTitle.length > 24
+                      ? ' is-very-long'
+                      : localizedTitle.length > 16
+                        ? ' is-long'
+                        : '';
 
                   const buttonLabel = isEquipped
-                    ? 'DÉSÉQUIPER'
+                    ? t('common.unequip')
                     : isOwned
-                      ? 'ÉQUIPER'
-                      : 'ACHETER';
+                      ? t('common.equip')
+                      : t('common.buy');
 
                   return (
                     <article
@@ -2230,11 +2555,11 @@ export default function App(): React.JSX.Element {
 
                       {isEquipped && (
                         <span className="shop-item__equipped-badge">
-                          ÉQUIPÉ
+                          {t('common.equipped')}
                         </span>
                       )}
 
-                      <h2>{item.title}</h2>
+                      <h2 className={titleLengthClass}>{localizedTitle}</h2>
 
                       <div className="shop-item__price">
                         <img
@@ -2280,7 +2605,7 @@ export default function App(): React.JSX.Element {
                         <div className="shop-object-card__icon" aria-hidden="true">
                           <img src={item.icon} alt="" />
                         </div>
-                        <h2>{item.title}</h2>
+                        <h2>{t(`shop.object.${item.id}`)}</h2>
                         <div className="shop-object-card__price">
                           <img
                             src="/assets/collectable/pasteque.png"
@@ -2298,7 +2623,7 @@ export default function App(): React.JSX.Element {
                           onClick={() => void handleShopObjectAction(item)}
                         >
                           <span className="visually-hidden">
-                            {isActive ? 'Possede' : 'Acheter'}
+                            {t(isActive ? 'common.owned' : 'common.buy')}
                           </span>
                         </button>
                       </article>
@@ -2316,15 +2641,15 @@ export default function App(): React.JSX.Element {
                         alt=""
                         aria-hidden="true"
                       />
-                      Pastèques
+                      {t('shop.watermelons')}
                     </h2>
-                    <p>Achetez des pastèques pour booster votre aventure !</p>
+                    <p>{t('shop.buyAdventure')}</p>
                   </header>
 
                   <div className="watermelon-pack-grid">
                     {WATERMELON_PACKS.map((pack) => (
                       <article className="watermelon-pack-card" key={pack.id}>
-                        <h3>{pack.title}</h3>
+                        <h3>{t(`shop.pack.${pack.id}`)}</h3>
                         <div
                           className={`watermelon-pack-card__pile watermelon-pack-card__pile--${pack.id}`}
                           aria-hidden="true"
@@ -2362,7 +2687,7 @@ export default function App(): React.JSX.Element {
                       alt=""
                       aria-hidden="true"
                     />
-                    Les pastèques sont utilisées pour acheter des objets et des accessoires !
+                    {t('shop.watermelonUse')}
                   </p>
                 </div>
               )}
@@ -2372,7 +2697,7 @@ export default function App(): React.JSX.Element {
                   <div
                     className="talent-tree-tabs"
                     role="tablist"
-                    aria-label="Categories de talents"
+                    aria-label={t('shop.talentCategories')}
                   >
                     {TALENT_TREE_TABS.map((tab) => (
                       <button
@@ -2385,7 +2710,7 @@ export default function App(): React.JSX.Element {
                         }`}
                         onClick={() => selectTalentTreeTab(tab.id)}
                       >
-                        {tab.label}
+                        {t(`talent.tab.${tab.id}`)}
                       </button>
                     ))}
                   </div>
@@ -2413,7 +2738,12 @@ export default function App(): React.JSX.Element {
                         >
                           <img src={CONTROL_MASTER_TALENT.icon} alt="" aria-hidden="true" />
                           <span className="control-talent-node__title">
-                            {CONTROL_MASTER_TALENT.title}
+                            {localizeTalent(
+                              'control',
+                              'master',
+                              CONTROL_MASTER_TALENT,
+                              language,
+                            ).title}
                           </span>
                           <span className="control-talent-node__price">
                             <img
@@ -2465,10 +2795,15 @@ export default function App(): React.JSX.Element {
                                     >
                                       <img src={talent.icon} alt="" aria-hidden="true" />
                                       <span className="control-talent-node__title">
-                                        {talent.title}
+                                        {localizeTalent(
+                                          'control',
+                                          talent.id,
+                                          talent,
+                                          language,
+                                        ).title}
                                       </span>
                                       <span className="control-talent-node__level">
-                                        niv {level}
+                                        {t('common.levelShort', { value: level })}
                                       </span>
                                       <span className="control-talent-node__price">
                                         <img
@@ -2515,7 +2850,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Rembourser {selectedControlTalentDetails.refund}
+                                  {t('common.refund', {
+                                    value: selectedControlTalentDetails.refund,
+                                  })}
                                 </span>
                               </button>
                             ) : (
@@ -2532,7 +2869,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Acheter {selectedControlTalentDetails.price}
+                                  {t('common.buyPrice', {
+                                    value: selectedControlTalentDetails.price,
+                                  })}
                                 </span>
                               </button>
                             )}
@@ -2566,7 +2905,12 @@ export default function App(): React.JSX.Element {
                             aria-hidden="true"
                           />
                           <span className="control-talent-node__title">
-                            {ENDURANCE_PHOENIX_TALENT.title}
+                            {localizeTalent(
+                              'endurance',
+                              'phoenix',
+                              ENDURANCE_PHOENIX_TALENT,
+                              language,
+                            ).title}
                           </span>
                           <span className="control-talent-node__price">
                             <img
@@ -2633,10 +2977,15 @@ export default function App(): React.JSX.Element {
                                     >
                                       <img src={talent.icon} alt="" aria-hidden="true" />
                                       <span className="control-talent-node__title">
-                                        {talent.title}
+                                        {localizeTalent(
+                                          'endurance',
+                                          talent.id,
+                                          talent,
+                                          language,
+                                        ).title}
                                       </span>
                                       <span className="control-talent-node__level">
-                                        niv {level}
+                                        {t('common.levelShort', { value: level })}
                                       </span>
                                       <span className="control-talent-node__price">
                                         <img
@@ -2683,7 +3032,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Rembourser {selectedEnduranceTalentDetails.refund}
+                                  {t('common.refund', {
+                                    value: selectedEnduranceTalentDetails.refund,
+                                  })}
                                 </span>
                               </button>
                             ) : (
@@ -2700,7 +3051,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Acheter {selectedEnduranceTalentDetails.price}
+                                  {t('common.buyPrice', {
+                                    value: selectedEnduranceTalentDetails.price,
+                                  })}
                                 </span>
                               </button>
                             )}
@@ -2734,7 +3087,12 @@ export default function App(): React.JSX.Element {
                             aria-hidden="true"
                           />
                           <span className="control-talent-node__title">
-                            {BLUE_FEAST_TALENT.title}
+                            {localizeTalent(
+                              'blue',
+                              'feast',
+                              BLUE_FEAST_TALENT,
+                              language,
+                            ).title}
                           </span>
                           <span className="control-talent-node__price">
                             <img
@@ -2794,10 +3152,15 @@ export default function App(): React.JSX.Element {
                               >
                                 <img src={talent.icon} alt="" aria-hidden="true" />
                                 <span className="control-talent-node__title">
-                                  {talent.title}
+                                  {localizeTalent(
+                                    'blue',
+                                    talent.id,
+                                    talent,
+                                    language,
+                                  ).title}
                                 </span>
                                 <span className="control-talent-node__level">
-                                  niv {level}
+                                  {t('common.levelShort', { value: level })}
                                 </span>
                                 <span className="control-talent-node__price">
                                   <img
@@ -2841,7 +3204,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Rembourser {selectedBlueTalentDetails.refund}
+                                  {t('common.refund', {
+                                    value: selectedBlueTalentDetails.refund,
+                                  })}
                                 </span>
                               </button>
                             ) : (
@@ -2858,7 +3223,9 @@ export default function App(): React.JSX.Element {
                                 }
                               >
                                 <span className="visually-hidden">
-                                  Acheter {selectedBlueTalentDetails.price}
+                                  {t('common.buyPrice', {
+                                    value: selectedBlueTalentDetails.price,
+                                  })}
                                 </span>
                               </button>
                             )}
@@ -2875,26 +3242,26 @@ export default function App(): React.JSX.Element {
               <section
                 className="talent-tree-tutorial"
                 role="dialog"
-                aria-label="Tutoriel de l’arbre de compétences"
+                aria-label={t('talent.treeTutorial')}
               >
                 <div className="talent-tree-tutorial__card">
                   <span className="talent-tree-tutorial__eyebrow">
-                    ARBRE DE COMPÉTENCES
+                    {t('talent.treeEyebrow')}
                   </span>
-                  <h2>FAIS GRANDIR TON DODO</h2>
-                  <p>
-                    Dépense tes pastèques pour débloquer les compétences, niveau
-                    après niveau.
-                  </p>
+                  <h2>{t('talent.growDodo')}</h2>
+                  <p>{t('talent.spend')}</p>
                   <ul>
                     <li>
-                      <strong>Contrôle</strong> améliore le vol.
+                      <strong>{t('talent.tab.control')}</strong>{' '}
+                      {t('talent.controlHelp')}
                     </li>
                     <li>
-                      <strong>Endurance</strong> aide à survivre.
+                      <strong>{t('talent.tab.endurance')}</strong>{' '}
+                      {t('talent.enduranceHelp')}
                     </li>
                     <li>
-                      <strong>Talents</strong> augmente tes récompenses.
+                      <strong>{t('talent.tab.talents')}</strong>{' '}
+                      {t('talent.rewardHelp')}
                     </li>
                   </ul>
                   <button
@@ -2904,7 +3271,7 @@ export default function App(): React.JSX.Element {
                       setTutorialStep('ultimate-control');
                     }}
                   >
-                    VOIR LES COMPÉTENCES ULTIMES
+                    {t('talent.seeUltimates')}
                   </button>
                 </div>
               </section>
@@ -2914,7 +3281,9 @@ export default function App(): React.JSX.Element {
               <section
                 className="ultimate-tutorial"
                 role="dialog"
-                aria-label={`Tutoriel de la compétence ultime ${ultimateTutorial.title}`}
+                aria-label={t('talent.ultimateTutorial', {
+                  title: ultimateTutorial.title,
+                })}
               >
                 <div className="ultimate-tutorial__card">
                   <img
@@ -2929,8 +3298,7 @@ export default function App(): React.JSX.Element {
                     <h2>{ultimateTutorial.title}</h2>
                     <p>{ultimateTutorial.description}</p>
                     <small>
-                      Débloque tous les niveaux de cet arbre pour pouvoir
-                      l’acheter.
+                      {t('talent.unlockTree')}
                     </small>
                   </div>
                   <button type="button" onClick={advanceUltimateTutorial}>

@@ -1,5 +1,16 @@
 import Phaser from 'phaser';
 import {
+  getAudioSettings,
+  subscribeAudioSettings,
+  type AudioSettings,
+} from '../../audio/audioSettings';
+import {
+  getAppLanguage,
+  subscribeAppLanguage,
+  translate,
+  type AppLanguage,
+} from '../../i18n/i18n';
+import {
   emitFallWarning,
   emitFlightHud,
   emitGameOver,
@@ -115,6 +126,12 @@ const MIN_FLAP_INTERVAL_MS = 115;
 const FLAP_WING_BOOST_DURATION = 0.28;
 const FLAP_WING_BOOST_MULTIPLIER = 1.5;
 const FLAP_LEG_ANIMATION_DURATION = 0;
+const FLIGHT_IDLE_TIMEOUT_MS = 5_000;
+const FLIGHT_IDLE_PANIC_DURATION_MS = 700;
+const FLIGHT_IDLE_PANIC_WING_MULTIPLIER = 3.25;
+const FLIGHT_IDLE_DROP_WING_MULTIPLIER = 0.45;
+const FLIGHT_IDLE_DROP_GRAVITY_MULTIPLIER = 1.8;
+const FLIGHT_IDLE_DROP_HORIZONTAL_DAMPING = 0.68;
 
 const FALL_LIMIT_BELOW_CAMERA = 5;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
@@ -182,7 +199,12 @@ const LIGHTNING_HIT_CAMERA_SHAKE_DURATION_MS = 440;
 const LIGHTNING_HIT_CAMERA_SHAKE_INTENSITY = 0.012;
 const SATELLITE_TEXTURE_KEY = 'space-satellite';
 const ASTEROID_TEXTURE_KEY = 'space-asteroid';
-const LAVA_TEXTURE_KEY = 'lava-flow';
+const LAVA_TEXTURE_PREFIX = 'lava-flow';
+const LAVA_ANIMATION_KEY = 'lava-flow-animation';
+const LAVA_FRAME_COUNT = 36;
+const LAVA_FRAME_RATE = 18;
+const LAVA_SOURCE_HEIGHT = 864;
+const LAVA_SOURCE_VISIBLE_TOP = 86;
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
 const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
 const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
@@ -251,6 +273,10 @@ const LAVA_START_Y = GROUND_Y + GROUND_DIRT_HEIGHT;
 const LAVA_ALPHA = 1;
 const LAVA_DEPTH = 13;
 const LAVA_PLAYER_BOTTOM_CONTACT_OFFSET = 100;
+const LAVA_DISPLAY_WIDTH = GAME_WIDTH;
+const LAVA_DISPLAY_HEIGHT = GAME_HEIGHT;
+const LAVA_VISIBLE_TOP_OFFSET =
+  LAVA_SOURCE_VISIBLE_TOP * (LAVA_DISPLAY_HEIGHT / LAVA_SOURCE_HEIGHT);
 
 interface GroundForestDecor {
   textureKey: string;
@@ -823,7 +849,7 @@ const FLIGHT_SOUND_VOLUME = 0.24;
 const SKY_WIND_SOUND_KEY = 'sky-wind-sound';
 const SKY_WIND_SOUND_PATH = '/assets/sounds/wind.mp3';
 const SKY_WIND_SOUND_MAX_VOLUME = 0.58;
-const SKY_WIND_SOUND_START_FORCE = 30;
+const SKY_WIND_SOUND_START_FORCE = 45;
 
 const FLAP_SOUND_KEY = 'dodo-single-flap-sound';
 const FLAP_SOUND_PATH = '/assets/sounds/1Flap.mp3';
@@ -1140,12 +1166,12 @@ const SKY_WIND_TEXTURE_KEY = 'sky-wind-streak';
 const SKY_WIND_STREAK_POOL_SIZE = 18;
 const SKY_WIND_MIN_ALTITUDE = AMBIENT_CLOUD_MIN_ALTITUDE;
 const SKY_WIND_MAX_ALTITUDE = AMBIENT_CLOUD_MAX_ALTITUDE;
-const SKY_WIND_MAX_FORCE = 82;
+const SKY_WIND_MAX_FORCE = 123;
 const SKY_WIND_LEVELS: readonly SkyWindLevelConfig[] = [
   { force: 0, durationMinMs: 3_500, durationMaxMs: 7_000 },
-  { force: 22, durationMinMs: 4_500, durationMaxMs: 8_500 },
-  { force: 48, durationMinMs: 3_800, durationMaxMs: 7_000 },
-  { force: 82, durationMinMs: 2_800, durationMaxMs: 5_200 },
+  { force: 34, durationMinMs: 4_500, durationMaxMs: 8_500 },
+  { force: 72, durationMinMs: 3_800, durationMaxMs: 7_000 },
+  { force: 123, durationMinMs: 2_800, durationMaxMs: 5_200 },
 ];
 
 const LEFT_WING_FRAMES = [
@@ -1269,7 +1295,14 @@ export class GameplayScene extends Phaser.Scene {
   private skyWindNextChangeAt = 0;
   private skyWindConsecutiveActivePhases = 0;
   private skyWindSpawnAccumulator = 0;
-  private flightSound?: Phaser.Sound.BaseSound;
+  private skyWindBaseVolume = 0;
+  private audioSettings: AudioSettings = getAudioSettings();
+  private unsubscribeAudioSettings?: () => void;
+  private language: AppLanguage = getAppLanguage();
+  private unsubscribeAppLanguage?: () => void;
+  private flightSound?:
+    | Phaser.Sound.WebAudioSound
+    | Phaser.Sound.HTML5AudioSound;
   private skyWindSound?:
     | Phaser.Sound.WebAudioSound
     | Phaser.Sound.HTML5AudioSound;
@@ -1305,6 +1338,8 @@ export class GameplayScene extends Phaser.Scene {
   private leftWingBoostTime = 0;
   private rightWingBoostTime = 0;
   private lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
+  private idleFlightState: 'active' | 'panic' | 'dropping' = 'active';
+  private idleFlightPanicStartedAt = 0;
   private legAnimationTime = 0;
 
   private startAltitudeY = START_Y;
@@ -1375,7 +1410,7 @@ export class GameplayScene extends Phaser.Scene {
   private offscreenIndicator!: Phaser.GameObjects.Container;
   private offscreenIndicatorBody!: Phaser.GameObjects.Image;
   private groundRecordValue!: Phaser.GameObjects.Text;
-  private lava!: Phaser.GameObjects.Image;
+  private lava!: Phaser.GameObjects.Sprite;
   private lavaTopY = LAVA_START_Y;
   private runStartTime = 0;
 
@@ -1465,12 +1500,17 @@ export class GameplayScene extends Phaser.Scene {
     }
     this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.png');
     this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.png');
-    this.load.image(LAVA_TEXTURE_KEY, '/assets/obstacles/lave/lave.png');
+    for (let index = 0; index < LAVA_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(3, '0');
+      this.load.image(
+        `${LAVA_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/obstacles/lave/frame_${paddedIndex}.png`,
+      );
+    }
     this.load.image(
       FRUIT_DETECTOR_TEXTURE_KEY,
       '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
     );
-    this.load.image('dodo-body', '/assets/dodo/optimized/body.png');
     this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
     this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
@@ -1522,6 +1562,25 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   create(data?: { startPaused?: boolean }): void {
+    this.unsubscribeAudioSettings?.();
+    this.audioSettings = getAudioSettings();
+    this.unsubscribeAudioSettings = subscribeAudioSettings((settings) => {
+      this.audioSettings = settings;
+      this.applyAudioSettings();
+    });
+    this.unsubscribeAppLanguage?.();
+    this.language = getAppLanguage();
+    this.unsubscribeAppLanguage = subscribeAppLanguage((language) => {
+      this.language = language;
+      this.updateGroundRecordText();
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribeAudioSettings?.();
+      this.unsubscribeAudioSettings = undefined;
+      this.unsubscribeAppLanguage?.();
+      this.unsubscribeAppLanguage = undefined;
+    });
+
     this.resetRuntimeState();
     this.createFlightSounds();
 
@@ -1676,6 +1735,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     const direction = this.consumeFlapDirection(time);
+    this.updateIdleFlightState(time);
     this.updateMosquitoCircleMotions(time);
     this.updatePterodactylPatrols(time);
     this.updateSatelliteDrifts(time, deltaSeconds);
@@ -1699,6 +1759,8 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.unsubscribeAppLanguage?.();
+    this.unsubscribeAppLanguage = undefined;
     this.heldPointerSides.clear();
     this.destroyFlightSounds();
     this.sound.stopByKey(THUNDER_SOUND_KEY);
@@ -2209,14 +2271,26 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createFlightSounds(): void {
-    this.flightSound = this.sound.add(FLIGHT_SOUND_KEY, {
-      loop: true,
-      volume: FLIGHT_SOUND_VOLUME,
-    });
+    this.flightSound = this.sound.add(
+      FLIGHT_SOUND_KEY,
+      {
+        loop: true,
+        volume: FLIGHT_SOUND_VOLUME * this.audioSettings.wings,
+      },
+    ) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
     this.skyWindSound = this.sound.add(SKY_WIND_SOUND_KEY, {
       loop: true,
       volume: 0,
     }) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
+  }
+
+  private applyAudioSettings(): void {
+    this.flightSound?.setVolume(
+      FLIGHT_SOUND_VOLUME * this.audioSettings.wings,
+    );
+    this.skyWindSound?.setVolume(
+      this.skyWindBaseVolume * this.audioSettings.wind,
+    );
   }
 
   private startFlightSound(): void {
@@ -2232,7 +2306,7 @@ export class GameplayScene extends Phaser.Scene {
      * Le son déjà en cours continue donc de jouer pendant que le nouveau démarre.
      */
     this.sound.play(FLAP_SOUND_KEY, {
-      volume: FLAP_SOUND_VOLUME,
+      volume: FLAP_SOUND_VOLUME * this.audioSettings.wings,
     });
   }
 
@@ -2276,6 +2350,7 @@ export class GameplayScene extends Phaser.Scene {
     this.skyWindNextChangeAt = 0;
     this.skyWindConsecutiveActivePhases = 0;
     this.skyWindSpawnAccumulator = 0;
+    this.skyWindBaseVolume = 0;
     this.watermelons = 0;
     this.playerMaxLives = PLAYER_BASE_LIVES;
     this.playerLives = PLAYER_BASE_LIVES;
@@ -2325,6 +2400,8 @@ export class GameplayScene extends Phaser.Scene {
     this.leftWingBoostTime = 0;
     this.rightWingBoostTime = 0;
     this.lastAcceptedFlapTime = Number.NEGATIVE_INFINITY;
+    this.idleFlightState = 'active';
+    this.idleFlightPanicStartedAt = 0;
     this.legAnimationTime = 0;
     this.featherParticles = [];
     this.windStreaks = [];
@@ -2565,12 +2642,13 @@ export class GameplayScene extends Phaser.Scene {
       1,
     );
     const volume = volumeProgress * SKY_WIND_SOUND_MAX_VOLUME;
+    this.skyWindBaseVolume = volume;
 
     if (volume > 0.01) {
       if (!this.skyWindSound.isPlaying) {
         this.skyWindSound.play();
       }
-      this.skyWindSound.setVolume(volume);
+      this.skyWindSound.setVolume(volume * this.audioSettings.wind);
     } else if (this.skyWindSound.isPlaying) {
       this.skyWindSound.stop();
     }
@@ -2931,6 +3009,20 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
+    if (!this.anims.exists(LAVA_ANIMATION_KEY)) {
+      this.anims.create({
+        key: LAVA_ANIMATION_KEY,
+        frames: Array.from({ length: LAVA_FRAME_COUNT }, (_value, index) => {
+          const paddedIndex = index.toString().padStart(3, '0');
+          return {
+            key: `${LAVA_TEXTURE_PREFIX}-${paddedIndex}`,
+          };
+        }),
+        frameRate: LAVA_FRAME_RATE,
+        repeat: -1,
+      });
+    }
+
     if (!this.anims.exists(DODO_LAVA_DEATH_ANIMATION_KEY)) {
       this.anims.create({
         key: DODO_LAVA_DEATH_ANIMATION_KEY,
@@ -3276,7 +3368,8 @@ export class GameplayScene extends Phaser.Scene {
 
         marker.revealStartedAt = this.time.now;
         this.sound.play(ZONE_TRANSITION_SOUND_KEY, {
-          volume: ZONE_TRANSITION_SOUND_VOLUME,
+          volume:
+            ZONE_TRANSITION_SOUND_VOLUME * this.audioSettings.transition,
         });
       }
 
@@ -3601,7 +3694,7 @@ export class GameplayScene extends Phaser.Scene {
     this.groundRecordValue = this.add.text(
       GROUND_RECORD_X,
       GROUND_RECORD_Y,
-      'RECORD : 0 m',
+      translate('phaser.record', { value: 0 }, this.language),
       {
         fontFamily,
         fontSize: '25px',
@@ -3624,7 +3717,9 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private updateGroundRecordText(): void {
-    this.groundRecordValue?.setText(`RECORD : ${this.bestAltitude} m`);
+    this.groundRecordValue?.setText(
+      translate('phaser.record', { value: this.bestAltitude }, this.language),
+    );
   }
 
   private playNewRecordCelebration(): void {
@@ -3653,7 +3748,11 @@ export class GameplayScene extends Phaser.Scene {
     );
 
     const announcement = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT + 55, 'NOUVEAU\nRECORD !', {
+      .text(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT + 55,
+        translate('phaser.newRecord', undefined, this.language),
+        {
         fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
         fontSize: '43px',
         fontStyle: 'bold',
@@ -3668,7 +3767,8 @@ export class GameplayScene extends Phaser.Scene {
           offsetX: 0,
           offsetY: 3,
         },
-      })
+        },
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(2_100)
@@ -3783,10 +3883,16 @@ export class GameplayScene extends Phaser.Scene {
   private createLava(): void {
     this.lavaTopY = LAVA_START_Y;
     this.lava = this.add
-      .image(GAME_WIDTH / 2, this.lavaTopY, LAVA_TEXTURE_KEY)
+      .sprite(
+        GAME_WIDTH / 2,
+        this.lavaTopY - LAVA_VISIBLE_TOP_OFFSET,
+        `${LAVA_TEXTURE_PREFIX}-000`,
+      )
       .setOrigin(0.5, 0)
+      .setDisplaySize(LAVA_DISPLAY_WIDTH, LAVA_DISPLAY_HEIGHT)
       .setDepth(LAVA_DEPTH)
-      .setAlpha(LAVA_ALPHA);
+      .setAlpha(LAVA_ALPHA)
+      .play(LAVA_ANIMATION_KEY);
     this.renderLava();
   }
 
@@ -3836,7 +3942,10 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private renderLava(): void {
-    this.lava.setPosition(GAME_WIDTH / 2, this.lavaTopY);
+    this.lava.setPosition(
+      GAME_WIDTH / 2,
+      this.lavaTopY - LAVA_VISIBLE_TOP_OFFSET,
+    );
   }
 
   private getLavaRiseSpeed(): number {
@@ -4331,7 +4440,9 @@ export class GameplayScene extends Phaser.Scene {
       motion.flashed = true;
       sprite.enableBody(true, sprite.x, sprite.y, true, true);
       sprite.play(LIGHTNING_ANIMATION_KEY);
-      this.sound.play(LIGHTNING_SOUND_KEY, { volume: LIGHTNING_SOUND_VOLUME });
+      this.sound.play(LIGHTNING_SOUND_KEY, {
+        volume: LIGHTNING_SOUND_VOLUME * this.audioSettings.lightning,
+      });
       this.playLightningScreenFlash();
       this.cameras.main.shake(
         LIGHTNING_CAMERA_SHAKE_DURATION_MS,
@@ -4551,7 +4662,7 @@ export class GameplayScene extends Phaser.Scene {
         Phaser.Math.Between(0, WATERMELON_COLLECT_SOUNDS.length - 1)
       ];
     this.sound.play(collectSound.key, {
-      volume: WATERMELON_SOUND_VOLUME,
+      volume: WATERMELON_SOUND_VOLUME * this.audioSettings.watermelon,
     });
 
     const baseAmount = 1 + this.blueTalentStats.watermelonBonus;
@@ -5153,6 +5264,8 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       this.lastAcceptedFlapTime = time;
+      this.idleFlightState = 'active';
+      this.idleFlightPanicStartedAt = 0;
       this.emitMovementStartedOnce();
       return direction;
     };
@@ -5173,6 +5286,41 @@ export class GameplayScene extends Phaser.Scene {
     rightHeld ||= this.cursors.right.isDown || this.keyD.isDown;
 
     return acceptDirection(this.getDirectionFromSides(leftHeld, rightHeld));
+  }
+
+  private updateIdleFlightState(time: number): void {
+    if (this.isGrounded) {
+      this.idleFlightState = 'active';
+      this.idleFlightPanicStartedAt = 0;
+      return;
+    }
+
+    const idleDuration = time - this.lastAcceptedFlapTime;
+
+    if (idleDuration < FLIGHT_IDLE_TIMEOUT_MS) {
+      return;
+    }
+
+    if (this.idleFlightState === 'active') {
+      this.idleFlightState = 'panic';
+      this.idleFlightPanicStartedAt = time;
+      return;
+    }
+
+    if (
+      this.idleFlightState !== 'panic' ||
+      time - this.idleFlightPanicStartedAt < FLIGHT_IDLE_PANIC_DURATION_MS
+    ) {
+      return;
+    }
+
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+
+    this.idleFlightState = 'dropping';
+    body.setVelocity(
+      body.velocity.x * FLIGHT_IDLE_DROP_HORIZONTAL_DAMPING,
+      MAX_VERTICAL_SPEED,
+    );
   }
 
   private getDirectionFromSides(leftPressed: boolean, rightPressed: boolean): number {
@@ -5295,7 +5443,12 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
-    body.setAcceleration(0, GRAVITY_Y);
+    body.setAcceleration(
+      0,
+      this.idleFlightState === 'dropping'
+        ? GRAVITY_Y * FLIGHT_IDLE_DROP_GRAVITY_MULTIPLIER
+        : GRAVITY_Y,
+    );
     const flapImpulse = this.controlStats.flapUpwardImpulse * flapImpulseMultiplier;
 
     if (hasBalancedFlap) {
@@ -5305,12 +5458,16 @@ export class GameplayScene extends Phaser.Scene {
       body.velocity.x +=
         headingX * flapImpulse + direction * FLAP_SIDE_IMPULSE;
       body.velocity.y += headingY * flapImpulse;
-    } else if (body.velocity.y > 0 && this.controlStats.lift > 0) {
+    } else if (
+      this.idleFlightState !== 'dropping' &&
+      body.velocity.y > 0 &&
+      this.controlStats.lift > 0
+    ) {
       body.setAcceleration(0, Math.max(0, GRAVITY_Y - this.controlStats.lift));
     }
 
     // Plus il va vite, plus son inertie tend à aligner sa trajectoire sur son orientation.
-    if (speed > 35) {
+    if (speed > 35 && this.idleFlightState !== 'dropping') {
       const alignment = Phaser.Math.Clamp(
         (speed / MAX_VERTICAL_SPEED) * VELOCITY_ALIGNMENT * deltaSeconds,
         0,
@@ -5448,6 +5605,20 @@ export class GameplayScene extends Phaser.Scene {
         FAST_WING_MULTIPLIER + boostRatio * FLAP_WING_BOOST_MULTIPLIER,
       );
       this.rightWingBoostTime = Math.max(0, this.rightWingBoostTime - deltaSeconds);
+    }
+
+    if (this.idleFlightState === 'panic') {
+      leftMultiplier = Math.max(
+        leftMultiplier,
+        FLIGHT_IDLE_PANIC_WING_MULTIPLIER,
+      );
+      rightMultiplier = Math.max(
+        rightMultiplier,
+        FLIGHT_IDLE_PANIC_WING_MULTIPLIER,
+      );
+    } else if (this.idleFlightState === 'dropping') {
+      leftMultiplier = FLIGHT_IDLE_DROP_WING_MULTIPLIER;
+      rightMultiplier = FLIGHT_IDLE_DROP_WING_MULTIPLIER;
     }
 
     const radiansPerSecond = BASE_WING_BEATS_PER_SECOND * Math.PI * 2;
@@ -5719,7 +5890,9 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       obstacle.setData('thunderPlayed', true);
-      this.sound.play(THUNDER_SOUND_KEY, { volume: THUNDER_SOUND_VOLUME });
+      this.sound.play(THUNDER_SOUND_KEY, {
+        volume: THUNDER_SOUND_VOLUME * this.audioSettings.thunder,
+      });
     }
   }
 
@@ -5805,7 +5978,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private async consumeActiveLifeVial(): Promise<void> {
     this.sound.play(POTION_SOUND_KEY, {
-      volume: POTION_SOUND_VOLUME,
+      volume: POTION_SOUND_VOLUME * this.audioSettings.items,
     });
 
     this.shopObjectInventory = {
@@ -5836,7 +6009,7 @@ export class GameplayScene extends Phaser.Scene {
       ];
 
     this.sound.play(soundKey, {
-      volume: DODO_HIT_SOUND_VOLUME,
+      volume: DODO_HIT_SOUND_VOLUME * this.audioSettings.damage,
     });
   }
 
@@ -5933,6 +6106,9 @@ export class GameplayScene extends Phaser.Scene {
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
     this.lastWarningReason = null;
+    this.lastAcceptedFlapTime = this.time.now;
+    this.idleFlightState = 'active';
+    this.idleFlightPanicStartedAt = 0;
 
     this.player.clearTint();
     this.leftWing.clearTint();
@@ -6094,7 +6270,9 @@ export class GameplayScene extends Phaser.Scene {
     this.emitHud();
     this.stopFlightSounds();
     emitPlayerDied(reason);
-    this.sound.play(GAME_OVER_SOUND_KEY, { volume: GAME_OVER_SOUND_VOLUME });
+    this.sound.play(GAME_OVER_SOUND_KEY, {
+      volume: GAME_OVER_SOUND_VOLUME * this.audioSettings.gameOver,
+    });
     this.updateDodoVisuals(0);
     const lavaDeathAnimation =
       reason === 'lava' ? this.playLavaDeathAnimation() : null;
@@ -6198,6 +6376,9 @@ export class GameplayScene extends Phaser.Scene {
     this.angularVelocity = 0;
     this.isGrounded = false;
     this.lastDodoPose = null;
+    this.lastAcceptedFlapTime = this.time.now;
+    this.idleFlightState = 'active';
+    this.idleFlightPanicStartedAt = 0;
 
     const camera = this.cameras.main;
     const safeX = GAME_WIDTH / 2;
