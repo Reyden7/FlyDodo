@@ -1006,6 +1006,19 @@ button {
   font-weight: 1000 !important;
 }
 
+.game-over__tip {
+  position: absolute;
+  top: 63%;
+  right: 11%;
+  left: 11%;
+  color: #7a3505;
+  font-size: clamp(0.67rem, 2.8vw, 0.95rem);
+  font-weight: 1000 !important;
+  line-height: 1.08;
+  text-align: center;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
+}
+
 .game-over__actions {
   position: absolute;
   top: 67.1%;
@@ -1013,6 +1026,10 @@ button {
   left: 19.5%;
   display: grid;
   gap: clamp(4px, 1.1vw, 8px);
+}
+
+.game-over--space .game-over__actions {
+  top: 70%;
 }
 
 .game-over__card button {

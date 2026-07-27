@@ -106,6 +106,10 @@ const CAMERA_FALL_FOLLOW_SPEED = 0.72;
 const CAMERA_MAX_FALL_CATCHUP = 260;
 
 const GRAVITY_Y = 800;
+const SPACE_ZERO_GRAVITY_ALTITUDE = 7_000;
+const SPACE_GRAVITY_TRANSITION_SPEED = 2.8;
+const ASTRONAUT_HELMET_ITEM_ID = 'hat-astronaute';
+const ASTRONAUT_OUTFIT_ITEM_ID = 'outfit-astronaute';
 const BASE_FLAP_UPWARD_IMPULSE = 160;
 const FLAP_SIDE_IMPULSE = 30;
 const DEFAULT_FLIGHT_SPEED_MULTIPLIER = 0.5;
@@ -212,6 +216,9 @@ const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
 const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
 const SKY_BACKGROUND_DEPTH = -10;
 const SKY_BACKGROUND_TOP_FILL_COLOR = 0x000000;
+const ZONE_TRANSITION_FONT_KEY = 'AlphaClouds';
+const ZONE_TRANSITION_FONT_PATH =
+  '/assets/Font/alpha_clouds/AlphaClouds.ttf';
 const GROUND_TEXTURE_SOURCE_WIDTH = 2172;
 const GROUND_TEXTURE_SOURCE_HEIGHT = 724;
 const GROUND_TEXTURE_CROP_TOP = 150;
@@ -309,7 +316,12 @@ type ObstacleKindId =
   | 'satellite'
   | 'asteroid';
 
-type PlayerDamageReason = 'obstacle' | 'lava' | 'mosquito' | 'lightning';
+type PlayerDamageReason =
+  | 'obstacle'
+  | 'lava'
+  | 'mosquito'
+  | 'lightning'
+  | 'space';
 type FinishGameReason = PlayerDamageReason | 'default';
 
 interface ObstacleKind {
@@ -346,13 +358,13 @@ interface AltitudeLevelConfig {
 
 interface ZoneTransitionConfig {
   altitude: number;
-  textureKey: string;
-  texturePath: string;
+  translationKey: string;
 }
 
 interface ZoneTransitionMarker {
   altitude: number;
-  image: Phaser.GameObjects.Image;
+  translationKey: string;
+  text: Phaser.GameObjects.Text;
   dispersed: boolean;
   revealStartedAt: number | null;
 }
@@ -1087,24 +1099,48 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
 
 const ZONE_TRANSITIONS: readonly ZoneTransitionConfig[] = [
   {
-    altitude: 200,
-    textureKey: 'zone-transition-200',
-    texturePath: '/assets/Decors/t1.png',
+    altitude: 100,
+    translationKey: 'transition.firstClouds',
   },
   {
-    altitude: 800,
-    textureKey: 'zone-transition-800',
-    texturePath: '/assets/Decors/t2.png',
+    altitude: 250,
+    translationKey: 'transition.cloudLayer',
+  },
+  {
+    altitude: 600,
+    translationKey: 'transition.stormClouds',
   },
   {
     altitude: 1_200,
-    textureKey: 'zone-transition-1200',
-    texturePath: '/assets/Decors/t3.png',
+    translationKey: 'transition.cloudEnd',
   },
   {
     altitude: 1_800,
-    textureKey: 'zone-transition-1800',
-    texturePath: '/assets/Decors/t4.png',
+    translationKey: 'transition.skyDarkens',
+  },
+  {
+    altitude: 3_000,
+    translationKey: 'transition.nightSky',
+  },
+  {
+    altitude: 3_500,
+    translationKey: 'transition.firstStars',
+  },
+  {
+    altitude: 5_000,
+    translationKey: 'transition.deepSky',
+  },
+  {
+    altitude: 7_000,
+    translationKey: 'transition.spaceEdge',
+  },
+  {
+    altitude: 8_000,
+    translationKey: 'transition.space',
+  },
+  {
+    altitude: 10_000,
+    translationKey: 'transition.summit',
   },
 ];
 const ZONE_TRANSITION_SCROLL_FACTOR = PARALLAX_FAR_SCROLL_FACTOR;
@@ -1369,6 +1405,8 @@ export class GameplayScene extends Phaser.Scene {
   private bestAltitude = 0;
   private currentAltitude = 0;
   private currentSpeed = 0;
+  private spaceGravityFactor = 1;
+  private playerStateReady = false;
   private recordToBeat = 0;
   private bestScoreReady = false;
   private newRecordCelebrated = false;
@@ -1470,9 +1508,11 @@ export class GameplayScene extends Phaser.Scene {
       BACKGROUND_GROUND_TEXTURE_KEY,
       BACKGROUND_GROUND_TEXTURE_PATH,
     );
-    for (const transition of ZONE_TRANSITIONS) {
-      this.load.image(transition.textureKey, transition.texturePath);
-    }
+    this.load.font(
+      ZONE_TRANSITION_FONT_KEY,
+      ZONE_TRANSITION_FONT_PATH,
+      'truetype',
+    );
     for (const cloudTexture of AMBIENT_CLOUD_TEXTURES) {
       this.load.image(cloudTexture.sourceKey, cloudTexture.texturePath);
     }
@@ -1596,6 +1636,7 @@ export class GameplayScene extends Phaser.Scene {
     this.unsubscribeAppLanguage = subscribeAppLanguage((language) => {
       this.language = language;
       this.updateGroundRecordText();
+      this.updateZoneTransitionTexts();
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribeAudioSettings?.();
@@ -1724,13 +1765,15 @@ export class GameplayScene extends Phaser.Scene {
 
     if (devStartAltitude > 0) {
       this.currentAltitude = devStartAltitude;
+      this.spaceGravityFactor =
+        devStartAltitude >= SPACE_ZERO_GRAVITY_ALTITUDE ? 0 : 1;
       this.maxAltitudeSinceTakeoff = devStartAltitude;
       this.isGrounded = false;
       this.lastAcceptedFlapTime = this.time.now;
       this.zoneTransitionMarkers.forEach((marker) => {
-        if (marker.altitude <= devStartAltitude) {
+        if (marker.altitude < devStartAltitude) {
           marker.dispersed = true;
-          marker.image.setAlpha(0).setVisible(false);
+          marker.text.setAlpha(0).setVisible(false);
         }
       });
     }
@@ -1917,6 +1960,7 @@ export class GameplayScene extends Phaser.Scene {
     );
 
     if (this.scene.isActive()) {
+      this.playerStateReady = true;
       this.updateDodoVisuals(0);
     }
   }
@@ -2397,6 +2441,8 @@ export class GameplayScene extends Phaser.Scene {
     this.lastWarningReason = null;
     this.currentAltitude = 0;
     this.currentSpeed = 0;
+    this.spaceGravityFactor = 1;
+    this.playerStateReady = false;
     this.recordToBeat = 0;
     this.bestScoreReady = false;
     this.newRecordCelebrated = false;
@@ -3105,7 +3151,6 @@ export class GameplayScene extends Phaser.Scene {
     const initialCameraScrollY =
       START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
     const screenCenterY = GAME_HEIGHT * ZONE_TRANSITION_SCREEN_Y_RATIO;
-    const maxDisplayWidth = GAME_WIDTH * 0.92;
 
     for (const transition of ZONE_TRANSITIONS) {
       const cameraScrollYAtTransition =
@@ -3113,22 +3158,69 @@ export class GameplayScene extends Phaser.Scene {
       const worldY =
         screenCenterY +
         cameraScrollYAtTransition * ZONE_TRANSITION_SCROLL_FACTOR;
-      const image = this.add
-        .image(GAME_WIDTH / 2, worldY, transition.textureKey)
+      const text = this.add
+        .text(
+          GAME_WIDTH / 2,
+          worldY,
+          this.getZoneTransitionText(transition),
+          {
+            align: 'center',
+            color: '#ffffff',
+            fontFamily: ZONE_TRANSITION_FONT_KEY,
+            fontSize: '38px',
+            lineSpacing: 4,
+            shadow: {
+              offsetX: 0,
+              offsetY: 4,
+              color: '#3f8dca',
+              blur: 8,
+              fill: true,
+              stroke: true,
+            },
+            stroke: '#d8f3ff',
+            strokeThickness: 2,
+          },
+        )
         .setOrigin(0.5)
         .setDepth(ZONE_TRANSITION_DEPTH)
         .setScrollFactor(ZONE_TRANSITION_SCROLL_FACTOR)
         .setAlpha(0)
         .setVisible(false);
-      const scale = maxDisplayWidth / image.width;
 
-      image.setScale(scale);
+      this.fitZoneTransitionText(text);
       this.zoneTransitionMarkers.push({
         altitude: transition.altitude,
-        image,
+        translationKey: transition.translationKey,
+        text,
         dispersed: false,
         revealStartedAt: null,
       });
+    }
+  }
+
+  private getZoneTransitionText(
+    transition: Pick<ZoneTransitionConfig, 'altitude' | 'translationKey'>,
+  ): string {
+    return `${transition.altitude} m\n${translate(
+      transition.translationKey,
+      undefined,
+      this.language,
+    )}`;
+  }
+
+  private fitZoneTransitionText(text: Phaser.GameObjects.Text): void {
+    text.setScale(1);
+    const maxDisplayWidth = GAME_WIDTH * 0.92;
+
+    if (text.width > maxDisplayWidth) {
+      text.setScale(maxDisplayWidth / text.width);
+    }
+  }
+
+  private updateZoneTransitionTexts(): void {
+    for (const marker of this.zoneTransitionMarkers) {
+      marker.text.setText(this.getZoneTransitionText(marker));
+      this.fitZoneTransitionText(marker.text);
     }
   }
 
@@ -3434,7 +3526,7 @@ export class GameplayScene extends Phaser.Scene {
 
       if (marker.revealStartedAt === null) {
         if (this.currentAltitude < marker.altitude) {
-          marker.image.setAlpha(0).setVisible(false);
+          marker.text.setAlpha(0).setVisible(false);
           continue;
         }
 
@@ -3446,7 +3538,7 @@ export class GameplayScene extends Phaser.Scene {
       }
 
       const screenY =
-        marker.image.y -
+        marker.text.y -
         camera.scrollY * ZONE_TRANSITION_SCROLL_FACTOR;
       const fadeProgress = Phaser.Math.Clamp(
         (this.time.now - marker.revealStartedAt) / 520,
@@ -3457,12 +3549,12 @@ export class GameplayScene extends Phaser.Scene {
         fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
       const playerCrossesText =
         smoothAlpha > 0.7 &&
-        Math.abs(playerScreenX - marker.image.x) <
-          marker.image.displayWidth * 0.52 &&
+        Math.abs(playerScreenX - marker.text.x) <
+          marker.text.displayWidth * 0.52 &&
         Math.abs(playerScreenY - screenY) <
-          marker.image.displayHeight * 0.42;
+          marker.text.displayHeight * 0.42;
 
-      marker.image
+      marker.text
         .setAlpha(smoothAlpha)
         .setVisible(smoothAlpha > 0.01);
 
@@ -3477,18 +3569,18 @@ export class GameplayScene extends Phaser.Scene {
     screenY: number,
   ): void {
     marker.dispersed = true;
-    const image = marker.image;
-    const spreadWidth = image.displayWidth * 0.46;
-    const spreadHeight = image.displayHeight * 0.28;
+    const text = marker.text;
+    const spreadWidth = text.displayWidth * 0.46;
+    const spreadHeight = text.displayHeight * 0.28;
 
     this.tweens.add({
-      targets: image,
+      targets: text,
       alpha: 0,
-      scaleX: image.scaleX * 1.06,
-      scaleY: image.scaleY * 1.12,
+      scaleX: text.scaleX * 1.06,
+      scaleY: text.scaleY * 1.12,
       duration: 360,
       ease: 'Cubic.easeOut',
-      onComplete: () => image.setVisible(false),
+      onComplete: () => text.setVisible(false),
     });
 
     for (
@@ -5444,6 +5536,16 @@ export class GameplayScene extends Phaser.Scene {
     const headingY = -Math.cos(this.player.rotation);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const speed = body.velocity.length();
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+    const targetGravityFactor =
+      altitude >= SPACE_ZERO_GRAVITY_ALTITUDE ? 0 : 1;
+    const gravitySmoothing =
+      1 - Math.exp(-SPACE_GRAVITY_TRANSITION_SPEED * deltaSeconds);
+    this.spaceGravityFactor = Phaser.Math.Linear(
+      this.spaceGravityFactor,
+      targetGravityFactor,
+      gravitySmoothing,
+    );
 
     if (this.isGrounded) {
       if (this.perchedBranch?.active) {
@@ -5515,12 +5617,13 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     // La poussée est orientée dans la direction vers laquelle le Dodo regarde.
-    body.setAcceleration(
-      0,
-      this.idleFlightState === 'dropping'
-        ? GRAVITY_Y * FLIGHT_IDLE_DROP_GRAVITY_MULTIPLIER
-        : GRAVITY_Y,
-    );
+    const effectiveGravity =
+      GRAVITY_Y *
+      this.spaceGravityFactor *
+      (this.idleFlightState === 'dropping'
+        ? FLIGHT_IDLE_DROP_GRAVITY_MULTIPLIER
+        : 1);
+    body.setAcceleration(0, effectiveGravity);
     const flapImpulse = this.controlStats.flapUpwardImpulse * flapImpulseMultiplier;
 
     if (hasBalancedFlap) {
@@ -5535,7 +5638,13 @@ export class GameplayScene extends Phaser.Scene {
       body.velocity.y > 0 &&
       this.controlStats.lift > 0
     ) {
-      body.setAcceleration(0, Math.max(0, GRAVITY_Y - this.controlStats.lift));
+      body.setAcceleration(
+        0,
+        Math.max(
+          0,
+          (GRAVITY_Y - this.controlStats.lift) * this.spaceGravityFactor,
+        ),
+      );
     }
 
     // Plus il va vite, plus son inertie tend à aligner sa trajectoire sur son orientation.
@@ -5898,6 +6007,15 @@ export class GameplayScene extends Phaser.Scene {
     this.currentAltitude = altitude;
     this.currentSpeed = speed;
 
+    if (
+      this.playerStateReady &&
+      altitude >= SPACE_ZERO_GRAVITY_ALTITUDE &&
+      !this.hasCompleteAstronautEquipment()
+    ) {
+      void this.finishGame('space', false);
+      return;
+    }
+
     if (altitude > this.bestAltitude) {
       this.bestAltitude = altitude;
       this.updateGroundRecordText();
@@ -5912,6 +6030,13 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.emitHud();
+  }
+
+  private hasCompleteAstronautEquipment(): boolean {
+    return (
+      this.equippedCosmeticIds.hat === ASTRONAUT_HELMET_ITEM_ID &&
+      this.equippedCosmeticIds.outfit === ASTRONAUT_OUTFIT_ITEM_ID
+    );
   }
 
   private emitHud(): void {

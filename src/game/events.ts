@@ -28,7 +28,8 @@ export type PlayerDeathReason =
   | 'obstacle'
   | 'mosquito'
   | 'lava'
-  | 'lightning';
+  | 'lightning'
+  | 'space';
 
 export interface PlayerDiedDetail {
   reason: PlayerDeathReason;
