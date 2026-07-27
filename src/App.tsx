@@ -315,6 +315,7 @@ export default function App(): React.JSX.Element {
     useState<MainMenuButton | null>(null);
   const [altitude, setAltitude] = useState(0);
   const [bestAltitude, setBestAltitude] = useState(0);
+  const [newRecord, setNewRecord] = useState(false);
   const [speed, setSpeed] = useState(0);
   const [watermelons, setWatermelons] = useState(0);
   const [lives, setLives] = useState(1);
@@ -536,6 +537,7 @@ export default function App(): React.JSX.Element {
       const hud = (event as CustomEvent<FlightHudDetail>).detail;
       setAltitude(hud.altitude);
       setBestAltitude(hud.bestAltitude);
+      setNewRecord(hud.newRecord);
       setSpeed(hud.speed);
       setWatermelons(hud.watermelons);
       setLives(hud.lives);
@@ -1811,8 +1813,12 @@ export default function App(): React.JSX.Element {
               <strong>{speed} m/s</strong>
             </div>
 
-            <div className="hud-pill hud-pill--altitude">
-              <span>ALTITUDE</span>
+            <div
+              className={`hud-pill hud-pill--altitude${
+                newRecord ? ' hud-pill--new-record' : ''
+              }`}
+            >
+              <span>{newRecord ? 'NOUVEAU RECORD' : 'ALTITUDE'}</span>
               <strong>{altitude} m</strong>
             </div>
 
@@ -1820,7 +1826,9 @@ export default function App(): React.JSX.Element {
 
           <div className="hud-pill hud-pill--watermelons">
             <span>PASTÈQUES</span>
-            <strong>{watermelons}</strong>
+            <strong key={watermelons} className="hud-pill__watermelon-count">
+              {watermelons}
+            </strong>
           </div>
 
           <div className="survival-icons">

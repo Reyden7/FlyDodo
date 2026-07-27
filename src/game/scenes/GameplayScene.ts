@@ -99,6 +99,9 @@ const DEFAULT_FLIGHT_SPEED_MULTIPLIER = 0.5;
 const MAX_HORIZONTAL_SPEED = 300 * DEFAULT_FLIGHT_SPEED_MULTIPLIER;
 const MAX_VERTICAL_SPEED = 450 * DEFAULT_FLIGHT_SPEED_MULTIPLIER;
 const VELOCITY_ALIGNMENT = 0.62;
+const SCREEN_EDGE_BOUNCE_DAMPING = 0.68;
+const SCREEN_EDGE_MIN_BOUNCE_SPEED = 60;
+const SCREEN_EDGE_TURN_IMPULSE = 58;
 
 const BASE_FLAP_TURN_IMPULSE = 50;
 const MAX_TURN_RATE = 112; 
@@ -123,10 +126,29 @@ const GROUND_DIRT_HEIGHT = 85;
 const GROUND_TEXTURE_KEY = 'ground-decor';
 const GROUND_TEXTURE_FRAME = 'ground-cropped';
 const GROUND_TEXTURE_PATH = '/assets/Decors/ground.png';
+const PARALLAX_FAR_SCROLL_FACTOR = 0.2;
+const PARALLAX_MID_SCROLL_FACTOR = 0.6;
+const PARALLAX_NEAR_SCROLL_FACTOR = 1;
+const PARALLAX_FOREGROUND_SCROLL_FACTOR = 1.12;
+const BACKGROUND_GROUND_TEXTURE_KEY = 'forest-background-ground';
+const BACKGROUND_GROUND_TEXTURE_PATH = '/assets/Decors/ground2.png';
+const BACKGROUND_GROUND_SOURCE_WIDTH = 2_172;
+const BACKGROUND_GROUND_SOURCE_SURFACE_Y = 150;
+const BACKGROUND_GROUND_SCROLL_FACTOR = PARALLAX_MID_SCROLL_FACTOR;
+const BACKGROUND_GROUND_SCREEN_LIFT = 0;
+const BACKGROUND_GROUND_DEPTH = -4.2;
+const FAR_BACKGROUND_GROUND_SCROLL_FACTOR = PARALLAX_FAR_SCROLL_FACTOR;
+const FAR_BACKGROUND_GROUND_SCREEN_LIFT = 0;
+const FAR_BACKGROUND_GROUND_DEPTH = -9.4;
+const FOREST_VOLCANO_KEY = 'forest-volcano';
 const FOREST_TREE_1_KEY = 'forest-tree-1';
 const FOREST_TREE_2_KEY = 'forest-tree-2';
 const FOREST_FERN_1_KEY = 'forest-fern-1';
 const FOREST_FERN_2_KEY = 'forest-fern-2';
+const FOREST_GRASS_1_KEY = 'forest-grass-1';
+const FOREST_GRASS_2_KEY = 'forest-grass-2';
+const FOREST_GRASS_3_KEY = 'forest-grass-3';
+const FOREST_GRASS_4_KEY = 'forest-grass-4';
 const FOREST_BRANCH_RIGHT_SOURCE_KEY = 'forest-branch-right-source';
 const FOREST_BRANCH_LEFT_SOURCE_KEY = 'forest-branch-left-source';
 const FOREST_MOSQUITO_TEXTURE_PREFIX = 'forest-mosquito';
@@ -138,6 +160,7 @@ const PTERODACTYL_FRAME_COUNT = 16;
 const STORM_CLOUD_TEXTURE_PREFIX = 'mid-sky-storm-cloud';
 const STORM_CLOUD_ANIMATION_KEY = 'mid-sky-storm-cloud-flash';
 const STORM_CLOUD_FRAME_COUNT = 9;
+const STORM_CLOUD_DISPLAY_WIDTHS = [130, 160, 190] as const;
 const THUNDER_SOUND_KEY = 'mid-sky-thunder-sound';
 const THUNDER_SOUND_PATH = '/assets/sounds/thunder.mp3';
 const THUNDER_SOUND_VOLUME = 0.7;
@@ -151,6 +174,12 @@ const LIGHTNING_SCREEN_FLASH_COLOR = 0xeafaff;
 const LIGHTNING_SCREEN_FLASH_ALPHA = 0.25;
 const LIGHTNING_SCREEN_FLASH_FADE_MS = 420;
 const LIGHTNING_SCREEN_FLASH_DEPTH = 1_000;
+const BRANCH_CAMERA_SHAKE_DURATION_MS = 120;
+const BRANCH_CAMERA_SHAKE_INTENSITY = 0.0025;
+const LIGHTNING_CAMERA_SHAKE_DURATION_MS = 170;
+const LIGHTNING_CAMERA_SHAKE_INTENSITY = 0.002;
+const LIGHTNING_HIT_CAMERA_SHAKE_DURATION_MS = 440;
+const LIGHTNING_HIT_CAMERA_SHAKE_INTENSITY = 0.012;
 const SATELLITE_TEXTURE_KEY = 'space-satellite';
 const ASTEROID_TEXTURE_KEY = 'space-asteroid';
 const LAVA_TEXTURE_KEY = 'lava-flow';
@@ -164,9 +193,15 @@ const GROUND_TEXTURE_SOURCE_HEIGHT = 724;
 const GROUND_TEXTURE_CROP_TOP = 150;
 const GROUND_TEXTURE_SURFACE_Y = 236;
 const GROUND_VISUAL_Y_OFFSET = 2;
+const GROUND_HORIZONTAL_OVERSCAN = 24;
 const GROUND_RECORD_X = GAME_WIDTH / 2;
 const GROUND_RECORD_Y = GROUND_Y + 60;
 const GROUND_RECORD_DEPTH = -3;
+const NEW_RECORD_LEAF_TEXTURE_KEY = 'new-record-leaf';
+const NEW_RECORD_CAMERA_SHAKE_DURATION_MS = 650;
+const NEW_RECORD_CAMERA_SHAKE_INTENSITY = 0.007;
+const NEW_RECORD_BIRD_COUNT = 7;
+const NEW_RECORD_LEAF_COUNT = 24;
 const OBSTACLE_DEPTH = 6;
 const OBSTACLE_ALPHA = 0.92;
 const BRANCH_EDGE_OVERHANG = 20;
@@ -195,7 +230,12 @@ const ASTEROID_CLUSTER_INNER_SPACING_MAX_METRES = 10;
 const LIGHTNING_TRIGGER_DISTANCE_METRES = 28;
 const LIGHTNING_HITBOX_WIDTH_RATIO = 0.58;
 const LIGHTNING_HITBOX_HEIGHT_RATIO = 0.82;
-const BRANCH_PERCH_TOP_TOLERANCE = 50;
+const BRANCH_PERCH_TOP_TOLERANCE = 18;
+const BRANCH_PERCH_PREVIOUS_BOTTOM_TOLERANCE = 6;
+const BRANCH_PERCH_SETTLE_SPEED = 18;
+const BRANCH_PERCH_SETTLE_EPSILON = 0.35;
+const BRANCH_PERCH_Y_OFFSET = -2;
+const BRANCH_TAKEOFF_COLLISION_GRACE_MS = 250;
 const PLAYER_MANUAL_HITBOX_WIDTH_RATIO = 0.46;
 const PLAYER_MANUAL_HITBOX_HEIGHT_RATIO = 0.58;
 const PLAYER_BASE_LIVES = 1;
@@ -219,6 +259,7 @@ interface GroundForestDecor {
   depth: number;
   scrollFactor: number;
   groundOffset: number;
+  groundLayer?: 'background' | 'far-background';
   flipX?: boolean;
   alpha?: number;
 }
@@ -235,11 +276,8 @@ type ObstacleKindId =
   | 'branchRight'
   | 'flyingInsect'
   | 'pterodactyl'
-  | 'bird'
   | 'stormCloud'
-  | 'storm'
   | 'lightning'
-  | 'strongWind'
   | 'satellite'
   | 'asteroid';
 
@@ -276,6 +314,65 @@ interface AltitudeLevelConfig {
   spacingMin: number;
   spacingMax: number;
   sideMargin: number;
+}
+
+interface ZoneTransitionConfig {
+  altitude: number;
+  textureKey: string;
+  texturePath: string;
+}
+
+interface ZoneTransitionMarker {
+  altitude: number;
+  image: Phaser.GameObjects.Image;
+  dispersed: boolean;
+  revealStartedAt: number | null;
+}
+
+interface AmbientCloudTextureConfig {
+  sourceKey: string;
+  textureKey: string;
+  texturePath: string;
+  crop: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+interface AmbientCloudPlaneConfig {
+  depth: number;
+  scrollFactor: number;
+  widthMin: number;
+  widthMax: number;
+  alphaMin: number;
+  alphaMax: number;
+  evaporatesOnContact: boolean;
+}
+
+interface AmbientCloud {
+  image: Phaser.GameObjects.Image;
+  velocityX: number;
+  baseAlpha: number;
+  evaporatesOnContact: boolean;
+  evaporated: boolean;
+}
+
+interface SkyWindStreak {
+  image: Phaser.GameObjects.Image;
+  velocityX: number;
+  age: number;
+  lifetime: number;
+  maxAlpha: number;
+  wobblePhase: number;
+  wobbleSpeed: number;
+}
+
+interface SkyWindLevelConfig {
+  force: number;
+  durationMinMs: number;
+  durationMaxMs: number;
 }
 
 interface MosquitoCircleMotion {
@@ -340,31 +437,23 @@ interface WindStreak {
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
   {
-    textureKey: FOREST_TREE_2_KEY,
-    x: 120,
-    scale: 0.42,
-    depth: -9,
-    scrollFactor: 0.82,
-    groundOffset: 10,
+    textureKey: FOREST_VOLCANO_KEY,
+    x: GAME_WIDTH / 2,
+    scale: 0.55,
+    depth: -9.5,
+    scrollFactor: FAR_BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 50,
+    groundLayer: 'far-background',
     alpha: 1,
   },
   {
     textureKey: FOREST_TREE_1_KEY,
     x: 315,
-    scale: 0.30,
+    scale: 1,
     depth: -8.7,
-    scrollFactor: 0.78,
-    groundOffset: 9,
-    flipX: true,
-    alpha: 1,
-  },
-  {
-    textureKey: FOREST_TREE_2_KEY,
-    x: 306,
-    scale: 0.36,
-    depth: -8.2,
-    scrollFactor: 0.84,
-    groundOffset: 11,
+    scrollFactor: BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 5,
+    groundLayer: 'background',
     flipX: true,
     alpha: 1,
   },
@@ -373,25 +462,25 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
     x: -60,
     scale: 1,
     depth: -6.4,
-    scrollFactor: 0.9,
-    groundOffset: 8,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 28,
   },
   {
     textureKey: FOREST_TREE_1_KEY,
-    x: 15,
+    x: -45,
     scale: 1.2,
-    depth: -8,
-    scrollFactor: 0.94,
-    groundOffset: 42,
+    depth: 2,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 1,
     flipX: true,
     alpha: 1,
   },
   {
     textureKey: FOREST_TREE_2_KEY,
-    x: 340,
-    scale: 1,
+    x: 380,
+    scale: 0.5,
     depth: -6.2,
-    scrollFactor: 0.91,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
     groundOffset: 9,
     flipX: true,
     alpha: 1,
@@ -399,26 +488,52 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
   {
     textureKey: FOREST_TREE_1_KEY,
     x: 424,
-    scale: 0.5,
+    scale: 1,
     depth: -6.5,
-    scrollFactor: 0.88,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
     groundOffset: 8,
   },
   {
-    textureKey: FOREST_FERN_1_KEY,
-    x: 200,
-    scale: 0.12,
-    depth: 1,
-    scrollFactor: 0.98,
-    groundOffset: -1,
+    textureKey: FOREST_TREE_2_KEY,
+    x: 105,
+    scale: 0.38,
+    depth: 1.65,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 4,
+  },
+  {
+    textureKey: FOREST_TREE_1_KEY,
+    x: 328,
+    scale: 0.42,
+    depth: 1.7,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 3,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_TREE_1_KEY,
+    x: -245,
+    scale: 0.7,
+    depth: 12,
+    scrollFactor: PARALLAX_FOREGROUND_SCROLL_FACTOR,
+    groundOffset: 0,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_TREE_2_KEY,
+    x: 670,
+    scale: 0.72,
+    depth: 12,
+    scrollFactor: PARALLAX_FOREGROUND_SCROLL_FACTOR,
+    groundOffset: 0,
   },
   {
     textureKey: FOREST_FERN_2_KEY,
     x: 130,
     scale: 0.045,
     depth: 11,
-    scrollFactor: 1,
-    groundOffset: 30,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 10,
     flipX: true,
   },
   {
@@ -426,42 +541,271 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
     x: 228,
     scale: 0.053,
     depth: 11,
-    scrollFactor: 1,
-    groundOffset: 30,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 10,
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 72,
+    scale: 0.034,
+    depth: -9.25,
+    scrollFactor: FAR_BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 318,
+    scale: 0.03,
+    depth: -9.2,
+    scrollFactor: FAR_BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+    flipX: true,
   },
   {
     textureKey: FOREST_FERN_2_KEY,
     x: 116,
     scale: 0.11,
     depth: -3.75,
-    scrollFactor: 0.99,
+    scrollFactor: BACKGROUND_GROUND_SCROLL_FACTOR,
     groundOffset: 0,
+    groundLayer: 'background',
     flipX: true,
   },
   {
-    textureKey: FOREST_FERN_1_KEY,
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 45,
+    scale: 0.052,
+    depth: -3.98,
+    scrollFactor: BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+  },
+  {
+    textureKey: FOREST_GRASS_3_KEY,
+    x: 215,
+    scale: 0.046,
+    depth: -3.94,
+    scrollFactor: BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 355,
+    scale: 0.05,
+    depth: -3.9,
+    scrollFactor: BACKGROUND_GROUND_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 58,
+    scale: 0.064,
+    depth: 1.2,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 305,
+    scale: 0.06,
+    depth: 1.4,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_3_KEY,
+    x: 382,
+    scale: 0.052,
+    depth: 11,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 17,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 18,
+    scale: 0.027,
+    depth: -9.29,
+    scrollFactor: PARALLAX_FAR_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_3_KEY,
+    x: 138,
+    scale: 0.029,
+    depth: -9.24,
+    scrollFactor: PARALLAX_FAR_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 232,
+    scale: 0.031,
+    depth: -9.22,
+    scrollFactor: PARALLAX_FAR_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 378,
+    scale: 0.028,
+    depth: -9.18,
+    scrollFactor: PARALLAX_FAR_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'far-background',
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 8,
+    scale: 0.044,
+    depth: -4.02,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 102,
+    scale: 0.041,
+    depth: -3.97,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 158,
+    scale: 0.048,
+    depth: -3.93,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
     x: 270,
-    scale: 0.105,
-    depth: -3.82,
-    scrollFactor: 0.985,
-    groundOffset: 0,
+    scale: 0.044,
+    depth: -3.91,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
     flipX: true,
   },
   {
-    textureKey: FOREST_FERN_2_KEY,
-    x: 386,
-    scale: 0.12,
-    depth: -3.78,
-    scrollFactor: 0.98,
-    groundOffset: -1,
+    textureKey: FOREST_GRASS_3_KEY,
+    x: 315,
+    scale: 0.041,
+    depth: -3.88,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 402,
+    scale: 0.045,
+    depth: -3.86,
+    scrollFactor: PARALLAX_MID_SCROLL_FACTOR,
+    groundOffset: 15,
+    groundLayer: 'background',
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 6,
+    scale: 0.052,
+    depth: 1.1,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 112,
+    scale: 0.055,
+    depth: 1.25,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_3_KEY,
+    x: 168,
+    scale: 0.049,
+    depth: 1.3,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+  },
+  {
+    textureKey: FOREST_GRASS_4_KEY,
+    x: 235,
+    scale: 0.058,
+    depth: 1.35,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+    flipX: true,
+  },
+  {
+    textureKey: FOREST_GRASS_2_KEY,
+    x: 350,
+    scale: 0.054,
+    depth: 1.45,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 16,
+  },
+  {
+    textureKey: FOREST_GRASS_1_KEY,
+    x: 255,
+    scale: 0.042,
+    depth: 11,
+    scrollFactor: PARALLAX_NEAR_SCROLL_FACTOR,
+    groundOffset: 17,
+    flipX: true,
   },
 ];
 
 const WATERMELON_TEXTURE_KEY = 'watermelon-collectable';
-const WATERMELON_TEXTURE_PATH = '/assets/collectable/pasteque.png';
+const WATERMELON_TEXTURE_PATH = '/assets/collectable/pastequeN.png';
+const WATERMELON_TAKE_TEXTURE_KEY = 'watermelon-collect-take';
+const WATERMELON_TAKE_TEXTURE_PATH = '/assets/collectable/pastèque take.png';
+const WATERMELON_SCORE_TEXTURES = [
+  { amount: 1, key: 'watermelon-collect-score-1', path: '/assets/collectable/score.png' },
+  { amount: 2, key: 'watermelon-collect-score-2', path: '/assets/collectable/s2.png' },
+  { amount: 3, key: 'watermelon-collect-score-3', path: '/assets/collectable/s3.png' },
+  { amount: 4, key: 'watermelon-collect-score-4', path: '/assets/collectable/s4.png' },
+  { amount: 5, key: 'watermelon-collect-score-5', path: '/assets/collectable/s5.png' },
+  { amount: 6, key: 'watermelon-collect-score-6', path: '/assets/collectable/s6.png' },
+  { amount: 7, key: 'watermelon-collect-score-7', path: '/assets/collectable/s7.png' },
+  { amount: 8, key: 'watermelon-collect-score-8', path: '/assets/collectable/s8.png' },
+] as const;
+const WATERMELON_SEEDS_TEXTURE_KEY = 'watermelon-collect-seeds';
+const WATERMELON_SEEDS_TEXTURE_PATH = '/assets/collectable/pepin.png';
+const WATERMELON_JUICE_TEXTURE_KEY = 'watermelon-collect-juice';
+const WATERMELON_JUICE_TEXTURE_PATH = '/assets/collectable/jus.png';
+const WATERMELON_FRAGMENT_TEXTURES = [
+  { key: 'watermelon-fragment-1', path: '/assets/collectable/m1.png' },
+  { key: 'watermelon-fragment-2', path: '/assets/collectable/m2.png' },
+  { key: 'watermelon-fragment-3', path: '/assets/collectable/m3.png' },
+  { key: 'watermelon-fragment-4', path: '/assets/collectable/m4.png' },
+  { key: 'watermelon-fragment-5', path: '/assets/collectable/m5.png' },
+] as const;
 const FRUIT_DETECTOR_TEXTURE_KEY = 'fruit-detector-talent-button';
-const WATERMELON_SOUND_KEY = 'watermelon-collect-sound';
-const WATERMELON_SOUND_PATH = '/assets/sounds/pasteque.mp3';
+const WATERMELON_COLLECT_SOUNDS = [
+  { key: 'watermelon-collect-sound-1', path: '/assets/collectable/eat1.mp3' },
+  { key: 'watermelon-collect-sound-2', path: '/assets/collectable/eat2.mp3' },
+  { key: 'watermelon-collect-sound-3', path: '/assets/collectable/eat3.mp3' },
+] as const;
 const WATERMELON_SOUND_VOLUME = 0.65;
 const WATERMELON_MAGNET_BASE_RADIUS = 100;
 const WATERMELON_MAGNET_RADIUS_BY_LEVEL = [100, 200, 300, 400] as const;
@@ -476,6 +820,10 @@ const DODO_HIT_SOUND_VOLUME = 0.72;
 const FLIGHT_SOUND_KEY = 'dodo-flight-default-sound';
 const FLIGHT_SOUND_PATH = '/assets/sounds/defaut.mp3';
 const FLIGHT_SOUND_VOLUME = 0.24;
+const SKY_WIND_SOUND_KEY = 'sky-wind-sound';
+const SKY_WIND_SOUND_PATH = '/assets/sounds/wind.mp3';
+const SKY_WIND_SOUND_MAX_VOLUME = 0.58;
+const SKY_WIND_SOUND_START_FORCE = 30;
 
 const FLAP_SOUND_KEY = 'dodo-single-flap-sound';
 const FLAP_SOUND_PATH = '/assets/sounds/1Flap.mp3';
@@ -483,6 +831,9 @@ const FLAP_SOUND_VOLUME = 0.25;
 const GAME_OVER_SOUND_KEY = 'game-over-sound';
 const GAME_OVER_SOUND_PATH = '/assets/sounds/GO.mp3';
 const GAME_OVER_SOUND_VOLUME = 1;
+const ZONE_TRANSITION_SOUND_KEY = 'zone-transition-sound';
+const ZONE_TRANSITION_SOUND_PATH = '/assets/sounds/transistionMusic.mp3';
+const ZONE_TRANSITION_SOUND_VOLUME = 0.72;
 
 const COSMETIC_FALLBACK_TEXTURE_KEY = 'cosmetic-runtime-placeholder';
 const COSMETIC_TRIM_ALPHA_THRESHOLD = 64;
@@ -508,6 +859,10 @@ const FEATHER_TEXTURES = [
 
 const WATERMELON_SCALE = 0.075;
 const WATERMELON_DEPTH = 4;
+const WATERMELON_GLOW_TEXTURE_KEY = 'watermelon-attraction-glow';
+const WATERMELON_GLOW_SIZE = 112;
+const WATERMELON_ROTATION_DURATION_MIN_MS = 4_500;
+const WATERMELON_ROTATION_DURATION_MAX_MS = 6_500;
 const WATERMELON_SIDE_MARGIN = 55;
 const WATERMELON_FIRST_OFFSET_Y = 750;
 const WATERMELON_MIN_SPACING_Y = 520;
@@ -571,14 +926,6 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     strokeColor: 0x3a2a23,
   },
   {
-    id: 'bird',
-    textureKey: 'obstacle-bird-placeholder',
-    width: 38,
-    height: 38,
-    fillColor: 0xefe2bd,
-    strokeColor: 0x846d42,
-  },
-  {
     id: 'stormCloud',
     textureKey: `${STORM_CLOUD_TEXTURE_PREFIX}-000`,
     width: 220,
@@ -587,14 +934,6 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     animationKey: STORM_CLOUD_ANIMATION_KEY,
     fillColor: 0x273449,
     strokeColor: 0x101721,
-  },
-  {
-    id: 'storm',
-    textureKey: 'obstacle-storm-placeholder',
-    width: 70,
-    height: 50,
-    fillColor: 0x4b5267,
-    strokeColor: 0x161a28,
   },
   {
     id: 'lightning',
@@ -606,14 +945,6 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     animationKey: LIGHTNING_ANIMATION_KEY,
     fillColor: 0xffda39,
     strokeColor: 0x8f6a00,
-  },
-  {
-    id: 'strongWind',
-    textureKey: 'obstacle-strong-wind-placeholder',
-    width: 76,
-    height: 30,
-    fillColor: 0xbff8ff,
-    strokeColor: 0x4caebc,
   },
   {
     id: 'satellite',
@@ -663,7 +994,7 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     label: 'LowSky',
     minAltitude: 200,
     maxAltitude: 800,
-    obstacleKinds: ['pterodactyl', 'bird', 'stormCloud'],
+    obstacleKinds: ['pterodactyl', 'stormCloud'],
     firstObstacleOffset: 45,
     spacingMin: 80,
     spacingMax: 125,
@@ -674,7 +1005,7 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     label: 'MidSky',
     minAltitude: 800,
     maxAltitude: 1800,
-    obstacleKinds: ['storm', 'lightning'],
+    obstacleKinds: ['lightning'],
     firstObstacleOffset: 65,
     spacingMin: 105,
     spacingMax: 165,
@@ -685,7 +1016,7 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     label: 'Stratosphere',
     minAltitude: 1800,
     maxAltitude: 3000,
-    obstacleKinds: ['strongWind'],
+    obstacleKinds: [],
     firstObstacleOffset: 80,
     spacingMin: 135,
     spacingMax: 210,
@@ -702,6 +1033,119 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     spacingMax: 430,
     sideMargin: 44,
   },
+];
+
+const ZONE_TRANSITIONS: readonly ZoneTransitionConfig[] = [
+  {
+    altitude: 200,
+    textureKey: 'zone-transition-200',
+    texturePath: '/assets/Decors/t1.png',
+  },
+  {
+    altitude: 800,
+    textureKey: 'zone-transition-800',
+    texturePath: '/assets/Decors/t2.png',
+  },
+  {
+    altitude: 1_200,
+    textureKey: 'zone-transition-1200',
+    texturePath: '/assets/Decors/t3.png',
+  },
+  {
+    altitude: 1_800,
+    textureKey: 'zone-transition-1800',
+    texturePath: '/assets/Decors/t4.png',
+  },
+  {
+    altitude: 3_000,
+    textureKey: 'zone-transition-3000',
+    texturePath: '/assets/Decors/t5.png',
+  },
+];
+const ZONE_TRANSITION_SCROLL_FACTOR = PARALLAX_FAR_SCROLL_FACTOR;
+const ZONE_TRANSITION_DEPTH = 20;
+const ZONE_TRANSITION_SCREEN_Y_RATIO = 0.43;
+const ZONE_TRANSITION_CLOUD_TEXTURE_KEY = 'zone-transition-cloud-puff';
+const ZONE_TRANSITION_CLOUD_PUFF_COUNT = 24;
+const AMBIENT_CLOUD_MIN_ALTITUDE = 250;
+const AMBIENT_CLOUD_MAX_ALTITUDE = 1_700;
+const AMBIENT_CLOUD_COUNT = 32;
+const AMBIENT_CLOUD_TEXTURES: readonly AmbientCloudTextureConfig[] = [
+  {
+    sourceKey: 'ambient-cloud-1-source',
+    textureKey: 'ambient-cloud-1',
+    texturePath: '/assets/Decors/nuage1.png',
+    crop: { x: 78, y: 320, width: 640, height: 370 },
+  },
+  {
+    sourceKey: 'ambient-cloud-2-source',
+    textureKey: 'ambient-cloud-2',
+    texturePath: '/assets/Decors/nuage2.png',
+    crop: { x: 92, y: 300, width: 570, height: 380 },
+  },
+  {
+    sourceKey: 'ambient-cloud-3-source',
+    textureKey: 'ambient-cloud-3',
+    texturePath: '/assets/Decors/nuage3.png',
+    crop: { x: 105, y: 375, width: 1_245, height: 365 },
+  },
+];
+const AMBIENT_CLOUD_PLANES: readonly AmbientCloudPlaneConfig[] = [
+  {
+    depth: -6.5,
+    scrollFactor: 0.25,
+    widthMin: 105,
+    widthMax: 175,
+    alphaMin: 0.4,
+    alphaMax: 0.58,
+    evaporatesOnContact: false,
+  },
+  {
+    depth: 5,
+    scrollFactor: 0.55,
+    widthMin: 135,
+    widthMax: 225,
+    alphaMin: 0.55,
+    alphaMax: 0.72,
+    evaporatesOnContact: false,
+  },
+  {
+    depth: 9,
+    scrollFactor: 1,
+    widthMin: 165,
+    widthMax: 270,
+    alphaMin: 0.68,
+    alphaMax: 0.86,
+    evaporatesOnContact: true,
+  },
+  {
+    depth: 18,
+    scrollFactor: 1.12,
+    widthMin: 220,
+    widthMax: 350,
+    alphaMin: 0.58,
+    alphaMax: 0.76,
+    evaporatesOnContact: false,
+  },
+];
+const AMBIENT_CLOUD_TINTS = [
+  0xffffff,
+  0xedf1f4,
+  0xdde3e7,
+  0xcdd5da,
+  0xbec8cf,
+  0xd9dee7,
+] as const;
+const SKY_WIND_TEXTURE_KEY = 'sky-wind-streak';
+const SKY_WIND_STREAK_POOL_SIZE = 18;
+const SKY_WIND_MIN_ALTITUDE = AMBIENT_CLOUD_MIN_ALTITUDE;
+const SKY_WIND_MAX_ALTITUDE = AMBIENT_CLOUD_MAX_ALTITUDE;
+const SKY_WIND_MAX_FORCE = 82;
+const SKY_WIND_LEVELS: readonly SkyWindLevelConfig[] = [
+  { force: 0, durationMinMs: 3_500, durationMaxMs: 7_000 },
+  { force: 22, durationMinMs: 4_500, durationMaxMs: 8_500 },
+  { force: 48, durationMinMs: 3_800, durationMaxMs: 7_000 },
+  { force: 82, durationMinMs: 2_800, durationMaxMs: 5_200 },
 ];
 
 const LEFT_WING_FRAMES = [
@@ -818,7 +1262,17 @@ export class GameplayScene extends Phaser.Scene {
   private lightningFlashMotions: LightningFlashMotion[] = [];
   private stormCloudObstacles: Phaser.Physics.Arcade.Sprite[] = [];
   private lightningScreenFlash!: Phaser.GameObjects.Rectangle;
+  private ambientClouds: AmbientCloud[] = [];
+  private skyWindStreaks: SkyWindStreak[] = [];
+  private skyWindForce = 0;
+  private skyWindTargetForce = 0;
+  private skyWindNextChangeAt = 0;
+  private skyWindConsecutiveActivePhases = 0;
+  private skyWindSpawnAccumulator = 0;
   private flightSound?: Phaser.Sound.BaseSound;
+  private skyWindSound?:
+    | Phaser.Sound.WebAudioSound
+    | Phaser.Sound.HTML5AudioSound;
   private featherParticles: FeatherParticle[] = [];
   private windStreaks: WindStreak[] = [];
   private windStreakSpawnAccumulator = 0;
@@ -857,6 +1311,10 @@ export class GameplayScene extends Phaser.Scene {
   private bestAltitude = 0;
   private currentAltitude = 0;
   private currentSpeed = 0;
+  private recordToBeat = 0;
+  private bestScoreReady = false;
+  private newRecordCelebrated = false;
+  private zoneTransitionMarkers: ZoneTransitionMarker[] = [];
   private watermelons = 0;
   private playerMaxLives = PLAYER_BASE_LIVES;
   private playerLives = PLAYER_BASE_LIVES;
@@ -892,6 +1350,10 @@ export class GameplayScene extends Phaser.Scene {
   private fruitDetectorArrow?: Phaser.GameObjects.Graphics;
   private fruitDetectorActive = false;
   private perchedBranch: Phaser.Physics.Arcade.Image | null = null;
+  private perchTargetX: number | null = null;
+  private isPerchSettling = false;
+  private perchCollisionGraceBranch: Phaser.Physics.Arcade.Image | null = null;
+  private perchCollisionGraceUntil = 0;
   private pendingPowerTakeoff = false;
   private lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
   private nextLifeRegenerationAt: number | null = null;
@@ -910,7 +1372,6 @@ export class GameplayScene extends Phaser.Scene {
   private lastWarningReason: 'fall' | 'side' | null = null;
   private lastHudSnapshot: FlightHudDetail | null = null;
   private lastDodoPose: CosmeticPose | 'lava' | 'lightning' | null = null;
-  private backgroundClouds: Phaser.GameObjects.Arc[] = [];
   private offscreenIndicator!: Phaser.GameObjects.Container;
   private offscreenIndicatorBody!: Phaser.GameObjects.Image;
   private groundRecordValue!: Phaser.GameObjects.Text;
@@ -926,6 +1387,11 @@ export class GameplayScene extends Phaser.Scene {
     this.load.audio(THUNDER_SOUND_KEY, THUNDER_SOUND_PATH);
     this.load.audio(LIGHTNING_SOUND_KEY, LIGHTNING_SOUND_PATH);
     this.load.audio(GAME_OVER_SOUND_KEY, GAME_OVER_SOUND_PATH);
+    this.load.audio(SKY_WIND_SOUND_KEY, SKY_WIND_SOUND_PATH);
+    this.load.audio(
+      ZONE_TRANSITION_SOUND_KEY,
+      ZONE_TRANSITION_SOUND_PATH,
+    );
     this.load.image(
       DODO_LIGHTNING_DEATH_TEXTURE_KEY,
       DODO_LIGHTNING_DEATH_TEXTURE_PATH,
@@ -942,10 +1408,25 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
     this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
+    this.load.image(
+      BACKGROUND_GROUND_TEXTURE_KEY,
+      BACKGROUND_GROUND_TEXTURE_PATH,
+    );
+    for (const transition of ZONE_TRANSITIONS) {
+      this.load.image(transition.textureKey, transition.texturePath);
+    }
+    for (const cloudTexture of AMBIENT_CLOUD_TEXTURES) {
+      this.load.image(cloudTexture.sourceKey, cloudTexture.texturePath);
+    }
+    this.load.image(FOREST_VOLCANO_KEY, '/assets/Decors/volcan.png');
     this.load.image(FOREST_TREE_1_KEY, '/assets/Decors/arbre1.png');
     this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.png');
     this.load.image(FOREST_FERN_1_KEY, '/assets/Decors/fougere1.png');
     this.load.image(FOREST_FERN_2_KEY, '/assets/Decors/fougère2.png');
+    this.load.image(FOREST_GRASS_1_KEY, '/assets/Decors/h1.png');
+    this.load.image(FOREST_GRASS_2_KEY, '/assets/Decors/h2.png');
+    this.load.image(FOREST_GRASS_3_KEY, '/assets/Decors/h3.png');
+    this.load.image(FOREST_GRASS_4_KEY, '/assets/Decors/h4.png');
     this.load.image(
       FOREST_BRANCH_RIGHT_SOURCE_KEY,
       '/assets/obstacles/forest/branche-d.png',
@@ -1002,7 +1483,18 @@ export class GameplayScene extends Phaser.Scene {
       '/assets/dodo/optimized/animation/flight_feet.png',
     );
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
-    this.load.audio(WATERMELON_SOUND_KEY, WATERMELON_SOUND_PATH);
+    this.load.image(WATERMELON_TAKE_TEXTURE_KEY, WATERMELON_TAKE_TEXTURE_PATH);
+    WATERMELON_SCORE_TEXTURES.forEach(({ key, path }) => {
+      this.load.image(key, path);
+    });
+    this.load.image(WATERMELON_SEEDS_TEXTURE_KEY, WATERMELON_SEEDS_TEXTURE_PATH);
+    this.load.image(WATERMELON_JUICE_TEXTURE_KEY, WATERMELON_JUICE_TEXTURE_PATH);
+    WATERMELON_FRAGMENT_TEXTURES.forEach(({ key, path }) => {
+      this.load.image(key, path);
+    });
+    WATERMELON_COLLECT_SOUNDS.forEach(({ key, path }) => {
+      this.load.audio(key, path);
+    });
     this.load.audio(POTION_SOUND_KEY, POTION_SOUND_PATH);
     DODO_HIT_SOUND_KEYS.forEach((key, index) => {
       this.load.audio(key, DODO_HIT_SOUND_PATHS[index]);
@@ -1038,9 +1530,14 @@ export class GameplayScene extends Phaser.Scene {
 
     this.createPlaceholderTextures();
     this.createObstaclePlaceholderTextures();
+    this.createNewRecordLeafTexture();
     this.createObstacleAnimations();
     this.createSkyDecor();
+    this.createZoneTransitionMarkers();
+    this.createAmbientClouds();
     this.createGroundDecor();
+    this.createFarBackgroundGround();
+    this.createBackgroundGround();
     this.createGroundForestDecor();
     this.createGroundRecord();
     this.createLava();
@@ -1086,6 +1583,7 @@ export class GameplayScene extends Phaser.Scene {
       .setVisible(false);
 
     this.createDodoJuicePools();
+    this.createSkyWindPool();
     this.createCosmeticDisplayObjects();
 
     this.createWatermelonCollectables();
@@ -1101,7 +1599,14 @@ export class GameplayScene extends Phaser.Scene {
       this.player,
       this.obstacleGroup,
       this.handleObstacleHit,
-      undefined,
+      this.shouldProcessNonBranchOverlap,
+      this,
+    );
+    this.physics.add.collider(
+      this.player,
+      this.obstacleGroup,
+      this.handleObstacleHit,
+      this.shouldProcessBranchCollision,
       this,
     );
 
@@ -1177,6 +1682,8 @@ export class GameplayScene extends Phaser.Scene {
     this.updateAsteroidPassages(deltaSeconds);
     this.updateLightningFlashes();
     this.updateFlight(direction, deltaSeconds);
+    this.updateSkyWind(deltaSeconds);
+    this.updateHorizontalScreenBounds();
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
     this.updateDodoJuice(deltaSeconds);
@@ -1187,7 +1694,6 @@ export class GameplayScene extends Phaser.Scene {
     this.updateEnduranceTimers(time);
     this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
-    this.updateCloudVisibility();
     this.updateLava(time, deltaSeconds);
     this.updateFallState(time);
   }
@@ -1198,6 +1704,7 @@ export class GameplayScene extends Phaser.Scene {
     this.sound.stopByKey(THUNDER_SOUND_KEY);
     this.sound.stopByKey(LIGHTNING_SOUND_KEY);
     this.sound.stopByKey(GAME_OVER_SOUND_KEY);
+    this.sound.stopByKey(ZONE_TRANSITION_SOUND_KEY);
     this.destroyFruitDetectorButton();
     this.events.off(
       Phaser.Scenes.Events.POST_UPDATE,
@@ -1623,6 +2130,8 @@ export class GameplayScene extends Phaser.Scene {
       this.updateStormCloudSounds();
     }
 
+    this.updateZoneTransitionMarkers();
+    this.updateAmbientClouds(Math.min(delta / 1000, 0.034));
     this.updateDodoVisuals(0);
   };
 
@@ -1704,6 +2213,10 @@ export class GameplayScene extends Phaser.Scene {
       loop: true,
       volume: FLIGHT_SOUND_VOLUME,
     });
+    this.skyWindSound = this.sound.add(SKY_WIND_SOUND_KEY, {
+      loop: true,
+      volume: 0,
+    }) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
   }
 
   private startFlightSound(): void {
@@ -1727,6 +2240,9 @@ export class GameplayScene extends Phaser.Scene {
     if (this.flightSound?.isPlaying) {
       this.flightSound.stop();
     }
+    if (this.skyWindSound?.isPlaying) {
+      this.skyWindSound.stop();
+    }
 
     // Coupe toutes les copies de 1Flap éventuellement encore en cours.
     this.sound.stopByKey(FLAP_SOUND_KEY);
@@ -1736,6 +2252,8 @@ export class GameplayScene extends Phaser.Scene {
     this.stopFlightSounds();
     this.flightSound?.destroy();
     this.flightSound = undefined;
+    this.skyWindSound?.destroy();
+    this.skyWindSound = undefined;
   }
 
   private resetRuntimeState(): void {
@@ -1747,6 +2265,17 @@ export class GameplayScene extends Phaser.Scene {
     this.lastWarningReason = null;
     this.currentAltitude = 0;
     this.currentSpeed = 0;
+    this.recordToBeat = 0;
+    this.bestScoreReady = false;
+    this.newRecordCelebrated = false;
+    this.zoneTransitionMarkers = [];
+    this.ambientClouds = [];
+    this.skyWindStreaks = [];
+    this.skyWindForce = 0;
+    this.skyWindTargetForce = 0;
+    this.skyWindNextChangeAt = 0;
+    this.skyWindConsecutiveActivePhases = 0;
+    this.skyWindSpawnAccumulator = 0;
     this.watermelons = 0;
     this.playerMaxLives = PLAYER_BASE_LIVES;
     this.playerLives = PLAYER_BASE_LIVES;
@@ -1773,6 +2302,10 @@ export class GameplayScene extends Phaser.Scene {
     this.watermelonCollectStreak = 0;
     this.fruitDetectorActive = false;
     this.perchedBranch = null;
+    this.perchTargetX = null;
+    this.isPerchSettling = false;
+    this.perchCollisionGraceBranch = null;
+    this.perchCollisionGraceUntil = 0;
     this.pendingPowerTakeoff = false;
     this.fruitDetectorArrow?.clear();
     this.lastPlayerDamageTime = Number.NEGATIVE_INFINITY;
@@ -1844,6 +2377,237 @@ export class GameplayScene extends Phaser.Scene {
         maxAlpha: 0,
       });
     }
+  }
+
+  private createSkyWindPool(): void {
+    this.createSkyWindTexture();
+
+    for (let index = 0; index < SKY_WIND_STREAK_POOL_SIZE; index += 1) {
+      const image = this.add
+        .image(0, 0, SKY_WIND_TEXTURE_KEY)
+        .setOrigin(0.5)
+        .setDepth(index % 3 === 0 ? 12 : 7)
+        .setScrollFactor(0)
+        .setVisible(false);
+
+      this.skyWindStreaks.push({
+        image,
+        velocityX: 0,
+        age: 0,
+        lifetime: 0,
+        maxAlpha: 0,
+        wobblePhase: 0,
+        wobbleSpeed: 0,
+      });
+    }
+  }
+
+  private createSkyWindTexture(): void {
+    if (this.textures.exists(SKY_WIND_TEXTURE_KEY)) {
+      return;
+    }
+
+    const texture = this.textures.createCanvas(
+      SKY_WIND_TEXTURE_KEY,
+      240,
+      52,
+    );
+
+    if (!texture) {
+      return;
+    }
+
+    const context = texture.getContext();
+    const gradient = context.createLinearGradient(0, 0, 240, 0);
+    gradient.addColorStop(0, 'rgba(225, 248, 255, 0)');
+    gradient.addColorStop(0.18, 'rgba(235, 251, 255, 0.9)');
+    gradient.addColorStop(0.76, 'rgba(245, 253, 255, 1)');
+    gradient.addColorStop(1, 'rgba(225, 248, 255, 0)');
+    context.clearRect(0, 0, 240, 52);
+    context.strokeStyle = gradient;
+    context.lineCap = 'round';
+    context.shadowColor = 'rgba(190, 235, 248, 0.65)';
+    context.shadowBlur = 5;
+
+    const windLines = [
+      { y: 12, width: 3.1, bend: -5 },
+      { y: 27, width: 3.8, bend: 6 },
+      { y: 41, width: 2.6, bend: -4 },
+    ];
+
+    for (const line of windLines) {
+      context.beginPath();
+      context.lineWidth = line.width;
+      context.moveTo(8, line.y);
+      context.bezierCurveTo(
+        72,
+        line.y + line.bend,
+        160,
+        line.y - line.bend,
+        232,
+        line.y,
+      );
+      context.stroke();
+    }
+
+    texture.refresh();
+  }
+
+  private updateSkyWind(deltaSeconds: number): void {
+    const fadeIn = Phaser.Math.Clamp(
+      (this.currentAltitude - SKY_WIND_MIN_ALTITUDE) / 80,
+      0,
+      1,
+    );
+    const fadeOut = Phaser.Math.Clamp(
+      (SKY_WIND_MAX_ALTITUDE - this.currentAltitude) / 100,
+      0,
+      1,
+    );
+    const zoneStrength = Math.min(fadeIn, fadeOut);
+
+    if (zoneStrength <= 0) {
+      this.skyWindTargetForce = 0;
+      this.skyWindNextChangeAt = 0;
+      this.skyWindConsecutiveActivePhases = 0;
+    } else if (
+      this.skyWindNextChangeAt === 0 ||
+      this.time.now >= this.skyWindNextChangeAt
+    ) {
+      this.scheduleNextSkyWind();
+    }
+
+    const targetForce = this.skyWindTargetForce * zoneStrength;
+    const responseSpeed = targetForce === 0 ? 1.2 : 0.82;
+    const smoothing = 1 - Math.exp(-responseSpeed * deltaSeconds);
+    this.skyWindForce = Phaser.Math.Linear(
+      this.skyWindForce,
+      targetForce,
+      smoothing,
+    );
+    this.updateSkyWindSound();
+
+    if (!this.isGrounded && zoneStrength > 0) {
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      body.velocity.x += this.skyWindForce * deltaSeconds;
+    }
+
+    const gustStrength = Phaser.Math.Clamp(
+      Math.abs(this.skyWindForce) / SKY_WIND_MAX_FORCE,
+      0,
+      1,
+    );
+    this.skyWindSpawnAccumulator +=
+      deltaSeconds * zoneStrength * (3 + gustStrength * 11);
+
+    while (this.skyWindSpawnAccumulator >= 1) {
+      this.skyWindSpawnAccumulator -= 1;
+      this.spawnSkyWindStreak(gustStrength);
+    }
+
+    for (const streak of this.skyWindStreaks) {
+      if (!streak.image.visible) {
+        continue;
+      }
+
+      streak.age += deltaSeconds;
+
+      if (streak.age >= streak.lifetime) {
+        streak.image.setVisible(false);
+        continue;
+      }
+
+      const progress = streak.age / streak.lifetime;
+      streak.wobblePhase += streak.wobbleSpeed * deltaSeconds;
+      streak.image.x += streak.velocityX * deltaSeconds;
+      streak.image.y +=
+        Math.sin(streak.wobblePhase) * 4.5 * deltaSeconds;
+      streak.image.setAlpha(
+        Math.sin(progress * Math.PI) *
+          streak.maxAlpha *
+          Math.max(0.25, zoneStrength),
+      );
+    }
+  }
+
+  private scheduleNextSkyWind(): void {
+    const roll = Phaser.Math.Between(0, 99);
+    const levelIndex =
+      this.skyWindConsecutiveActivePhases >= 2 || roll < 30
+        ? 0
+        : roll < 62
+          ? 1
+          : roll < 87
+            ? 2
+            : 3;
+    const level = SKY_WIND_LEVELS[levelIndex];
+    const direction = level.force === 0 ? 0 : Phaser.Math.RND.sign();
+
+    this.skyWindConsecutiveActivePhases =
+      level.force === 0
+        ? 0
+        : this.skyWindConsecutiveActivePhases + 1;
+    this.skyWindTargetForce = level.force * direction;
+    this.skyWindNextChangeAt =
+      this.time.now +
+      Phaser.Math.Between(level.durationMinMs, level.durationMaxMs);
+  }
+
+  private updateSkyWindSound(): void {
+    if (!this.skyWindSound) {
+      return;
+    }
+
+    const volumeProgress = Phaser.Math.Clamp(
+      (Math.abs(this.skyWindForce) - SKY_WIND_SOUND_START_FORCE) /
+        (SKY_WIND_MAX_FORCE - SKY_WIND_SOUND_START_FORCE),
+      0,
+      1,
+    );
+    const volume = volumeProgress * SKY_WIND_SOUND_MAX_VOLUME;
+
+    if (volume > 0.01) {
+      if (!this.skyWindSound.isPlaying) {
+        this.skyWindSound.play();
+      }
+      this.skyWindSound.setVolume(volume);
+    } else if (this.skyWindSound.isPlaying) {
+      this.skyWindSound.stop();
+    }
+  }
+
+  private spawnSkyWindStreak(gustStrength: number): void {
+    const streak = this.skyWindStreaks.find(
+      ({ image }) => !image.visible,
+    );
+
+    if (!streak) {
+      return;
+    }
+
+    const direction = this.skyWindForce >= 0 ? 1 : -1;
+    const speed =
+      Phaser.Math.FloatBetween(135, 215) * (0.75 + gustStrength * 0.55);
+    streak.age = 0;
+    streak.lifetime =
+      (GAME_WIDTH + 360) / Math.max(1, speed);
+    streak.velocityX = speed * direction;
+    streak.maxAlpha = Phaser.Math.FloatBetween(0.44, 0.72);
+    streak.wobblePhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    streak.wobbleSpeed = Phaser.Math.FloatBetween(1.1, 2.1);
+
+    streak.image
+      .setPosition(
+        direction > 0 ? -150 : GAME_WIDTH + 150,
+        Phaser.Math.Between(95, GAME_HEIGHT - 85),
+      )
+      .setFlipX(direction < 0)
+      .setScale(
+        Phaser.Math.FloatBetween(0.72, 1.22),
+        Phaser.Math.FloatBetween(0.7, 1.1),
+      )
+      .setAlpha(0)
+      .setVisible(true);
   }
 
   private updateDodoJuice(deltaSeconds: number): void {
@@ -2003,12 +2767,33 @@ export class GameplayScene extends Phaser.Scene {
         Math.sin(progress * Math.PI) * streak.maxAlpha,
       );
     }
+
   }
 
   private async initializeBestScore(): Promise<void> {
-    this.bestAltitude = await loadBestAltitude();
+    const savedBestAltitude = await loadBestAltitude();
+    this.recordToBeat = savedBestAltitude;
+    this.bestAltitude = Math.max(savedBestAltitude, this.currentAltitude);
+    this.bestScoreReady = true;
     this.updateGroundRecordText();
+    if (this.currentAltitude > this.recordToBeat) {
+      this.playNewRecordCelebration();
+    }
     this.emitHud();
+  }
+
+  private createNewRecordLeafTexture(): void {
+    if (this.textures.exists(NEW_RECORD_LEAF_TEXTURE_KEY)) {
+      return;
+    }
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillEllipse(9, 6, 16, 9);
+    graphics.lineStyle(1.5, 0x6f8a2b, 0.9);
+    graphics.lineBetween(2, 8, 16, 4);
+    graphics.generateTexture(NEW_RECORD_LEAF_TEXTURE_KEY, 18, 12);
+    graphics.destroy();
   }
 
   private createPlaceholderTextures(): void {
@@ -2162,16 +2947,428 @@ export class GameplayScene extends Phaser.Scene {
 
   private createSkyDecor(): void {
     this.createSkyBackground();
-    this.backgroundClouds = [];
+  }
 
-    for (let index = 0; index < 80; index += 1) {
-      const y = START_Y - index * 900 - Phaser.Math.Between(80, 600);
-      const x = Phaser.Math.Between(25, GAME_WIDTH - 25);
-      const radius = Phaser.Math.Between(18, 42);
-      const cloud = this.add.circle(x, y, radius, 0xffffff, 0.28);
-      cloud.setScrollFactor(0.82);
-      cloud.setDepth(-5);
-      this.backgroundClouds.push(cloud);
+  private createZoneTransitionMarkers(): void {
+    this.createZoneTransitionCloudTexture();
+
+    const initialCameraScrollY =
+      START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const screenCenterY = GAME_HEIGHT * ZONE_TRANSITION_SCREEN_Y_RATIO;
+    const maxDisplayWidth = GAME_WIDTH * 0.92;
+
+    for (const transition of ZONE_TRANSITIONS) {
+      const cameraScrollYAtTransition =
+        initialCameraScrollY - transition.altitude * 10;
+      const worldY =
+        screenCenterY +
+        cameraScrollYAtTransition * ZONE_TRANSITION_SCROLL_FACTOR;
+      const image = this.add
+        .image(GAME_WIDTH / 2, worldY, transition.textureKey)
+        .setOrigin(0.5)
+        .setDepth(ZONE_TRANSITION_DEPTH)
+        .setScrollFactor(ZONE_TRANSITION_SCROLL_FACTOR)
+        .setAlpha(0)
+        .setVisible(false);
+      const scale = maxDisplayWidth / image.width;
+
+      image.setScale(scale);
+      this.zoneTransitionMarkers.push({
+        altitude: transition.altitude,
+        image,
+        dispersed: false,
+        revealStartedAt: null,
+      });
+    }
+  }
+
+  private createZoneTransitionCloudTexture(): void {
+    if (this.textures.exists(ZONE_TRANSITION_CLOUD_TEXTURE_KEY)) {
+      return;
+    }
+
+    const texture = this.textures.createCanvas(
+      ZONE_TRANSITION_CLOUD_TEXTURE_KEY,
+      72,
+      58,
+    );
+
+    if (!texture) {
+      return;
+    }
+
+    const context = texture.getContext();
+    const cloudBlobs = [
+      { x: 21, y: 34, radius: 19 },
+      { x: 37, y: 23, radius: 23 },
+      { x: 54, y: 35, radius: 18 },
+      { x: 38, y: 39, radius: 20 },
+    ];
+
+    context.clearRect(0, 0, 72, 58);
+
+    for (const blob of cloudBlobs) {
+      const gradient = context.createRadialGradient(
+        blob.x,
+        blob.y,
+        blob.radius * 0.12,
+        blob.x,
+        blob.y,
+        blob.radius,
+      );
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
+      gradient.addColorStop(0.58, 'rgba(238, 248, 255, 0.72)');
+      gradient.addColorStop(1, 'rgba(222, 241, 250, 0)');
+      context.fillStyle = gradient;
+      context.beginPath();
+      context.arc(blob.x, blob.y, blob.radius, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    texture.refresh();
+  }
+
+  private createAmbientClouds(): void {
+    this.createAmbientCloudTextures();
+
+    const initialCameraScrollY =
+      START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const altitudeRange =
+      AMBIENT_CLOUD_MAX_ALTITUDE - AMBIENT_CLOUD_MIN_ALTITUDE;
+
+    for (let index = 0; index < AMBIENT_CLOUD_COUNT; index += 1) {
+      const plane =
+        AMBIENT_CLOUD_PLANES[
+          Phaser.Math.Between(0, AMBIENT_CLOUD_PLANES.length - 1)
+        ];
+      const texture =
+        AMBIENT_CLOUD_TEXTURES[
+          Phaser.Math.Between(0, AMBIENT_CLOUD_TEXTURES.length - 1)
+        ];
+      const altitudeProgress =
+        AMBIENT_CLOUD_COUNT <= 1
+          ? 0
+          : index / (AMBIENT_CLOUD_COUNT - 1);
+      const altitude = Phaser.Math.Clamp(
+        AMBIENT_CLOUD_MIN_ALTITUDE +
+          altitudeRange * altitudeProgress +
+          Phaser.Math.Between(-28, 28),
+        AMBIENT_CLOUD_MIN_ALTITUDE,
+        AMBIENT_CLOUD_MAX_ALTITUDE,
+      );
+      const cameraScrollYAtAltitude =
+        initialCameraScrollY - altitude * 10;
+      const targetScreenY = Phaser.Math.Between(
+        -60,
+        GAME_HEIGHT + 60,
+      );
+      const worldY =
+        targetScreenY +
+        cameraScrollYAtAltitude * plane.scrollFactor;
+      const desiredWidth = Phaser.Math.Between(
+        plane.widthMin,
+        plane.widthMax,
+      );
+      const image = this.add
+        .image(
+          Phaser.Math.Between(-45, GAME_WIDTH + 45),
+          worldY,
+          texture.textureKey,
+        )
+        .setOrigin(0.5)
+        .setDepth(plane.depth)
+        .setScrollFactor(plane.scrollFactor)
+        .setAlpha(0)
+        .setTint(
+          AMBIENT_CLOUD_TINTS[
+            Phaser.Math.Between(0, AMBIENT_CLOUD_TINTS.length - 1)
+          ],
+        );
+      const scale = desiredWidth / image.width;
+
+      image.setScale(
+        Phaser.Math.RND.sign() * scale,
+        scale * Phaser.Math.FloatBetween(0.88, 1.08),
+      );
+
+      this.ambientClouds.push({
+        image,
+        velocityX:
+          Phaser.Math.RND.sign() * Phaser.Math.FloatBetween(1.4, 4.8),
+        baseAlpha: Phaser.Math.FloatBetween(
+          plane.alphaMin,
+          plane.alphaMax,
+        ),
+        evaporatesOnContact: plane.evaporatesOnContact,
+        evaporated: false,
+      });
+    }
+  }
+
+  private createAmbientCloudTextures(): void {
+    for (const cloudTexture of AMBIENT_CLOUD_TEXTURES) {
+      if (this.textures.exists(cloudTexture.textureKey)) {
+        continue;
+      }
+
+      const sourceImage = this.textures
+        .get(cloudTexture.sourceKey)
+        .getSourceImage() as CanvasImageSource;
+      const canvas = document.createElement('canvas');
+      canvas.width = cloudTexture.crop.width;
+      canvas.height = cloudTexture.crop.height;
+      const context = canvas.getContext('2d');
+
+      context?.drawImage(
+        sourceImage,
+        cloudTexture.crop.x,
+        cloudTexture.crop.y,
+        cloudTexture.crop.width,
+        cloudTexture.crop.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+      this.textures.addCanvas(cloudTexture.textureKey, canvas);
+    }
+  }
+
+  private updateAmbientClouds(deltaSeconds: number): void {
+    const camera = this.cameras.main;
+    const playerScreenX = this.player.x - camera.scrollX;
+    const playerScreenY = this.player.y - camera.scrollY;
+    const fadeIn = Phaser.Math.Clamp(
+      (this.currentAltitude - AMBIENT_CLOUD_MIN_ALTITUDE) / 50,
+      0,
+      1,
+    );
+    const fadeOut = Phaser.Math.Clamp(
+      (AMBIENT_CLOUD_MAX_ALTITUDE - this.currentAltitude) / 50,
+      0,
+      1,
+    );
+    const altitudeAlpha = Math.min(fadeIn, fadeOut);
+
+    for (const cloud of this.ambientClouds) {
+      if (cloud.evaporated) {
+        continue;
+      }
+
+      const { image } = cloud;
+      const horizontalMargin = image.displayWidth * 0.55;
+      image.x += cloud.velocityX * deltaSeconds;
+
+      if (image.x < -horizontalMargin) {
+        image.x = GAME_WIDTH + horizontalMargin;
+      } else if (image.x > GAME_WIDTH + horizontalMargin) {
+        image.x = -horizontalMargin;
+      }
+
+      const screenX =
+        image.x - camera.scrollX * image.scrollFactorX;
+      const screenY =
+        image.y - camera.scrollY * image.scrollFactorY;
+      const isNearViewport =
+        screenY > -image.displayHeight &&
+        screenY < GAME_HEIGHT + image.displayHeight;
+      const alpha = cloud.baseAlpha * altitudeAlpha;
+
+      image
+        .setAlpha(alpha)
+        .setVisible(isNearViewport && alpha > 0.01);
+
+      if (
+        !cloud.evaporatesOnContact ||
+        alpha < 0.45 ||
+        !isNearViewport
+      ) {
+        continue;
+      }
+
+      const overlapsDodo =
+        Math.abs(playerScreenX - screenX) <
+          image.displayWidth * 0.42 + this.player.displayWidth * 0.18 &&
+        Math.abs(playerScreenY - screenY) <
+          image.displayHeight * 0.34 + this.player.displayHeight * 0.22;
+
+      if (overlapsDodo) {
+        this.evaporateAmbientCloud(cloud, screenX, screenY);
+      }
+    }
+  }
+
+  private evaporateAmbientCloud(
+    cloud: AmbientCloud,
+    screenX: number,
+    screenY: number,
+  ): void {
+    cloud.evaporated = true;
+    const { image } = cloud;
+
+    this.tweens.add({
+      targets: image,
+      alpha: 0,
+      scaleX: image.scaleX * 1.08,
+      scaleY: image.scaleY * 1.14,
+      duration: 320,
+      ease: 'Cubic.easeOut',
+      onComplete: () => image.setVisible(false),
+    });
+
+    for (let index = 0; index < 16; index += 1) {
+      const angle =
+        (index / 16) * Math.PI * 2 +
+        Phaser.Math.FloatBetween(-0.35, 0.35);
+      const startX =
+        screenX +
+        Phaser.Math.FloatBetween(
+          -image.displayWidth * 0.32,
+          image.displayWidth * 0.32,
+        );
+      const startY =
+        screenY +
+        Phaser.Math.FloatBetween(
+          -image.displayHeight * 0.25,
+          image.displayHeight * 0.25,
+        );
+      const distance = Phaser.Math.FloatBetween(35, 85);
+      const puff = this.add
+        .image(startX, startY, ZONE_TRANSITION_CLOUD_TEXTURE_KEY)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(image.depth + 1)
+        .setScale(Phaser.Math.FloatBetween(0.18, 0.42))
+        .setAlpha(Phaser.Math.FloatBetween(0.5, 0.82));
+
+      this.tweens.add({
+        targets: puff,
+        x: startX + Math.cos(angle) * distance,
+        y:
+          startY +
+          Math.sin(angle) * distance -
+          Phaser.Math.FloatBetween(14, 42),
+        alpha: 0,
+        scale: Phaser.Math.FloatBetween(0.7, 1.18),
+        delay: Phaser.Math.Between(0, 90),
+        duration: Phaser.Math.Between(520, 780),
+        ease: 'Cubic.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  private updateZoneTransitionMarkers(): void {
+    const camera = this.cameras.main;
+    const playerScreenX = this.player.x - camera.scrollX;
+    const playerScreenY = this.player.y - camera.scrollY;
+
+    for (const marker of this.zoneTransitionMarkers) {
+      if (marker.dispersed) {
+        continue;
+      }
+
+      if (marker.revealStartedAt === null) {
+        if (this.currentAltitude < marker.altitude) {
+          marker.image.setAlpha(0).setVisible(false);
+          continue;
+        }
+
+        marker.revealStartedAt = this.time.now;
+        this.sound.play(ZONE_TRANSITION_SOUND_KEY, {
+          volume: ZONE_TRANSITION_SOUND_VOLUME,
+        });
+      }
+
+      const screenY =
+        marker.image.y -
+        camera.scrollY * ZONE_TRANSITION_SCROLL_FACTOR;
+      const fadeProgress = Phaser.Math.Clamp(
+        (this.time.now - marker.revealStartedAt) / 520,
+        0,
+        1,
+      );
+      const smoothAlpha =
+        fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+      const playerCrossesText =
+        smoothAlpha > 0.7 &&
+        Math.abs(playerScreenX - marker.image.x) <
+          marker.image.displayWidth * 0.52 &&
+        Math.abs(playerScreenY - screenY) <
+          marker.image.displayHeight * 0.42;
+
+      marker.image
+        .setAlpha(smoothAlpha)
+        .setVisible(smoothAlpha > 0.01);
+
+      if (playerCrossesText) {
+        this.disperseZoneTransition(marker, screenY);
+      }
+    }
+  }
+
+  private disperseZoneTransition(
+    marker: ZoneTransitionMarker,
+    screenY: number,
+  ): void {
+    marker.dispersed = true;
+    const image = marker.image;
+    const spreadWidth = image.displayWidth * 0.46;
+    const spreadHeight = image.displayHeight * 0.28;
+
+    this.tweens.add({
+      targets: image,
+      alpha: 0,
+      scaleX: image.scaleX * 1.06,
+      scaleY: image.scaleY * 1.12,
+      duration: 360,
+      ease: 'Cubic.easeOut',
+      onComplete: () => image.setVisible(false),
+    });
+
+    for (
+      let index = 0;
+      index < ZONE_TRANSITION_CLOUD_PUFF_COUNT;
+      index += 1
+    ) {
+      const startX =
+        GAME_WIDTH / 2 + Phaser.Math.FloatBetween(-spreadWidth, spreadWidth);
+      const startY =
+        screenY + Phaser.Math.FloatBetween(-spreadHeight, spreadHeight);
+      const radialAngle = Math.atan2(
+        startY - screenY,
+        startX - GAME_WIDTH / 2,
+      );
+      const swirlDirection = index % 2 === 0 ? 1 : -1;
+      const swirlAngle =
+        radialAngle +
+        swirlDirection * Phaser.Math.FloatBetween(0.45, 1.05);
+      const travelDistance = Phaser.Math.FloatBetween(45, 105);
+      const puff = this.add
+        .image(startX, startY, ZONE_TRANSITION_CLOUD_TEXTURE_KEY)
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(ZONE_TRANSITION_DEPTH + 1)
+        .setScale(Phaser.Math.FloatBetween(0.24, 0.54))
+        .setAlpha(Phaser.Math.FloatBetween(0.58, 0.9));
+
+      this.tweens.add({
+        targets: puff,
+        x: startX + Math.cos(swirlAngle) * travelDistance,
+        y:
+          startY +
+          Math.sin(swirlAngle) * travelDistance -
+          Phaser.Math.FloatBetween(18, 52),
+        alpha: 0,
+        scale: Phaser.Math.FloatBetween(0.9, 1.5),
+        rotation:
+          puff.rotation +
+          swirlDirection * Phaser.Math.FloatBetween(0.5, 1.4),
+        delay: Phaser.Math.Between(0, 130),
+        duration: Phaser.Math.Between(620, 920),
+        ease: 'Cubic.easeOut',
+        onComplete: () => puff.destroy(),
+      });
     }
   }
 
@@ -2242,20 +3439,23 @@ export class GameplayScene extends Phaser.Scene {
     const scale = GAME_WIDTH / sourceWidth;
     const backgroundBottomY = GROUND_Y + GROUND_DIRT_HEIGHT;
     const backgroundTopY = backgroundBottomY - Math.round(sourceHeight * scale);
+    const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const farLayerOffsetY =
+      initialCameraScrollY * (1 - PARALLAX_FAR_SCROLL_FACTOR);
+    const parallaxBackgroundTopY = backgroundTopY - farLayerOffsetY;
 
-    if (backgroundTopY > 0) {
-      this.add
-        .rectangle(
-          0,
-          0,
-          GAME_WIDTH,
-          backgroundTopY,
-          SKY_BACKGROUND_TOP_FILL_COLOR,
-          1,
-        )
-        .setOrigin(0, 0)
-        .setDepth(SKY_BACKGROUND_DEPTH);
-    }
+    this.add
+      .rectangle(
+        0,
+        parallaxBackgroundTopY - WORLD_HEIGHT,
+        GAME_WIDTH,
+        WORLD_HEIGHT,
+        SKY_BACKGROUND_TOP_FILL_COLOR,
+        1,
+      )
+      .setOrigin(0, 0)
+      .setDepth(SKY_BACKGROUND_DEPTH)
+      .setScrollFactor(PARALLAX_FAR_SCROLL_FACTOR);
 
     for (let index = 0; index < segmentCount; index += 1) {
       const textureKey = `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`;
@@ -2267,9 +3467,14 @@ export class GameplayScene extends Phaser.Scene {
       const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
 
       this.add
-        .image(GAME_WIDTH / 2, backgroundTopY + Math.round(sourceY * scale), textureKey)
+        .image(
+          GAME_WIDTH / 2,
+          parallaxBackgroundTopY + Math.round(sourceY * scale),
+          textureKey,
+        )
         .setOrigin(0.5, 0)
-        .setDepth(SKY_BACKGROUND_DEPTH);
+        .setDepth(SKY_BACKGROUND_DEPTH)
+        .setScrollFactor(PARALLAX_FAR_SCROLL_FACTOR);
     }
   }
 
@@ -2288,7 +3493,9 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
 
-    const groundScaleX = GAME_WIDTH / GROUND_TEXTURE_SOURCE_WIDTH;
+    const groundScaleX =
+      (GAME_WIDTH + GROUND_HORIZONTAL_OVERSCAN * 2) /
+      GROUND_TEXTURE_SOURCE_WIDTH;
     const groundScaleY =
       GROUND_DIRT_HEIGHT / (GROUND_TEXTURE_SOURCE_HEIGHT - GROUND_TEXTURE_SURFACE_Y);
     const surfaceOffset = (GROUND_TEXTURE_SURFACE_Y - GROUND_TEXTURE_CROP_TOP) * groundScaleY;
@@ -2304,15 +3511,76 @@ export class GameplayScene extends Phaser.Scene {
     ground.setDepth(-4);
   }
 
+  private createBackgroundGround(): void {
+    const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const groundScreenY = GROUND_Y - initialCameraScrollY;
+    const scaleX = GAME_WIDTH / BACKGROUND_GROUND_SOURCE_WIDTH;
+    const scaleY =
+      GROUND_DIRT_HEIGHT / (GROUND_TEXTURE_SOURCE_HEIGHT - GROUND_TEXTURE_SURFACE_Y);
+    const surfaceY =
+      groundScreenY -
+      BACKGROUND_GROUND_SCREEN_LIFT +
+      initialCameraScrollY * BACKGROUND_GROUND_SCROLL_FACTOR;
+    const imageTopY =
+      surfaceY - BACKGROUND_GROUND_SOURCE_SURFACE_Y * scaleY;
+
+    this.add
+      .image(
+        GAME_WIDTH / 2,
+        imageTopY,
+        BACKGROUND_GROUND_TEXTURE_KEY,
+      )
+      .setOrigin(0.5, 0)
+      .setScale(scaleX, scaleY)
+      .setDepth(BACKGROUND_GROUND_DEPTH)
+      .setScrollFactor(BACKGROUND_GROUND_SCROLL_FACTOR);
+  }
+
+  private createFarBackgroundGround(): void {
+    const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const groundScreenY = GROUND_Y - initialCameraScrollY;
+    const scaleX = GAME_WIDTH / BACKGROUND_GROUND_SOURCE_WIDTH;
+    const scaleY =
+      GROUND_DIRT_HEIGHT / (GROUND_TEXTURE_SOURCE_HEIGHT - GROUND_TEXTURE_SURFACE_Y);
+    const surfaceY =
+      groundScreenY -
+      FAR_BACKGROUND_GROUND_SCREEN_LIFT +
+      initialCameraScrollY * FAR_BACKGROUND_GROUND_SCROLL_FACTOR;
+    const imageTopY =
+      surfaceY - BACKGROUND_GROUND_SOURCE_SURFACE_Y * scaleY;
+
+    this.add
+      .image(
+        GAME_WIDTH / 2,
+        imageTopY,
+        BACKGROUND_GROUND_TEXTURE_KEY,
+      )
+      .setOrigin(0.5, 0)
+      .setScale(scaleX, scaleY)
+      .setDepth(FAR_BACKGROUND_GROUND_DEPTH)
+      .setScrollFactor(FAR_BACKGROUND_GROUND_SCROLL_FACTOR);
+  }
+
   private createGroundForestDecor(): void {
     const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
     const groundScreenY = GROUND_Y - initialCameraScrollY;
+    const backgroundGroundSurfaceY =
+      groundScreenY -
+      BACKGROUND_GROUND_SCREEN_LIFT +
+      initialCameraScrollY * BACKGROUND_GROUND_SCROLL_FACTOR;
+    const farBackgroundGroundSurfaceY =
+      groundScreenY -
+      FAR_BACKGROUND_GROUND_SCREEN_LIFT +
+      initialCameraScrollY * FAR_BACKGROUND_GROUND_SCROLL_FACTOR;
 
     for (const decor of GROUND_FOREST_DECOR) {
-      const y =
-        groundScreenY +
-        initialCameraScrollY * decor.scrollFactor +
-        decor.groundOffset;
+      const groundSurfaceY =
+        decor.groundLayer === 'background'
+          ? backgroundGroundSurfaceY
+          : decor.groundLayer === 'far-background'
+            ? farBackgroundGroundSurfaceY
+            : groundScreenY + initialCameraScrollY * decor.scrollFactor;
+      const y = groundSurfaceY + decor.groundOffset;
       const scaleX = decor.flipX ? -decor.scale : decor.scale;
 
       this.add
@@ -2357,6 +3625,159 @@ export class GameplayScene extends Phaser.Scene {
 
   private updateGroundRecordText(): void {
     this.groundRecordValue?.setText(`RECORD : ${this.bestAltitude} m`);
+  }
+
+  private playNewRecordCelebration(): void {
+    if (this.newRecordCelebrated || !this.bestScoreReady) {
+      return;
+    }
+
+    this.newRecordCelebrated = true;
+    this.groundRecordValue
+      .setColor('#ffd75a')
+      .setStroke('#7f4300', 2);
+
+    this.tweens.add({
+      targets: this.groundRecordValue,
+      scaleX: 1.14,
+      scaleY: 1.14,
+      duration: 240,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.cameras.main.shake(
+      NEW_RECORD_CAMERA_SHAKE_DURATION_MS,
+      NEW_RECORD_CAMERA_SHAKE_INTENSITY,
+    );
+
+    const announcement = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT + 55, 'NOUVEAU\nRECORD !', {
+        fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
+        fontSize: '43px',
+        fontStyle: 'bold',
+        color: '#fff3a3',
+        align: 'center',
+        stroke: '#6d3500',
+        strokeThickness: 8,
+        shadow: {
+          color: '#ffbd18',
+          blur: 18,
+          fill: true,
+          offsetX: 0,
+          offsetY: 3,
+        },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2_100)
+      .setScale(0.72, 0.16)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: announcement,
+      y: GAME_HEIGHT * 0.61,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 620,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: announcement,
+          y: GAME_HEIGHT * 0.55,
+          alpha: 0,
+          delay: 1_150,
+          duration: 600,
+          ease: 'Quad.easeIn',
+          onComplete: () => announcement.destroy(),
+        });
+      },
+    });
+
+    this.launchNewRecordBirds();
+    this.launchNewRecordLeaves();
+  }
+
+  private launchNewRecordBirds(): void {
+    for (let index = 0; index < NEW_RECORD_BIRD_COUNT; index += 1) {
+      const bird = this.add.graphics();
+      bird.lineStyle(3, 0x3b2514, 0.9);
+      bird.beginPath();
+      bird.moveTo(-12, 2);
+      bird.lineTo(-6, -4);
+      bird.lineTo(0, 1);
+      bird.lineTo(6, -4);
+      bird.lineTo(12, 2);
+      bird.strokePath();
+
+      const side = index % 2 === 0 ? -1 : 1;
+      const startX = GAME_WIDTH / 2 + side * Phaser.Math.Between(15, 90);
+      const startY = GAME_HEIGHT * 0.78 + Phaser.Math.Between(-20, 45);
+
+      bird
+        .setPosition(startX, startY)
+        .setScrollFactor(0)
+        .setDepth(2_020)
+        .setScale(Phaser.Math.FloatBetween(0.65, 1.05))
+        .setAlpha(0);
+
+      this.tweens.add({
+        targets: bird,
+        x: startX + side * Phaser.Math.Between(115, 240),
+        y: Phaser.Math.Between(70, 190),
+        scaleX: Phaser.Math.FloatBetween(0.3, 0.55),
+        scaleY: Phaser.Math.FloatBetween(0.2, 0.45),
+        angle: side * Phaser.Math.Between(8, 22),
+        alpha: { from: 0.95, to: 0 },
+        delay: index * 75,
+        duration: Phaser.Math.Between(1_050, 1_450),
+        ease: 'Cubic.easeOut',
+        onComplete: () => bird.destroy(),
+      });
+    }
+  }
+
+  private launchNewRecordLeaves(): void {
+    const leafTints = [0x88bd36, 0xb7d84a, 0xe3b735, 0xd8792b, 0x6f9d2d];
+
+    for (let index = 0; index < NEW_RECORD_LEAF_COUNT; index += 1) {
+      const startX = GAME_WIDTH / 2 + Phaser.Math.Between(-75, 75);
+      const startY = GAME_HEIGHT * 0.67 + Phaser.Math.Between(-15, 35);
+      const leaf = this.add
+        .image(startX, startY, NEW_RECORD_LEAF_TEXTURE_KEY)
+        .setTint(leafTints[index % leafTints.length])
+        .setScrollFactor(0)
+        .setDepth(2_050)
+        .setScale(Phaser.Math.FloatBetween(0.55, 1.05))
+        .setAngle(Phaser.Math.Between(0, 360));
+
+      const targetX = startX + Phaser.Math.Between(-210, 210);
+      const riseY = startY - Phaser.Math.Between(65, 175);
+
+      this.tweens.add({
+        targets: leaf,
+        x: targetX,
+        y: riseY,
+        angle: leaf.angle + Phaser.Math.Between(-240, 240),
+        duration: Phaser.Math.Between(380, 620),
+        delay: Phaser.Math.Between(0, 180),
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: leaf,
+            x: targetX + Phaser.Math.Between(-35, 35),
+            y: GAME_HEIGHT + 35,
+            angle: leaf.angle + Phaser.Math.Between(180, 520),
+            alpha: 0,
+            duration: Phaser.Math.Between(800, 1_250),
+            ease: 'Sine.easeIn',
+            onComplete: () => leaf.destroy(),
+          });
+        },
+      });
+    }
   }
 
   private createLava(): void {
@@ -2436,6 +3857,10 @@ export class GameplayScene extends Phaser.Scene {
     });
 
     for (const level of ALTITUDE_LEVELS) {
+      if (level.obstacleKinds.length === 0) {
+        continue;
+      }
+
       const maxAltitude = level.maxAltitude ?? MAX_OBSTACLE_ALTITUDE;
       let altitude = level.minAltitude + level.firstObstacleOffset;
       let previousX = GAME_WIDTH / 2;
@@ -2458,7 +3883,15 @@ export class GameplayScene extends Phaser.Scene {
           obstacleKind.textureKey,
         );
         this.obstacleGroup.add(obstacle);
-        const displayWidth = obstacleKind.displayWidth ?? obstacleKind.width;
+        const displayWidth =
+          obstacleKind.id === 'stormCloud'
+            ? STORM_CLOUD_DISPLAY_WIDTHS[
+                Phaser.Math.Between(
+                  0,
+                  STORM_CLOUD_DISPLAY_WIDTHS.length - 1,
+                )
+              ]
+            : obstacleKind.displayWidth ?? obstacleKind.width;
         const displayHeight =
           obstacleKind.displayHeight ?? displayWidth * (obstacle.height / obstacle.width);
         const originX =
@@ -2900,6 +4333,10 @@ export class GameplayScene extends Phaser.Scene {
       sprite.play(LIGHTNING_ANIMATION_KEY);
       this.sound.play(LIGHTNING_SOUND_KEY, { volume: LIGHTNING_SOUND_VOLUME });
       this.playLightningScreenFlash();
+      this.cameras.main.shake(
+        LIGHTNING_CAMERA_SHAKE_DURATION_MS,
+        LIGHTNING_CAMERA_SHAKE_INTENSITY,
+      );
     }
   }
 
@@ -2969,6 +4406,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createWatermelonCollectables(): void {
+    this.createWatermelonGlowTexture();
     this.watermelonCollectables = this.physics.add.staticGroup();
 
     let y = START_Y - WATERMELON_FIRST_OFFSET_Y;
@@ -3000,9 +4438,92 @@ export class GameplayScene extends Phaser.Scene {
         .setDepth(WATERMELON_DEPTH)
         .setAngle(Phaser.Math.Between(-18, 18));
       watermelon.refreshBody();
+      this.addWatermelonAttractionEffect(watermelon);
 
       previousX = x;
       y -= Phaser.Math.Between(WATERMELON_MIN_SPACING_Y, WATERMELON_MAX_SPACING_Y);
+    }
+  }
+
+  private createWatermelonGlowTexture(): void {
+    if (this.textures.exists(WATERMELON_GLOW_TEXTURE_KEY)) {
+      return;
+    }
+
+    const texture = this.textures.createCanvas(
+      WATERMELON_GLOW_TEXTURE_KEY,
+      128,
+      128,
+    );
+
+    if (!texture) {
+      return;
+    }
+
+    const context = texture.getContext();
+    const glow = context.createRadialGradient(64, 64, 4, 64, 64, 64);
+    glow.addColorStop(0, 'rgba(255, 255, 205, 0.95)');
+    glow.addColorStop(0.28, 'rgba(255, 234, 72, 0.72)');
+    glow.addColorStop(0.62, 'rgba(255, 199, 18, 0.34)');
+    glow.addColorStop(1, 'rgba(255, 176, 0, 0)');
+    context.clearRect(0, 0, 128, 128);
+    context.fillStyle = glow;
+    context.fillRect(0, 0, 128, 128);
+    texture.refresh();
+  }
+
+  private addWatermelonAttractionEffect(
+    watermelon: Phaser.Physics.Arcade.Image,
+  ): void {
+    const glow = this.add
+      .image(watermelon.x, watermelon.y, WATERMELON_GLOW_TEXTURE_KEY)
+      .setDisplaySize(WATERMELON_GLOW_SIZE, WATERMELON_GLOW_SIZE)
+      .setDepth(WATERMELON_DEPTH - 0.2)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0.58);
+    const glowScaleX = glow.scaleX;
+    const glowScaleY = glow.scaleY;
+    const rotationDirection = Phaser.Math.RND.sign();
+
+    watermelon.setData('attractionGlow', glow);
+
+    this.tweens.add({
+      targets: glow,
+      scaleX: glowScaleX * 1.16,
+      scaleY: glowScaleY * 1.16,
+      alpha: 0.86,
+      duration: Phaser.Math.Between(650, 900),
+      delay: Phaser.Math.Between(0, 450),
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    });
+
+    this.tweens.add({
+      targets: watermelon,
+      angle: watermelon.angle + rotationDirection * 360,
+      duration: Phaser.Math.Between(
+        WATERMELON_ROTATION_DURATION_MIN_MS,
+        WATERMELON_ROTATION_DURATION_MAX_MS,
+      ),
+      ease: 'Linear',
+      repeat: -1,
+    });
+  }
+
+  private destroyWatermelonAttractionEffect(
+    watermelon: Phaser.Physics.Arcade.Image,
+  ): void {
+    const glow = watermelon.getData(
+      'attractionGlow',
+    ) as Phaser.GameObjects.Image | undefined;
+
+    this.tweens.killTweensOf(watermelon);
+
+    if (glow) {
+      this.tweens.killTweensOf(glow);
+      glow.destroy();
+      watermelon.setData('attractionGlow', undefined);
     }
   }
 
@@ -3020,10 +4541,16 @@ export class GameplayScene extends Phaser.Scene {
     const collectedY = watermelon.y;
     const collectedScaleX = watermelon.scaleX;
     const collectedScaleY = watermelon.scaleY;
+    const collectedAngle = watermelon.angle;
 
+    this.destroyWatermelonAttractionEffect(watermelon);
     watermelon.disableBody(true, true);
 
-    this.sound.play(WATERMELON_SOUND_KEY, {
+    const collectSound =
+      WATERMELON_COLLECT_SOUNDS[
+        Phaser.Math.Between(0, WATERMELON_COLLECT_SOUNDS.length - 1)
+      ];
+    this.sound.play(collectSound.key, {
       volume: WATERMELON_SOUND_VOLUME,
     });
 
@@ -3043,22 +4570,164 @@ export class GameplayScene extends Phaser.Scene {
       emitWalletUpdated({ watermelons: profile.watermelons });
     });
 
-    // Petit retour visuel au ramassage.
-    const collectedEffect = this.add
-      .image(collectedX, collectedY, WATERMELON_TEXTURE_KEY)
-      .setScale(collectedScaleX, collectedScaleY)
+    this.playWatermelonCollectEffect(
+      collectedX,
+      collectedY,
+      collectedScaleX,
+      collectedScaleY,
+      collectedAngle,
+      collectedAmount,
+    );
+  };
+
+  private playWatermelonCollectEffect(
+    x: number,
+    y: number,
+    scaleX: number,
+    scaleY: number,
+    angle: number,
+    collectedAmount: number,
+  ): void {
+    const juice = this.add
+      .image(x, y + 5, WATERMELON_JUICE_TEXTURE_KEY)
+      .setScale(0.035)
+      .setAlpha(0.92)
       .setDepth(WATERMELON_DEPTH + 1);
 
     this.tweens.add({
-      targets: collectedEffect,
-      y: collectedY - 35,
-      scaleX: collectedScaleX * 1.35,
-      scaleY: collectedScaleY * 1.35,
+      targets: juice,
+      scaleX: 0.1,
+      scaleY: 0.1,
       alpha: 0,
-      duration: 240,
-      ease: 'Quad.easeOut',
-      onComplete: () => collectedEffect.destroy(),
+      duration: 440,
+      ease: 'Cubic.easeOut',
+      onComplete: () => juice.destroy(),
     });
+
+    const take = this.add
+      .image(x, y, WATERMELON_TAKE_TEXTURE_KEY)
+      .setScale(scaleX * 0.88, scaleY * 0.88)
+      .setAngle(angle)
+      .setDepth(WATERMELON_DEPTH + 4);
+
+    this.tweens.add({
+      targets: take,
+      scaleX: scaleX * 1.18,
+      scaleY: scaleY * 1.18,
+      alpha: 0,
+      duration: 170,
+      ease: 'Back.easeOut',
+      onComplete: () => take.destroy(),
+    });
+
+    WATERMELON_FRAGMENT_TEXTURES.forEach(({ key }, index) => {
+      const direction = (Math.PI * 2 * index) / WATERMELON_FRAGMENT_TEXTURES.length;
+      const distance = Phaser.Math.Between(45, 78);
+      const fragmentScale = Phaser.Math.FloatBetween(0.032, 0.05);
+      const fragment = this.add
+        .image(x, y, key)
+        .setScale(fragmentScale * 0.45)
+        .setAngle(Phaser.Math.Between(-35, 35))
+        .setDepth(WATERMELON_DEPTH + 3);
+
+      this.tweens.add({
+        targets: fragment,
+        x: x + Math.cos(direction) * distance,
+        y: y + Math.sin(direction) * distance - Phaser.Math.Between(8, 28),
+        angle: fragment.angle + Phaser.Math.Between(-150, 150),
+        scaleX: fragmentScale,
+        scaleY: fragmentScale,
+        alpha: 0,
+        duration: Phaser.Math.Between(480, 650),
+        ease: 'Cubic.easeOut',
+        onComplete: () => fragment.destroy(),
+      });
+    });
+
+    const seeds = this.add
+      .image(x, y, WATERMELON_SEEDS_TEXTURE_KEY)
+      .setScale(0.025)
+      .setAngle(Phaser.Math.Between(-20, 20))
+      .setDepth(WATERMELON_DEPTH + 3);
+
+    this.tweens.add({
+      targets: seeds,
+      scaleX: 0.085,
+      scaleY: 0.085,
+      angle: seeds.angle + Phaser.Math.Between(-45, 45),
+      alpha: 0,
+      duration: 560,
+      ease: 'Quad.easeOut',
+      onComplete: () => seeds.destroy(),
+    });
+
+    const scoreTexture = WATERMELON_SCORE_TEXTURES.find(
+      ({ amount }) => amount === collectedAmount,
+    );
+    const score = scoreTexture
+      ? this.add
+          .image(x, y - 25, scoreTexture.key)
+          .setScale(0.035)
+          .setDepth(WATERMELON_DEPTH + 5)
+      : this.add
+          .text(x, y - 25, `+${collectedAmount}`, {
+            color: '#b7ff1f',
+            fontFamily: 'Arial Black, Arial, sans-serif',
+            fontSize: '52px',
+            fontStyle: 'bold',
+            stroke: '#075e18',
+            strokeThickness: 8,
+            shadow: {
+              color: '#ffd82e',
+              blur: 10,
+              fill: true,
+              offsetX: 0,
+              offsetY: 0,
+            },
+          })
+          .setOrigin(0.5)
+          .setScale(0.55)
+          .setDepth(WATERMELON_DEPTH + 5);
+
+    this.tweens.add({
+      targets: score,
+      y: y - 68,
+      scaleX: scoreTexture ? 0.078 : 1,
+      scaleY: scoreTexture ? 0.078 : 1,
+      duration: 420,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: score,
+          y: y - 92,
+          alpha: 0,
+          delay: 600,
+          duration: 500,
+          ease: 'Quad.easeIn',
+          onComplete: () => score.destroy(),
+        });
+      },
+    });
+  }
+
+  private shouldProcessNonBranchOverlap: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _playerObject,
+    obstacleObject,
+  ): boolean => {
+    const obstacle = obstacleObject as Phaser.Physics.Arcade.Image;
+    const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
+
+    return obstacleKind !== 'branchLeft' && obstacleKind !== 'branchRight';
+  };
+
+  private shouldProcessBranchCollision: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+    _playerObject,
+    obstacleObject,
+  ): boolean => {
+    const obstacle = obstacleObject as Phaser.Physics.Arcade.Image;
+    const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
+
+    return obstacleKind === 'branchLeft' || obstacleKind === 'branchRight';
   };
 
   private handleObstacleHit: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
@@ -3078,13 +4747,42 @@ export class GameplayScene extends Phaser.Scene {
     const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
 
     if (obstacleKind === 'lightning') {
+      this.cameras.main.shake(
+        LIGHTNING_HIT_CAMERA_SHAKE_DURATION_MS,
+        LIGHTNING_HIT_CAMERA_SHAKE_INTENSITY,
+        true,
+      );
       void this.finishGame('lightning', false);
+      return;
+    }
+
+    const isBranch =
+      obstacleKind === 'branchLeft' || obstacleKind === 'branchRight';
+    const isCurrentPerch =
+      isBranch && this.isGrounded && this.perchedBranch === obstacle;
+    const isProtectedTakeoff =
+      isBranch &&
+      this.perchCollisionGraceBranch === obstacle &&
+      this.time.now < this.perchCollisionGraceUntil;
+
+    if (isCurrentPerch || isProtectedTakeoff) {
       return;
     }
 
     if (this.canPerchOnBranch(obstacle, obstacleKind)) {
       this.perchOnBranch(obstacle);
       return;
+    }
+
+    if (
+      isBranch &&
+      this.time.now - this.lastPlayerDamageTime >=
+        PLAYER_DAMAGE_INVULNERABILITY_MS
+    ) {
+      this.cameras.main.shake(
+        BRANCH_CAMERA_SHAKE_DURATION_MS,
+        BRANCH_CAMERA_SHAKE_INTENSITY,
+      );
     }
 
     void this.damagePlayer(
@@ -3098,6 +4796,7 @@ export class GameplayScene extends Phaser.Scene {
     obstacleKind: ObstacleKindId | undefined,
   ): boolean {
     if (
+      this.isGrounded ||
       !this.blueTalentStats.branchPerch ||
       (obstacleKind !== 'branchLeft' && obstacleKind !== 'branchRight')
     ) {
@@ -3106,29 +4805,43 @@ export class GameplayScene extends Phaser.Scene {
 
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
     const obstacleBody = obstacle.body as Phaser.Physics.Arcade.Body;
+    const previousBottom = playerBody.prev.y + playerBody.height;
+    const feetCenterX = playerBody.center.x;
 
     return (
       playerBody.velocity.y >= 0 &&
+      previousBottom <=
+        obstacleBody.top + BRANCH_PERCH_PREVIOUS_BOTTOM_TOLERANCE &&
       playerBody.bottom <= obstacleBody.top + BRANCH_PERCH_TOP_TOLERANCE &&
-      playerBody.center.y < obstacleBody.center.y
+      playerBody.center.y < obstacleBody.top &&
+      feetCenterX >= obstacleBody.left &&
+      feetCenterX <= obstacleBody.right
     );
   }
 
   private perchOnBranch(branch: Phaser.Physics.Arcade.Image): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const branchBody = branch.body as Phaser.Physics.Arcade.Body;
+    const playerCenterOffsetX = this.player.x - body.center.x;
+    const minCenterX = branchBody.left + body.halfWidth;
+    const maxCenterX = branchBody.right - body.halfWidth;
+    const targetCenterX =
+      minCenterX <= maxCenterX
+        ? Phaser.Math.Clamp(body.center.x, minCenterX, maxCenterX)
+        : branchBody.center.x;
 
     this.perchedBranch = branch;
+    this.perchCollisionGraceBranch = null;
+    this.perchCollisionGraceUntil = 0;
+    this.perchTargetX = targetCenterX + playerCenterOffsetX;
+    this.isPerchSettling = true;
     this.pendingPowerTakeoff = this.blueTalentStats.powerTakeoff;
     this.isGrounded = true;
     this.angularVelocity = 0;
-    this.player.setAngle(0);
-    this.player.setPosition(this.player.x, branchBody.top - 2);
     body.reset(this.player.x, this.player.y);
     body.setVelocity(0, 0);
     body.setAcceleration(0, 0);
     this.stopFlightSounds();
-    this.updateDodoVisuals(0);
   }
 
   private updateWatermelonMisses(): void {
@@ -3136,6 +4849,13 @@ export class GameplayScene extends Phaser.Scene {
 
     for (const child of this.watermelonCollectables.getChildren()) {
       const watermelon = child as Phaser.Physics.Arcade.Image;
+      const glow = watermelon.getData(
+        'attractionGlow',
+      ) as Phaser.GameObjects.Image | undefined;
+
+      if (watermelon.active && glow?.active) {
+        glow.setPosition(watermelon.x, watermelon.y);
+      }
 
       if (
         watermelon.active &&
@@ -3508,9 +5228,42 @@ export class GameplayScene extends Phaser.Scene {
     if (this.isGrounded) {
       if (this.perchedBranch?.active) {
         const branchBody = this.perchedBranch.body as Phaser.Physics.Arcade.Body;
-        this.player.y = branchBody.top - 2;
+        const targetX = this.perchTargetX ?? this.player.x;
+        const targetY = branchBody.top + BRANCH_PERCH_Y_OFFSET;
+
+        if (this.isPerchSettling) {
+          const smoothing =
+            1 - Math.exp(-BRANCH_PERCH_SETTLE_SPEED * deltaSeconds);
+          this.player.x = Phaser.Math.Linear(
+            this.player.x,
+            targetX,
+            smoothing,
+          );
+          this.player.y = Phaser.Math.Linear(
+            this.player.y,
+            targetY,
+            smoothing,
+          );
+
+          if (
+            Math.abs(this.player.x - targetX) <=
+              BRANCH_PERCH_SETTLE_EPSILON &&
+            Math.abs(this.player.y - targetY) <=
+              BRANCH_PERCH_SETTLE_EPSILON
+          ) {
+            this.player.setPosition(targetX, targetY);
+            this.player.setAngle(0);
+            this.isPerchSettling = false;
+          }
+        } else {
+          this.player.setPosition(targetX, targetY);
+        }
+
+        body.reset(this.player.x, this.player.y);
       } else {
         this.perchedBranch = null;
+        this.perchTargetX = null;
+        this.isPerchSettling = false;
         this.pendingPowerTakeoff = false;
         this.player.y = GROUND_Y;
       }
@@ -3524,7 +5277,14 @@ export class GameplayScene extends Phaser.Scene {
 
       flapImpulseMultiplier = this.pendingPowerTakeoff ? 2 : 1;
       this.pendingPowerTakeoff = false;
+      this.perchCollisionGraceBranch = this.perchedBranch;
+      this.perchCollisionGraceUntil =
+        this.perchedBranch === null
+          ? 0
+          : this.time.now + BRANCH_TAKEOFF_COLLISION_GRACE_MS;
       this.perchedBranch = null;
+      this.perchTargetX = null;
+      this.isPerchSettling = false;
       this.isGrounded = false;
       this.maxAltitudeSinceTakeoff = 0;
       this.startFlightSound();
@@ -3590,10 +5350,53 @@ export class GameplayScene extends Phaser.Scene {
 
     this.isGrounded = true;
     this.perchedBranch = null;
+    this.perchTargetX = null;
+    this.isPerchSettling = false;
+    this.perchCollisionGraceBranch = null;
+    this.perchCollisionGraceUntil = 0;
     this.pendingPowerTakeoff = false;
     this.maxAltitudeSinceTakeoff = 0;
     this.angularVelocity = 0;
     this.player.angle = 0;
+  }
+
+  private updateHorizontalScreenBounds(): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerToBodyCenterOffset = this.player.x - body.center.x;
+    const minimumPlayerX = body.halfWidth + playerToBodyCenterOffset;
+    const maximumPlayerX =
+      GAME_WIDTH - body.halfWidth + playerToBodyCenterOffset;
+    let bounceDirection: -1 | 0 | 1 = 0;
+
+    if (this.player.x < minimumPlayerX) {
+      this.player.setX(minimumPlayerX);
+      bounceDirection = 1;
+    } else if (this.player.x > maximumPlayerX) {
+      this.player.setX(maximumPlayerX);
+      bounceDirection = -1;
+    }
+
+    if (bounceDirection === 0) {
+      return;
+    }
+
+    body.updateFromGameObject();
+
+    const isMovingOutside =
+      (bounceDirection === 1 && body.velocity.x < 0) ||
+      (bounceDirection === -1 && body.velocity.x > 0);
+
+    if (!isMovingOutside) {
+      return;
+    }
+
+    const bounceSpeed = Math.max(
+      Math.abs(body.velocity.x) * SCREEN_EDGE_BOUNCE_DAMPING,
+      SCREEN_EDGE_MIN_BOUNCE_SPEED,
+    );
+
+    body.setVelocityX(bounceDirection * bounceSpeed);
+    this.angularVelocity += bounceDirection * SCREEN_EDGE_TURN_IMPULSE;
   }
 
   private updateWingBeats(direction: number, deltaSeconds: number): void {
@@ -3739,7 +5542,7 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    if (this.isGrounded) {
+    if (this.isGrounded && !this.isPerchSettling) {
       if (this.lastDodoPose !== 'ground') {
         this.player.setTexture('dodo-pose-ground');
         this.player.setOrigin(0.5, DODO_GROUND_ORIGIN_Y);
@@ -3852,6 +5655,14 @@ export class GameplayScene extends Phaser.Scene {
       this.updateGroundRecordText();
     }
 
+    if (
+      this.bestScoreReady &&
+      !this.newRecordCelebrated &&
+      altitude > this.recordToBeat
+    ) {
+      this.playNewRecordCelebration();
+    }
+
     this.emitHud();
   }
 
@@ -3861,6 +5672,7 @@ export class GameplayScene extends Phaser.Scene {
     if (
       previous?.altitude === this.currentAltitude &&
       previous.bestAltitude === this.bestAltitude &&
+      previous.newRecord === this.newRecordCelebrated &&
       previous.speed === this.currentSpeed &&
       previous.watermelons === this.watermelons &&
       previous.maxLives === this.playerMaxLives &&
@@ -3875,6 +5687,7 @@ export class GameplayScene extends Phaser.Scene {
     const detail: FlightHudDetail = {
       altitude: this.currentAltitude,
       bestAltitude: this.bestAltitude,
+      newRecord: this.newRecordCelebrated,
       speed: this.currentSpeed,
       watermelons: this.watermelons,
       lives: this.playerLives,
@@ -3885,19 +5698,6 @@ export class GameplayScene extends Phaser.Scene {
     };
     this.lastHudSnapshot = detail;
     emitFlightHud(detail);
-  }
-
-  private updateCloudVisibility(): void {
-    const cameraTop = this.cameras.main.worldView.top;
-    const cameraBottom = this.cameras.main.worldView.bottom;
-
-    for (const cloud of this.backgroundClouds) {
-      const shouldBeVisible =
-        cloud.y > cameraTop - 200 && cloud.y < cameraBottom + 200;
-      if (cloud.visible !== shouldBeVisible) {
-        cloud.setVisible(shouldBeVisible);
-      }
-    }
   }
 
   private updateStormCloudSounds(): void {
@@ -4389,6 +6189,10 @@ export class GameplayScene extends Phaser.Scene {
         ? this.time.now + PLAYER_SHIELD_RECHARGE_DELAY_MS
         : null;
     this.perchedBranch = null;
+    this.perchTargetX = null;
+    this.isPerchSettling = false;
+    this.perchCollisionGraceBranch = null;
+    this.perchCollisionGraceUntil = 0;
     this.pendingPowerTakeoff = false;
     this.heldPointerSides.clear();
     this.angularVelocity = 0;

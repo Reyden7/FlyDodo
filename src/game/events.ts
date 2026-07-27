@@ -4,6 +4,7 @@ import type { ShopObjectInventory } from '../services/saveService';
 export interface FlightHudDetail {
   altitude: number;
   bestAltitude: number;
+  newRecord: boolean;
   speed: number;
   watermelons: number;
   lives: number;
