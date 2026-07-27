@@ -10,6 +10,7 @@ import {
   translate,
   type AppLanguage,
 } from '../../i18n/i18n';
+import { getDevStartAltitude } from '../devSettings';
 import {
   emitFallWarning,
   emitFlightHud,
@@ -63,8 +64,8 @@ import {
 
 const GAME_WIDTH = 390;
 const GAME_HEIGHT = 844;
-const WORLD_HEIGHT = 100_000;
-const START_Y = 99_900;
+const WORLD_HEIGHT = 101_100;
+const START_Y = 101_000;
 const GROUND_Y = START_Y;
 const DODO_BODY_SCALE = 0.125;
 const DODO_GROUND_SCALE = 0.1;
@@ -100,8 +101,9 @@ const PHOENIX_REVIVAL_FLASH_DEPTH = 1_001;
 const PHOENIX_REVIVAL_SPARK_DEPTH = 1_002;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
-const CAMERA_FALL_FOLLOW_SPEED = 1.15;
-const CAMERA_MAX_FALL_CATCHUP = 360;
+const CAMERA_FALL_SCREEN_Y_RATIO = 0.97;
+const CAMERA_FALL_FOLLOW_SPEED = 0.72;
+const CAMERA_MAX_FALL_CATCHUP = 260;
 
 const GRAVITY_Y = 800;
 const BASE_FLAP_UPWARD_IMPULSE = 160;
@@ -997,20 +999,20 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     id: 'forest',
     label: 'Forest',
     minAltitude: 0,
-    maxAltitude: 200,
+    maxAltitude: 100,
     obstacleKinds: ['branchLeft', 'branchRight', 'flyingInsect'],
-    firstObstacleOffset: 75,
-    spacingMin: 45,
-    spacingMax: 70,
+    firstObstacleOffset: 35,
+    spacingMin: 35,
+    spacingMax: 55,
     sideMargin: 34,
   },
   {
     id: 'forest',
     label: 'Forest',
-    minAltitude: 200,
-    maxAltitude: 350,
+    minAltitude: 100,
+    maxAltitude: 250,
     obstacleKinds: ['flyingInsect'],
-    firstObstacleOffset: 30,
+    firstObstacleOffset: 25,
     spacingMin: 55,
     spacingMax: 85,
     sideMargin: 34,
@@ -1018,43 +1020,65 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
   {
     id: 'lowSky',
     label: 'LowSky',
-    minAltitude: 200,
-    maxAltitude: 800,
-    obstacleKinds: ['pterodactyl', 'stormCloud'],
-    firstObstacleOffset: 45,
-    spacingMin: 80,
-    spacingMax: 125,
+    minAltitude: 250,
+    maxAltitude: 600,
+    obstacleKinds: ['pterodactyl'],
+    firstObstacleOffset: 55,
+    spacingMin: 90,
+    spacingMax: 135,
     sideMargin: 42,
   },
   {
     id: 'midSky',
     label: 'MidSky',
-    minAltitude: 800,
-    maxAltitude: 1800,
-    obstacleKinds: ['lightning'],
-    firstObstacleOffset: 65,
-    spacingMin: 105,
-    spacingMax: 165,
+    minAltitude: 600,
+    maxAltitude: 1_000,
+    obstacleKinds: ['pterodactyl', 'stormCloud', 'lightning'],
+    firstObstacleOffset: 45,
+    spacingMin: 85,
+    spacingMax: 125,
     sideMargin: 48,
   },
   {
-    id: 'stratosphere',
-    label: 'Stratosphere',
-    minAltitude: 1800,
-    maxAltitude: 3000,
-    obstacleKinds: [],
-    firstObstacleOffset: 80,
-    spacingMin: 135,
-    spacingMax: 210,
+    id: 'midSky',
+    label: 'CloudExit',
+    minAltitude: 1_000,
+    maxAltitude: 1_200,
+    obstacleKinds: ['lightning'],
+    firstObstacleOffset: 45,
+    spacingMin: 95,
+    spacingMax: 135,
     sideMargin: 34,
+  },
+  {
+    id: 'stratosphere',
+    label: 'UpperAtmosphere',
+    minAltitude: 1_200,
+    maxAltitude: 7_000,
+    obstacleKinds: [],
+    firstObstacleOffset: 180,
+    spacingMin: 240,
+    spacingMax: 360,
+    sideMargin: 34,
+  },
+  {
+    id: 'stratosphere',
+    label: 'SpaceEdge',
+    minAltitude: 7_000,
+    maxAltitude: 8_000,
+    obstacleKinds: ['satellite'],
+    firstObstacleOffset: 180,
+    spacingMin: 300,
+    spacingMax: 480,
+    sideMargin: 44,
   },
   {
     id: 'space',
     label: 'Space',
-    minAltitude: 3000,
-    maxAltitude: null,
+    minAltitude: 8_000,
+    maxAltitude: 10_000,
     obstacleKinds: ['satellite', 'asteroid'],
-    firstObstacleOffset: 120,
+    firstObstacleOffset: 160,
     spacingMin: 280,
     spacingMax: 430,
     sideMargin: 44,
@@ -1082,20 +1106,19 @@ const ZONE_TRANSITIONS: readonly ZoneTransitionConfig[] = [
     textureKey: 'zone-transition-1800',
     texturePath: '/assets/Decors/t4.png',
   },
-  {
-    altitude: 3_000,
-    textureKey: 'zone-transition-3000',
-    texturePath: '/assets/Decors/t5.png',
-  },
 ];
 const ZONE_TRANSITION_SCROLL_FACTOR = PARALLAX_FAR_SCROLL_FACTOR;
 const ZONE_TRANSITION_DEPTH = 20;
 const ZONE_TRANSITION_SCREEN_Y_RATIO = 0.43;
 const ZONE_TRANSITION_CLOUD_TEXTURE_KEY = 'zone-transition-cloud-puff';
 const ZONE_TRANSITION_CLOUD_PUFF_COUNT = 24;
-const AMBIENT_CLOUD_MIN_ALTITUDE = 250;
-const AMBIENT_CLOUD_MAX_ALTITUDE = 1_700;
+const AMBIENT_CLOUD_MIN_ALTITUDE = 100;
+const AMBIENT_CLOUD_LAYER_ALTITUDE = 250;
+const AMBIENT_CLOUD_STORM_MIN_ALTITUDE = 600;
+const AMBIENT_CLOUD_STORM_MAX_ALTITUDE = 1_000;
+const AMBIENT_CLOUD_MAX_ALTITUDE = 1_200;
 const AMBIENT_CLOUD_COUNT = 32;
+const AMBIENT_CLOUD_FIRST_LAYER_COUNT = 4;
 const AMBIENT_CLOUD_TEXTURES: readonly AmbientCloudTextureConfig[] = [
   {
     sourceKey: 'ambient-cloud-1-source',
@@ -1582,6 +1605,8 @@ export class GameplayScene extends Phaser.Scene {
     });
 
     this.resetRuntimeState();
+    const devStartAltitude = getDevStartAltitude();
+    const playerStartY = START_Y - devStartAltitude * 10;
     this.createFlightSounds();
 
     this.physics.world.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
@@ -1602,12 +1627,24 @@ export class GameplayScene extends Phaser.Scene {
     this.createLava();
     this.createLightningScreenFlash();
 
-    this.leftWing = this.add.image(GAME_WIDTH / 2, START_Y, LEFT_WING_FRAMES[0]);
-    this.rightWing = this.add.image(GAME_WIDTH / 2, START_Y, RIGHT_WING_FRAMES[0]);
+    this.leftWing = this.add.image(
+      GAME_WIDTH / 2,
+      playerStartY,
+      LEFT_WING_FRAMES[0],
+    );
+    this.rightWing = this.add.image(
+      GAME_WIDTH / 2,
+      playerStartY,
+      RIGHT_WING_FRAMES[0],
+    );
     this.leftWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
     this.rightWing.setOrigin(0.5, 0.92).setScale(DODO_WING_SCALE).setDepth(8);
 
-    this.player = this.physics.add.image(GAME_WIDTH / 2, START_Y, 'dodo-pose-ground');
+    this.player = this.physics.add.image(
+      GAME_WIDTH / 2,
+      playerStartY,
+      devStartAltitude > 0 ? 'dodo-pose-flight' : 'dodo-pose-ground',
+    );
     this.player.setOrigin(0.2, DODO_GROUND_ORIGIN_Y);
     this.player.setScale(DODO_GROUND_SCALE);
     this.player.setDepth(10);
@@ -1616,24 +1653,32 @@ export class GameplayScene extends Phaser.Scene {
     this.player.setMaxVelocity(MAX_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
     this.configurePlayerHitbox();
 
-    this.groundFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-ground-feet');
+    this.groundFeet = this.add.image(
+      GAME_WIDTH / 2,
+      playerStartY,
+      'dodo-ground-feet',
+    );
     this.groundFeet
       .setOrigin(0.5, DODO_GROUND_ORIGIN_Y)
       .setScale(DODO_GROUND_FEET_SCALE)
       .setDepth(9)
-      .setVisible(true);
+      .setVisible(devStartAltitude === 0);
 
-    this.flightFeet = this.add.image(GAME_WIDTH / 2, START_Y, 'dodo-flight-feet-default');
+    this.flightFeet = this.add.image(
+      GAME_WIDTH / 2,
+      playerStartY,
+      'dodo-flight-feet-default',
+    );
     this.flightFeet
       .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
       .setScale(DODO_FLIGHT_FEET_SCALE_X, DODO_FLIGHT_FEET_SCALE_Y)
       .setDepth(9)
-      .setVisible(false);
+      .setVisible(devStartAltitude > 0);
 
     this.lavaDeathSprite = this.add
       .sprite(
         GAME_WIDTH / 2,
-        START_Y,
+        playerStartY,
         `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-000`,
       )
       .setOrigin(0.5, DODO_FLIGHT_ORIGIN_Y)
@@ -1674,8 +1719,21 @@ export class GameplayScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.roundPixels = false;
     camera.setBounds(0, 0, GAME_WIDTH, WORLD_HEIGHT);
-    camera.setScroll(0, START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO);
+    camera.setScroll(0, playerStartY - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO);
     camera.setBackgroundColor('#73d8ff');
+
+    if (devStartAltitude > 0) {
+      this.currentAltitude = devStartAltitude;
+      this.maxAltitudeSinceTakeoff = devStartAltitude;
+      this.isGrounded = false;
+      this.lastAcceptedFlapTime = this.time.now;
+      this.zoneTransitionMarkers.forEach((marker) => {
+        if (marker.altitude <= devStartAltitude) {
+          marker.dispersed = true;
+          marker.image.setAlpha(0).setVisible(false);
+        }
+      });
+    }
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -3125,9 +3183,6 @@ export class GameplayScene extends Phaser.Scene {
 
     const initialCameraScrollY =
       START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
-    const altitudeRange =
-      AMBIENT_CLOUD_MAX_ALTITUDE - AMBIENT_CLOUD_MIN_ALTITUDE;
-
     for (let index = 0; index < AMBIENT_CLOUD_COUNT; index += 1) {
       const plane =
         AMBIENT_CLOUD_PLANES[
@@ -3137,16 +3192,27 @@ export class GameplayScene extends Phaser.Scene {
         AMBIENT_CLOUD_TEXTURES[
           Phaser.Math.Between(0, AMBIENT_CLOUD_TEXTURES.length - 1)
         ];
+      const isFirstCloudLayer = index < AMBIENT_CLOUD_FIRST_LAYER_COUNT;
+      const layerIndex = isFirstCloudLayer
+        ? index
+        : index - AMBIENT_CLOUD_FIRST_LAYER_COUNT;
+      const layerCount = isFirstCloudLayer
+        ? AMBIENT_CLOUD_FIRST_LAYER_COUNT
+        : AMBIENT_CLOUD_COUNT - AMBIENT_CLOUD_FIRST_LAYER_COUNT;
+      const altitudeMin = isFirstCloudLayer
+        ? AMBIENT_CLOUD_MIN_ALTITUDE
+        : AMBIENT_CLOUD_LAYER_ALTITUDE;
+      const altitudeMax = isFirstCloudLayer
+        ? AMBIENT_CLOUD_LAYER_ALTITUDE
+        : AMBIENT_CLOUD_MAX_ALTITUDE;
       const altitudeProgress =
-        AMBIENT_CLOUD_COUNT <= 1
-          ? 0
-          : index / (AMBIENT_CLOUD_COUNT - 1);
+        layerCount <= 1 ? 0 : layerIndex / (layerCount - 1);
       const altitude = Phaser.Math.Clamp(
-        AMBIENT_CLOUD_MIN_ALTITUDE +
-          altitudeRange * altitudeProgress +
+        altitudeMin +
+          (altitudeMax - altitudeMin) * altitudeProgress +
           Phaser.Math.Between(-28, 28),
-        AMBIENT_CLOUD_MIN_ALTITUDE,
-        AMBIENT_CLOUD_MAX_ALTITUDE,
+        altitudeMin,
+        altitudeMax,
       );
       const cameraScrollYAtAltitude =
         initialCameraScrollY - altitude * 10;
@@ -3161,6 +3227,12 @@ export class GameplayScene extends Phaser.Scene {
         plane.widthMin,
         plane.widthMax,
       );
+      const isStormLayer =
+        altitude >= AMBIENT_CLOUD_STORM_MIN_ALTITUDE &&
+        altitude <= AMBIENT_CLOUD_STORM_MAX_ALTITUDE;
+      const availableTints = isStormLayer
+        ? AMBIENT_CLOUD_TINTS.slice(2)
+        : AMBIENT_CLOUD_TINTS;
       const image = this.add
         .image(
           Phaser.Math.Between(-45, GAME_WIDTH + 45),
@@ -3172,8 +3244,8 @@ export class GameplayScene extends Phaser.Scene {
         .setScrollFactor(plane.scrollFactor)
         .setAlpha(0)
         .setTint(
-          AMBIENT_CLOUD_TINTS[
-            Phaser.Math.Between(0, AMBIENT_CLOUD_TINTS.length - 1)
+          availableTints[
+            Phaser.Math.Between(0, availableTints.length - 1)
           ],
         );
       const scale = desiredWidth / image.width;
@@ -5766,7 +5838,12 @@ export class GameplayScene extends Phaser.Scene {
 
   private updateCamera(deltaSeconds: number): void {
     const camera = this.cameras.main;
-    const desiredScrollY = this.player.y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const playerScreenYRatio =
+      body.velocity.y > 0
+        ? CAMERA_FALL_SCREEN_Y_RATIO
+        : PLAYER_SCREEN_Y_RATIO;
+    const desiredScrollY = this.player.y - GAME_HEIGHT * playerScreenYRatio;
     const lowestAllowedScrollY = Math.min(
       GROUND_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO,
       camera.scrollY + CAMERA_MAX_FALL_CATCHUP,

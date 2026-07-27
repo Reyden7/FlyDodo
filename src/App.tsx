@@ -43,6 +43,13 @@ import {
   type WalletUpdatedDetail,
 } from './game/events';
 import {
+  DEV_START_ALTITUDE_MAX,
+  DEV_START_ALTITUDE_MIN,
+  DEV_START_ALTITUDE_STEP,
+  getDevStartAltitude,
+  setDevStartAltitude,
+} from './game/devSettings';
+import {
   addWatermelons,
   createEmptyPlayerProfile,
   equipShopItem,
@@ -338,6 +345,8 @@ function AudioOptionsPanel({
   language: AppLanguage;
   onClose: () => void;
 }): React.JSX.Element {
+  const [devStartAltitude, setDevStartAltitudeState] =
+    useState(getDevStartAltitude);
   const t = (
     key: string,
     variables?: Record<string, string | number>,
@@ -413,6 +422,37 @@ function AudioOptionsPanel({
               ))}
             </select>
           </div>
+
+          {import.meta.env.DEV && (
+            <div className="audio-options__dev-altitude">
+              <label htmlFor="dev-start-altitude">
+                {t('options.devStartAltitude')}
+              </label>
+              <input
+                id="dev-start-altitude"
+                type="range"
+                min={DEV_START_ALTITUDE_MIN}
+                max={DEV_START_ALTITUDE_MAX}
+                step={DEV_START_ALTITUDE_STEP}
+                value={devStartAltitude}
+                style={
+                  {
+                    '--dev-altitude':
+                      `${(devStartAltitude / DEV_START_ALTITUDE_MAX) * 100}%`,
+                  } as CSSProperties
+                }
+                aria-valuetext={`${devStartAltitude} m`}
+                onChange={(event) => {
+                  const altitude = setDevStartAltitude(
+                    Number(event.currentTarget.value),
+                  );
+                  setDevStartAltitudeState(altitude);
+                }}
+              />
+              <output>{devStartAltitude} m</output>
+              <small>{t('options.devStartAltitudeHint')}</small>
+            </div>
+          )}
 
           {AUDIO_CHANNELS.map(({ id }) => {
             const label = t(`audio.${id}`);

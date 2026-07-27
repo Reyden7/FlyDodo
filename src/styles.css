@@ -1252,6 +1252,101 @@ button {
   box-shadow: 0 0 0 3px rgba(255, 215, 70, 0.9);
 }
 
+.audio-options__dev-altitude {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(120px, 1.7fr) 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 2px solid rgb(255 197 60 / 70%);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgb(91 49 12 / 92%), rgb(146 83 22 / 88%));
+}
+
+.audio-options__dev-altitude label {
+  color: #fff8d2;
+  font-size: clamp(0.65rem, 2.8vw, 0.84rem);
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.audio-options__dev-altitude input[type="range"] {
+  --dev-altitude: 0%;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.audio-options__dev-altitude input[type="range"]::-webkit-slider-runnable-track {
+  height: 13px;
+  border: 2px solid #8fa5ef;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      to right,
+      #ffc53c 0 var(--dev-altitude),
+      #c7d4ff var(--dev-altitude) 100%
+    );
+  box-shadow:
+    inset 0 1px 2px rgb(44 66 132 / 28%),
+    0 1px 0 #fff;
+}
+
+.audio-options__dev-altitude input[type="range"]::-webkit-slider-thumb {
+  width: 25px;
+  height: 25px;
+  margin-top: -8px;
+  appearance: none;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(#ff68dc, #c42fc9);
+  box-shadow:
+    0 0 0 2px #8a36bd,
+    0 3px 5px rgb(37 31 88 / 30%);
+}
+
+.audio-options__dev-altitude input[type="range"]::-moz-range-track {
+  height: 11px;
+  border: 2px solid #8fa5ef;
+  border-radius: 999px;
+  background: #c7d4ff;
+}
+
+.audio-options__dev-altitude input[type="range"]::-moz-range-progress {
+  height: 11px;
+  border-radius: 999px;
+  background: #ffc53c;
+}
+
+.audio-options__dev-altitude input[type="range"]::-moz-range-thumb {
+  width: 21px;
+  height: 21px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #d83ed0;
+  box-shadow: 0 0 0 2px #8a36bd;
+}
+
+.audio-options__dev-altitude output {
+  color: #fff8d2;
+  font-size: 0.75rem;
+  font-weight: 1000;
+  text-align: right;
+}
+
+.audio-options__dev-altitude small {
+  grid-column: 1 / -1;
+  color: rgb(255 248 210 / 76%);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .audio-options__channel {
   display: grid;
   grid-template-columns: minmax(78px, 0.9fr) 46px minmax(110px, 2fr) 42px;
