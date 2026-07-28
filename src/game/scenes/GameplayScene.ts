@@ -15,6 +15,7 @@ import {
   emitFallWarning,
   emitFlightHud,
   emitGameOver,
+  emitGameSceneReady,
   emitMovementStarted,
   emitPlayerDied,
   emitRewardedRevived,
@@ -67,18 +68,20 @@ const GAME_HEIGHT = 844;
 const WORLD_HEIGHT = 101_100;
 const START_Y = 101_000;
 const GROUND_Y = START_Y;
-const DODO_BODY_SCALE = 0.125;
-const DODO_GROUND_SCALE = 0.1;
-const DODO_WING_SCALE = 0.14;
+// Les textures runtime sont redimensionnées à 320 px, tout en conservant
+// exactement les dimensions d'affichage des sources haute résolution.
+const DODO_BODY_SCALE = 0.48984375;
+const DODO_GROUND_SCALE = 0.391875;
+const DODO_WING_SCALE = 0.28;
 const DODO_HITBOX_WIDTH = 52;
 const DODO_HITBOX_HEIGHT = 76;
 const DODO_FLIGHT_ORIGIN_Y = 0.75;
 const DODO_GROUND_ORIGIN_Y = 0.77;
-const DODO_GROUND_FEET_SCALE = DODO_GROUND_SCALE;
+const DODO_GROUND_FEET_SCALE = 0.1;
 const DODO_GROUND_FEET_OFFSET_X = 0;
 const DODO_GROUND_FEET_OFFSET_Y = -15;
-const DODO_FLIGHT_FEET_SCALE_X = 0.07;
-const DODO_FLIGHT_FEET_SCALE_Y = 0.07;
+const DODO_FLIGHT_FEET_SCALE_X = 0.2743125;
+const DODO_FLIGHT_FEET_SCALE_Y = 0.2743125;
 const DODO_FLIGHT_FEET_OFFSET_X = 0;
 const DODO_FLIGHT_FEET_OFFSET_Y = 15;
 const DODO_INDICATOR_SCALE = 0.045;
@@ -101,7 +104,6 @@ const PHOENIX_REVIVAL_FLASH_DEPTH = 1_001;
 const PHOENIX_REVIVAL_SPARK_DEPTH = 1_002;
 
 const PLAYER_SCREEN_Y_RATIO = 0.88;
-const CAMERA_FALL_SCREEN_Y_RATIO = 0.97;
 const CAMERA_FALL_FOLLOW_SPEED = 0.72;
 const CAMERA_MAX_FALL_CATCHUP = 260;
 const SPACE_CAMERA_SCREEN_Y_RATIO = 0.5;
@@ -291,8 +293,7 @@ const LAVA_FRAME_RATE = 18;
 const LAVA_SOURCE_HEIGHT = 864;
 const LAVA_SOURCE_VISIBLE_TOP = 86;
 const SKY_BACKGROUND_TEXTURE_PREFIX = 'sky-background-segment';
-const SKY_BACKGROUND_TEXTURE_PATH = '/assets/Decors/bg.png';
-const SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT = 2_000;
+const SKY_BACKGROUND_SEGMENT_COUNT = 20;
 const SKY_BACKGROUND_DEPTH = -10;
 const SKY_BACKGROUND_TOP_FILL_COLOR = 0x000000;
 const ZONE_TRANSITION_FONT_KEY = 'AlphaClouds';
@@ -1402,43 +1403,6 @@ const RIGHT_WING_FRAMES = [
   'dodo-wing-right-2',
 ];
 
-const LEG_FRAMES = [
-  'dodo-flight-legs-1',
-  'dodo-flight-legs-2',
-  'dodo-flight-legs-3',
-  'dodo-flight-legs-4',
-  'dodo-flight-legs-5',
-  'dodo-flight-legs-6',
-  'dodo-flight-legs-7',
-  'dodo-flight-legs-8',
-  'dodo-flight-legs-9',
-  'dodo-flight-legs-10',
-  'dodo-flight-legs-11',
-  'dodo-flight-legs-12',
-  'dodo-flight-legs-13',
-  'dodo-flight-legs-14',
-  'dodo-flight-legs-15',
-  'dodo-flight-legs-16',
-  'dodo-flight-legs-17',
-  'dodo-flight-legs-18',
-  'dodo-flight-legs-19',
-  'dodo-flight-legs-20',
-  'dodo-flight-legs-21',
-  'dodo-flight-legs-22',
-  'dodo-flight-legs-23',
-  'dodo-flight-legs-24',
-  'dodo-flight-legs-25',
-  'dodo-flight-legs-26',
-  'dodo-flight-legs-27',
-  'dodo-flight-legs-28',
-  'dodo-flight-legs-29',
-  'dodo-flight-legs-30',
-  'dodo-flight-legs-31',
-  'dodo-flight-legs-32',
-  'dodo-flight-legs-33',
-  'dodo-flight-legs-34',
-];
-
 export class GameplayScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private leftWing!: Phaser.GameObjects.Image;
@@ -1636,18 +1600,25 @@ export class GameplayScene extends Phaser.Scene {
       PHOENIX_REVIVAL_TEXTURE_KEY,
       PHOENIX_REVIVAL_TEXTURE_PATH,
     );
-    for (const frameIndex of DODO_LAVA_DEATH_FRAME_INDICES) {
-      const paddedIndex = frameIndex.toString().padStart(3, '0');
-      this.load.image(
-        `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${paddedIndex}.png`,
-      );
-    }
+    const firstLavaDeathFrame = DODO_LAVA_DEATH_FRAME_INDICES[0]
+      .toString()
+      .padStart(3, '0');
+    this.load.image(
+      `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${firstLavaDeathFrame}`,
+      `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${firstLavaDeathFrame}.png`,
+    );
     this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
     this.load.image(
       BACKGROUND_GROUND_TEXTURE_KEY,
       BACKGROUND_GROUND_TEXTURE_PATH,
     );
+    for (let index = 0; index < SKY_BACKGROUND_SEGMENT_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(2, '0');
+      this.load.image(
+        `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`,
+        `/assets/Decors/bg-segments/bg_${paddedIndex}.png`,
+      );
+    }
     this.load.font(
       ZONE_TRANSITION_FONT_KEY,
       ZONE_TRANSITION_FONT_PATH,
@@ -1680,53 +1651,41 @@ export class GameplayScene extends Phaser.Scene {
         `/assets/obstacles/forest/moustik/${paddedIndex}.png`,
       );
     }
-    for (let index = 0; index < PTERODACTYL_FRAME_COUNT; index += 1) {
-      const paddedIndex = index.toString().padStart(3, '0');
-      this.load.image(
-        `${PTERODACTYL_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/obstacles/lowSky/pterodactyl/frame_${paddedIndex}.png`,
-      );
-    }
-    for (let index = 0; index < STORM_CLOUD_FRAME_COUNT; index += 1) {
-      const paddedIndex = index.toString().padStart(3, '0');
-      this.load.image(
-        `${STORM_CLOUD_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/obstacles/midSky/nuage/frame_${paddedIndex}.png`,
-      );
-    }
-    for (let index = 0; index < LIGHTNING_FRAME_COUNT; index += 1) {
-      const paddedIndex = index.toString().padStart(3, '0');
-      this.load.image(
-        `${LIGHTNING_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/obstacles/midSky/eclaire/frame_${paddedIndex}.png`,
-      );
-    }
+    this.load.image(
+      `${PTERODACTYL_TEXTURE_PREFIX}-000`,
+      '/assets/obstacles/lowSky/pterodactyl/frame_000.png',
+    );
+    this.load.image(
+      `${STORM_CLOUD_TEXTURE_PREFIX}-000`,
+      '/assets/obstacles/midSky/nuage/frame_000.png',
+    );
+    this.load.image(
+      `${LIGHTNING_TEXTURE_PREFIX}-000`,
+      '/assets/obstacles/midSky/eclaire/frame_000.png',
+    );
     this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.png');
     this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.png');
     for (const asteroidTexture of FLOATING_ASTEROID_TEXTURES) {
       this.load.image(asteroidTexture.key, asteroidTexture.path);
     }
-    for (let index = 0; index < LAVA_FRAME_COUNT; index += 1) {
-      const paddedIndex = index.toString().padStart(3, '0');
-      this.load.image(
-        `${LAVA_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/obstacles/lave/frame_${paddedIndex}.png`,
-      );
-    }
+    this.load.image(
+      `${LAVA_TEXTURE_PREFIX}-000`,
+      '/assets/obstacles/lave/frame_000.png',
+    );
     this.load.image(
       FRUIT_DETECTOR_TEXTURE_KEY,
       '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
     );
-    this.load.image('dodo-body-flight', '/assets/dodo/optimized/flight_refined/body_flight.png');
+    this.load.image('dodo-body-flight', '/assets/dodo/runtime/body_flight.png');
     this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
-    this.load.image('dodo-pose-ground', '/assets/dodo/optimized/flight_refined/ground.png');
+    this.load.image('dodo-pose-ground', '/assets/dodo/runtime/ground.png');
     this.load.image('dodo-ground-feet', '/assets/dodo/optimized/foot-ground.png');
     FEATHER_TEXTURES.forEach(({ key, path }) => {
       this.load.image(key, path);
     });
     this.load.image(
       'dodo-flight-feet-default',
-      '/assets/dodo/optimized/animation/flight_feet.png',
+      '/assets/dodo/runtime/flight_feet.png',
     );
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
     this.load.image(WATERMELON_TAKE_TEXTURE_KEY, WATERMELON_TAKE_TEXTURE_PATH);
@@ -1751,18 +1710,11 @@ export class GameplayScene extends Phaser.Scene {
     for (let index = 1; index <= 14; index += 1) {
       this.load.image(
         `dodo-wing-left-${index}`,
-        `/assets/dodo/optimized/flight_refined/wing_left_${index}.png`,
+        `/assets/dodo/runtime/wing_left_${index}.png`,
       );
       this.load.image(
         `dodo-wing-right-${index}`,
-        `/assets/dodo/optimized/flight_refined/wing_right_${index}.png`,
-      );
-    }
-
-    for (let index = 1; index <= 34; index += 1) {
-      this.load.image(
-        LEG_FRAMES[index - 1],
-        `/assets/dodo/optimized/flight_refined/legs_${index}.png`,
+        `/assets/dodo/runtime/wing_right_${index}.png`,
       );
     }
   }
@@ -1781,12 +1733,11 @@ export class GameplayScene extends Phaser.Scene {
       this.updateGroundRecordText();
       this.updateZoneTransitionTexts();
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.unsubscribeAudioSettings?.();
-      this.unsubscribeAudioSettings = undefined;
-      this.unsubscribeAppLanguage?.();
-      this.unsubscribeAppLanguage = undefined;
-    });
+    this.events.once(
+      Phaser.Scenes.Events.SHUTDOWN,
+      this.shutdown,
+      this,
+    );
 
     this.resetRuntimeState();
     const devStartAltitude = getDevStartAltitude();
@@ -1965,6 +1916,17 @@ export class GameplayScene extends Phaser.Scene {
     if (data?.startPaused) {
       this.handlePauseRequest();
     }
+
+    // Le canvas n'est réellement visible qu'au premier rendu suivant create().
+    // Attendre POST_RENDER empêche le décor HTML de disparaître une frame trop tôt.
+    this.game.events.once(
+      Phaser.Core.Events.POST_RENDER,
+      () => {
+        console.info('[FlyDodo] gameplay first frame rendered');
+        emitGameSceneReady();
+        this.time.delayedCall(250, this.loadDeferredAnimations, [], this);
+      },
+    );
   }
 
   update(time: number, delta: number): void {
@@ -2021,8 +1983,15 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.unsubscribeAudioSettings?.();
+    this.unsubscribeAudioSettings = undefined;
     this.unsubscribeAppLanguage?.();
     this.unsubscribeAppLanguage = undefined;
+    this.load.off(
+      Phaser.Loader.Events.COMPLETE,
+      this.activateDeferredAnimations,
+      this,
+    );
     this.heldPointerSides.clear();
     this.destroyFlightSounds();
     this.sound.stopByKey(THUNDER_SOUND_KEY);
@@ -3245,7 +3214,10 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
-    if (!this.anims.exists(PTERODACTYL_ANIMATION_KEY)) {
+    if (
+      !this.anims.exists(PTERODACTYL_ANIMATION_KEY) &&
+      this.textures.exists(`${PTERODACTYL_TEXTURE_PREFIX}-015`)
+    ) {
       this.anims.create({
         key: PTERODACTYL_ANIMATION_KEY,
         frames: Array.from({ length: PTERODACTYL_FRAME_COUNT }, (_value, index) => {
@@ -3259,7 +3231,10 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
-    if (!this.anims.exists(STORM_CLOUD_ANIMATION_KEY)) {
+    if (
+      !this.anims.exists(STORM_CLOUD_ANIMATION_KEY) &&
+      this.textures.exists(`${STORM_CLOUD_TEXTURE_PREFIX}-008`)
+    ) {
       this.anims.create({
         key: STORM_CLOUD_ANIMATION_KEY,
         frames: Array.from({ length: STORM_CLOUD_FRAME_COUNT }, (_value, index) => {
@@ -3273,7 +3248,10 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
-    if (!this.anims.exists(LIGHTNING_ANIMATION_KEY)) {
+    if (
+      !this.anims.exists(LIGHTNING_ANIMATION_KEY) &&
+      this.textures.exists(`${LIGHTNING_TEXTURE_PREFIX}-015`)
+    ) {
       this.anims.create({
         key: LIGHTNING_ANIMATION_KEY,
         frames: Array.from({ length: LIGHTNING_FRAME_COUNT }, (_value, index) => {
@@ -3287,7 +3265,10 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
-    if (!this.anims.exists(LAVA_ANIMATION_KEY)) {
+    if (
+      !this.anims.exists(LAVA_ANIMATION_KEY) &&
+      this.textures.exists(`${LAVA_TEXTURE_PREFIX}-035`)
+    ) {
       this.anims.create({
         key: LAVA_ANIMATION_KEY,
         frames: Array.from({ length: LAVA_FRAME_COUNT }, (_value, index) => {
@@ -3301,7 +3282,10 @@ export class GameplayScene extends Phaser.Scene {
       });
     }
 
-    if (!this.anims.exists(DODO_LAVA_DEATH_ANIMATION_KEY)) {
+    if (
+      !this.anims.exists(DODO_LAVA_DEATH_ANIMATION_KEY) &&
+      this.textures.exists(`${DODO_LAVA_DEATH_TEXTURE_PREFIX}-035`)
+    ) {
       this.anims.create({
         key: DODO_LAVA_DEATH_ANIMATION_KEY,
         frames: DODO_LAVA_DEATH_FRAME_INDICES.map((frameIndex) => ({
@@ -3317,6 +3301,115 @@ export class GameplayScene extends Phaser.Scene {
 
   private createSkyDecor(): void {
     this.createSkyBackground();
+  }
+
+  private loadDeferredAnimations(): void {
+    let queuedAssets = 0;
+
+    const queueSequence = (
+      texturePrefix: string,
+      assetDirectory: string,
+      frameCount: number,
+    ): void => {
+      for (let index = 1; index < frameCount; index += 1) {
+        const paddedIndex = index.toString().padStart(3, '0');
+        const textureKey = `${texturePrefix}-${paddedIndex}`;
+
+        if (!this.textures.exists(textureKey)) {
+          this.load.image(
+            textureKey,
+            `${assetDirectory}/frame_${paddedIndex}.png`,
+          );
+          queuedAssets += 1;
+        }
+      }
+    };
+
+    queueSequence(
+      PTERODACTYL_TEXTURE_PREFIX,
+      '/assets/obstacles/lowSky/pterodactyl',
+      PTERODACTYL_FRAME_COUNT,
+    );
+    queueSequence(
+      STORM_CLOUD_TEXTURE_PREFIX,
+      '/assets/obstacles/midSky/nuage',
+      STORM_CLOUD_FRAME_COUNT,
+    );
+    queueSequence(
+      LIGHTNING_TEXTURE_PREFIX,
+      '/assets/obstacles/midSky/eclaire',
+      LIGHTNING_FRAME_COUNT,
+    );
+
+    for (let index = 1; index < LAVA_FRAME_COUNT; index += 1) {
+      const paddedIndex = index.toString().padStart(3, '0');
+      const textureKey = `${LAVA_TEXTURE_PREFIX}-${paddedIndex}`;
+
+      if (!this.textures.exists(textureKey)) {
+        this.load.image(
+          textureKey,
+          `/assets/obstacles/lave/frame_${paddedIndex}.png`,
+        );
+        queuedAssets += 1;
+      }
+    }
+
+    for (const frameIndex of DODO_LAVA_DEATH_FRAME_INDICES.slice(1)) {
+      const paddedIndex = frameIndex.toString().padStart(3, '0');
+      const textureKey = `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${paddedIndex}`;
+
+      if (!this.textures.exists(textureKey)) {
+        this.load.image(
+          textureKey,
+          `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${paddedIndex}.png`,
+        );
+        queuedAssets += 1;
+      }
+    }
+
+    if (queuedAssets === 0) {
+      this.activateDeferredAnimations();
+      return;
+    }
+
+    this.load.once(
+      Phaser.Loader.Events.COMPLETE,
+      this.activateDeferredAnimations,
+      this,
+    );
+    this.load.start();
+  }
+
+  private activateDeferredAnimations(): void {
+    if (!this.scene.isActive()) {
+      return;
+    }
+
+    this.createObstacleAnimations();
+
+    this.obstacleGroup?.getChildren().forEach((child) => {
+      const obstacle = child as Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+      const obstacleKind = OBSTACLE_KINDS.find(
+        ({ id }) => id === obstacle.getData('kind'),
+      );
+
+      if (
+        obstacleKind?.animationKey &&
+        obstacleKind.id !== 'lightning' &&
+        this.anims.exists(obstacleKind.animationKey) &&
+        !obstacle.anims.isPlaying
+      ) {
+        obstacle.play(obstacleKind.animationKey);
+      }
+    });
+
+    if (
+      this.lava?.active &&
+      this.anims.exists(LAVA_ANIMATION_KEY) &&
+      !this.lava.anims.isPlaying
+    ) {
+      this.lava.play(LAVA_ANIMATION_KEY);
+    }
   }
 
   private createZoneTransitionMarkers(): void {
@@ -3804,72 +3897,21 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createSkyBackground(): void {
-    const image = new Image();
-
-    image.onload = (): void => {
-      if (!this.scene.isActive()) {
-        return;
-      }
-
-      const sourceWidth = image.naturalWidth;
-      const sourceHeight = image.naturalHeight;
-      const renderScale = GAME_WIDTH / sourceWidth;
-      const segmentCount = Math.ceil(sourceHeight / SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT);
-
-      for (let index = 0; index < segmentCount; index += 1) {
-        const textureKey = `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`;
-
-        if (this.textures.exists(textureKey)) {
-          continue;
-        }
-
-        const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
-        const sourceHeight = Math.min(
-          SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT,
-          image.naturalHeight - sourceY,
-        );
-        const canvas = document.createElement('canvas');
-        // Store the very tall background at its actual in-game resolution. The
-        // source is wider than the 390 px canvas, and retaining every segment at
-        // source size wastes tens of MB of GPU memory on mobile.
-        canvas.width = GAME_WIDTH;
-        canvas.height = Math.max(
-          1,
-          Math.round((sourceY + sourceHeight) * renderScale) -
-            Math.round(sourceY * renderScale),
-        );
-        canvas
-          .getContext('2d')
-          ?.drawImage(
-            image,
-            0,
-            sourceY,
-            sourceWidth,
-            sourceHeight,
-            0,
-            0,
-            canvas.width,
-            canvas.height,
-          );
-
-        this.textures.addCanvas(textureKey, canvas);
-      }
-
-      this.addSkyBackgroundSegments(segmentCount, sourceWidth, sourceHeight);
-    };
-
-    image.decoding = 'async';
-    image.src = SKY_BACKGROUND_TEXTURE_PATH;
-  }
-
-  private addSkyBackgroundSegments(
-    segmentCount: number,
-    sourceWidth: number,
-    sourceHeight: number,
-  ): void {
-    const scale = GAME_WIDTH / sourceWidth;
+    const segmentHeights = Array.from(
+      { length: SKY_BACKGROUND_SEGMENT_COUNT },
+      (_value, index) => {
+        const sourceImage = this.textures
+          .get(`${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`)
+          .getSourceImage() as HTMLImageElement;
+        return sourceImage.naturalHeight || sourceImage.height;
+      },
+    );
+    const backgroundHeight = segmentHeights.reduce(
+      (total, height) => total + height,
+      0,
+    );
     const backgroundBottomY = GROUND_Y + GROUND_DIRT_HEIGHT;
-    const backgroundTopY = backgroundBottomY - Math.round(sourceHeight * scale);
+    const backgroundTopY = backgroundBottomY - backgroundHeight;
     const initialCameraScrollY = START_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
     const farLayerOffsetY =
       initialCameraScrollY * (1 - PARALLAX_FAR_SCROLL_FACTOR);
@@ -3888,24 +3930,22 @@ export class GameplayScene extends Phaser.Scene {
       .setDepth(SKY_BACKGROUND_DEPTH)
       .setScrollFactor(PARALLAX_FAR_SCROLL_FACTOR);
 
-    for (let index = 0; index < segmentCount; index += 1) {
+    let segmentOffsetY = 0;
+
+    for (let index = 0; index < SKY_BACKGROUND_SEGMENT_COUNT; index += 1) {
       const textureKey = `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`;
-
-      if (!this.textures.exists(textureKey)) {
-        continue;
-      }
-
-      const sourceY = index * SKY_BACKGROUND_SEGMENT_SOURCE_HEIGHT;
 
       this.add
         .image(
           GAME_WIDTH / 2,
-          parallaxBackgroundTopY + Math.round(sourceY * scale),
+          parallaxBackgroundTopY + segmentOffsetY,
           textureKey,
         )
         .setOrigin(0.5, 0)
         .setDepth(SKY_BACKGROUND_DEPTH)
         .setScrollFactor(PARALLAX_FAR_SCROLL_FACTOR);
+
+      segmentOffsetY += segmentHeights[index];
     }
   }
 
@@ -4229,8 +4269,11 @@ export class GameplayScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDisplaySize(LAVA_DISPLAY_WIDTH, LAVA_DISPLAY_HEIGHT)
       .setDepth(LAVA_DEPTH)
-      .setAlpha(LAVA_ALPHA)
-      .play(LAVA_ANIMATION_KEY);
+      .setAlpha(LAVA_ALPHA);
+
+    if (this.anims.exists(LAVA_ANIMATION_KEY)) {
+      this.lava.play(LAVA_ANIMATION_KEY);
+    }
     this.renderLava();
   }
 
@@ -4408,7 +4451,11 @@ export class GameplayScene extends Phaser.Scene {
           obstacle.setData('thunderPlayed', false);
           this.stormCloudObstacles.push(obstacle);
         }
-        if (obstacleKind.animationKey && obstacleKind.id !== 'lightning') {
+        if (
+          obstacleKind.animationKey &&
+          obstacleKind.id !== 'lightning' &&
+          this.anims.exists(obstacleKind.animationKey)
+        ) {
           obstacle.play(obstacleKind.animationKey);
         }
         obstacle.body.setAllowGravity(false);
@@ -5899,9 +5946,11 @@ export class GameplayScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
 
     this.idleFlightState = 'dropping';
-    body.setVelocity(
+    // Conserve la vitesse verticale courante : la gravité renforcée appliquée
+    // dans updateFlight amorce ensuite la chute progressivement. Affecter
+    // directement MAX_VERTICAL_SPEED provoquait un saut visible au relâchement.
+    body.setVelocityX(
       body.velocity.x * FLIGHT_IDLE_DROP_HORIZONTAL_DAMPING,
-      MAX_VERTICAL_SPEED,
     );
   }
 
@@ -6509,11 +6558,10 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const playerScreenYRatio =
-      body.velocity.y > 0
-        ? CAMERA_FALL_SCREEN_Y_RATIO
-        : PLAYER_SCREEN_Y_RATIO;
-    const desiredScrollY = this.player.y - GAME_HEIGHT * playerScreenYRatio;
+    // Une cible différente pendant la descente déplaçait artificiellement le
+    // Dodo de 0,09 × 844 ≈ 76 px dès que sa vitesse changeait de signe.
+    const desiredScrollY =
+      this.player.y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
     const lowestAllowedScrollY = Math.min(
       GROUND_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO,
       camera.scrollY + CAMERA_MAX_FALL_CATCHUP,
@@ -7429,6 +7477,10 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private playLavaDeathAnimation(): Promise<void> {
+    if (!this.anims.exists(DODO_LAVA_DEATH_ANIMATION_KEY)) {
+      return Promise.resolve();
+    }
+
     return new Promise((resolve) => {
       this.lavaDeathSprite.once(
         Phaser.Animations.Events.ANIMATION_COMPLETE,

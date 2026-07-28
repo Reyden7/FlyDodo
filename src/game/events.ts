@@ -78,6 +78,10 @@ export function emitFlightHud(detail: FlightHudDetail): void {
   gameEvents.dispatchEvent(new CustomEvent<FlightHudDetail>('flydodo:hud', { detail }));
 }
 
+export function emitGameSceneReady(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:scene-ready'));
+}
+
 export function emitFallWarning(detail: FallWarningDetail): void {
   gameEvents.dispatchEvent(
     new CustomEvent<FallWarningDetail>('flydodo:fall-warning', { detail }),

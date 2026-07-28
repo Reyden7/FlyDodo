@@ -12,6 +12,7 @@ export function GameCanvas(): React.JSX.Element {
       return;
     }
 
+    console.info('[FlyDodo] gameplay boot started');
     gameRef.current = new Phaser.Game(createGameConfig(container));
 
     return () => {

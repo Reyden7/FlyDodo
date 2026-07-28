@@ -133,8 +133,9 @@ import {
   getEnduranceTalentNodePosition,
 } from './talents/enduranceTalentNodePositions';
 
+const loadGameCanvas = () => import('./components/GameCanvas');
 const GameCanvas = lazy(async () => {
-  const module = await import('./components/GameCanvas');
+  const module = await loadGameCanvas();
   return { default: module.GameCanvas };
 });
 
@@ -542,6 +543,7 @@ export default function App(): React.JSX.Element {
   const [isEndStoryOpen, setIsEndStoryOpen] = useState(false);
   const [endStoryPanel, setEndStoryPanel] = useState(0);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
+  const [isGameSceneReady, setIsGameSceneReady] = useState(false);
   const [clickedMainMenuButton, setClickedMainMenuButton] =
     useState<MainMenuButton | null>(null);
   const [altitude, setAltitude] = useState(0);
@@ -846,6 +848,14 @@ export default function App(): React.JSX.Element {
     }
   };
 
+  useEffect(() => {
+    const preloadTimer = window.setTimeout(() => {
+      void loadGameCanvas();
+    }, 400);
+
+    return () => window.clearTimeout(preloadTimer);
+  }, []);
+
   useEffect(
     () =>
       subscribeAudioSettings((settings) => {
@@ -1006,7 +1016,12 @@ export default function App(): React.JSX.Element {
       setHasMovedThisRun(true);
     };
 
+    const onGameSceneReady = (): void => {
+      setIsGameSceneReady(true);
+    };
+
     gameEvents.addEventListener('flydodo:hud', onHud);
+    gameEvents.addEventListener('flydodo:scene-ready', onGameSceneReady);
     gameEvents.addEventListener('flydodo:wallet-updated', onWalletUpdated);
     gameEvents.addEventListener('flydodo:fall-warning', onFallWarning);
     gameEvents.addEventListener('flydodo:player-died', onPlayerDied);
@@ -1016,6 +1031,7 @@ export default function App(): React.JSX.Element {
 
     return () => {
       gameEvents.removeEventListener('flydodo:hud', onHud);
+      gameEvents.removeEventListener('flydodo:scene-ready', onGameSceneReady);
       gameEvents.removeEventListener('flydodo:wallet-updated', onWalletUpdated);
       gameEvents.removeEventListener('flydodo:fall-warning', onFallWarning);
       gameEvents.removeEventListener('flydodo:player-died', onPlayerDied);
@@ -1238,6 +1254,7 @@ export default function App(): React.JSX.Element {
 
   const startGame = (withTutorial = false): void => {
     resetRunState();
+    setIsGameSceneReady(false);
     tutorialAcknowledgedRef.current = !withTutorial;
     setTutorialSide(null);
     setShowControlTutorial(withTutorial);
@@ -2367,6 +2384,15 @@ export default function App(): React.JSX.Element {
         <Suspense fallback={null}>
           <GameCanvas />
         </Suspense>
+      )}
+
+      {!isMainMenuOpen && (
+        <div
+          className={`game-loading-backdrop${
+            isGameSceneReady ? ' is-ready' : ''
+          }`}
+          aria-hidden="true"
+        />
       )}
 
       {isMainMenuOpen && (

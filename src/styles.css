@@ -378,6 +378,24 @@ button {
   max-height: none !important;
 }
 
+.game-loading-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background:
+    url("/assets/Decors/ground.png") center bottom / auto 31% no-repeat,
+    url("/assets/Decors/bg-segments/bg_19.png") center / cover no-repeat,
+    #73d8ff;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+  will-change: opacity;
+}
+
+.game-loading-backdrop.is-ready {
+  opacity: 0;
+}
+
 .main-menu {
   position: absolute;
   inset: 0;

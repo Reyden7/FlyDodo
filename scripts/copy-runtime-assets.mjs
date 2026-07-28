@@ -6,7 +6,7 @@ const sourceRoot = join(root, 'src');
 const publicRoot = join(root, 'public');
 const outputRoot = join(root, 'dist');
 const runtimeAssets = new Set();
-const assetPattern = /\/assets\/[^\"'`\r\n)]+?\.(?:png|mp3|m4a)/g;
+const assetPattern = /\/assets\/[^\"'`\r\n)]+?\.(?:png|mp3|m4a|ttf)/g;
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -53,17 +53,20 @@ for (let index = 0; index < 16; index += 1) {
 for (let index = 0; index < 9; index += 1) {
   addAsset(`/assets/obstacles/midSky/nuage/frame_${String(index).padStart(3, '0')}.png`);
 }
+for (let index = 0; index < 36; index += 1) {
+  addAsset(`/assets/obstacles/lave/frame_${String(index).padStart(3, '0')}.png`);
+}
+for (let index = 0; index < 20; index += 1) {
+  addAsset(`/assets/Decors/bg-segments/bg_${String(index).padStart(2, '0')}.png`);
+}
 for (const index of [0, 4, 5, 7, 8, 9, 11, 14, 31, 32, 33, 34, 35]) {
   addAsset(
     `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${String(index).padStart(3, '0')}.png`,
   );
 }
 for (let index = 1; index <= 14; index += 1) {
-  addAsset(`/assets/dodo/optimized/flight_refined/wing_left_${index}.png`);
-  addAsset(`/assets/dodo/optimized/flight_refined/wing_right_${index}.png`);
-}
-for (let index = 1; index <= 34; index += 1) {
-  addAsset(`/assets/dodo/optimized/flight_refined/legs_${index}.png`);
+  addAsset(`/assets/dodo/runtime/wing_left_${index}.png`);
+  addAsset(`/assets/dodo/runtime/wing_right_${index}.png`);
 }
 
 // Le chemin de repli des cosmétiques est calculé depuis leur catégorie et id.
