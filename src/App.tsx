@@ -196,7 +196,7 @@ const GAME_OVER_DEATH_IMAGES: Record<PlayerDeathReason, string> = {
   mosquito: '/assets/ui/GameOver/deadByMosquito.png',
   lava: '/assets/ui/GameOver/deadLava.png',
   lightning: '/assets/ui/GameOver/deadLightning.png',
-  space: '/assets/ui/GameOver/deadByOther.png',
+  space: '/assets/dodo/SpriteDodo/degats/deadSpace.png',
 };
 const MENU_POP_SOUND_DELAYS_MS = [180, 760, 1280, 1390] as const;
 const MAIN_MENU_CLICK_DELAY_MS = 140;
@@ -2344,11 +2344,10 @@ export default function App(): React.JSX.Element {
               <p className="game-over__record">
                 {t('gameOver.record', { value: bestAltitude })}
               </p>
+              {playerDeathReason === 'space' && (
+                <p className="game-over__tip">{t('gameOver.spaceTip')}</p>
+              )}
             </div>
-
-            {playerDeathReason === 'space' && (
-              <p className="game-over__tip">{t('gameOver.spaceTip')}</p>
-            )}
 
             <div className="game-over__actions">
               {!hasUsedRewardedRevive && playerDeathReason !== 'space' && (

@@ -108,6 +108,12 @@ const CAMERA_MAX_FALL_CATCHUP = 260;
 const GRAVITY_Y = 800;
 const SPACE_ZERO_GRAVITY_ALTITUDE = 7_000;
 const SPACE_GRAVITY_TRANSITION_SPEED = 2.8;
+const SPACE_UNPROTECTED_SURVIVAL_SECONDS = 9;
+const SPACE_EXPOSURE_RECOVERY_SECONDS = 4;
+const SPACE_CONTROL_LOSS_START = 0.08;
+const SPACE_CONTROL_LOSS_END = 0.84;
+const SPACE_MIN_WING_SPEED_MULTIPLIER = 0.08;
+const SPACE_MAX_FLAP_INTERVAL_MULTIPLIER = 4;
 const ASTRONAUT_HELMET_ITEM_ID = 'hat-astronaute';
 const ASTRONAUT_OUTFIT_ITEM_ID = 'outfit-astronaute';
 const BASE_FLAP_UPWARD_IMPULSE = 160;
@@ -1406,6 +1412,7 @@ export class GameplayScene extends Phaser.Scene {
   private currentAltitude = 0;
   private currentSpeed = 0;
   private spaceGravityFactor = 1;
+  private spaceExposure = 0;
   private playerStateReady = false;
   private recordToBeat = 0;
   private bestScoreReady = false;
@@ -1832,6 +1839,10 @@ export class GameplayScene extends Phaser.Scene {
     if (this.gamePaused) {
       this.updateDodoVisuals(deltaSeconds);
       this.updateOffscreenIndicator();
+      return;
+    }
+
+    if (this.updateSpaceExposure(deltaSeconds)) {
       return;
     }
 
@@ -2442,6 +2453,7 @@ export class GameplayScene extends Phaser.Scene {
     this.currentAltitude = 0;
     this.currentSpeed = 0;
     this.spaceGravityFactor = 1;
+    this.spaceExposure = 0;
     this.playerStateReady = false;
     this.recordToBeat = 0;
     this.bestScoreReady = false;
@@ -5423,7 +5435,16 @@ export class GameplayScene extends Phaser.Scene {
         return 0;
       }
 
-      if (time - this.lastAcceptedFlapTime < MIN_FLAP_INTERVAL_MS) {
+      const fatigueProgress = this.getSpaceFatigueProgress();
+      const flapInterval =
+        MIN_FLAP_INTERVAL_MS *
+        Phaser.Math.Linear(
+          1,
+          SPACE_MAX_FLAP_INTERVAL_MULTIPLIER,
+          fatigueProgress,
+        );
+
+      if (time - this.lastAcceptedFlapTime < flapInterval) {
         return 0;
       }
 
@@ -5515,14 +5536,23 @@ export class GameplayScene extends Phaser.Scene {
   private updateFlight(direction: number, deltaSeconds: number): void {
     const hasFlap = direction !== 0;
     const hasBalancedFlap = direction === 2;
+    const controlFactor = this.getSpaceControlFactor();
     let flapImpulseMultiplier = 1;
 
     if (direction === -1 || direction === 1) {
-      this.angularVelocity += direction * this.controlStats.flapTurnImpulse;
+      this.angularVelocity +=
+        direction * this.controlStats.flapTurnImpulse * controlFactor;
     }
 
-    this.angularVelocity *= Math.exp(-TURN_DAMPING * deltaSeconds);
-    this.player.angle *= Math.exp(-this.controlStats.autoLevelSpeed * deltaSeconds);
+    const effectiveTurnDamping = Phaser.Math.Linear(
+      TURN_DAMPING,
+      TURN_DAMPING * 0.2,
+      this.getSpaceFatigueProgress(),
+    );
+    this.angularVelocity *= Math.exp(-effectiveTurnDamping * deltaSeconds);
+    this.player.angle *= Math.exp(
+      -this.controlStats.autoLevelSpeed * controlFactor * deltaSeconds,
+    );
 
     this.angularVelocity = Phaser.Math.Clamp(
       this.angularVelocity,
@@ -5624,14 +5654,18 @@ export class GameplayScene extends Phaser.Scene {
         ? FLIGHT_IDLE_DROP_GRAVITY_MULTIPLIER
         : 1);
     body.setAcceleration(0, effectiveGravity);
-    const flapImpulse = this.controlStats.flapUpwardImpulse * flapImpulseMultiplier;
+    const flapImpulse =
+      this.controlStats.flapUpwardImpulse *
+      flapImpulseMultiplier *
+      controlFactor;
 
     if (hasBalancedFlap) {
       body.velocity.x += headingX * flapImpulse;
       body.velocity.y += headingY * flapImpulse * 1.12;
     } else if (hasFlap) {
       body.velocity.x +=
-        headingX * flapImpulse + direction * FLAP_SIDE_IMPULSE;
+        headingX * flapImpulse +
+        direction * FLAP_SIDE_IMPULSE * controlFactor;
       body.velocity.y += headingY * flapImpulse;
     } else if (
       this.idleFlightState !== 'dropping' &&
@@ -5650,7 +5684,10 @@ export class GameplayScene extends Phaser.Scene {
     // Plus il va vite, plus son inertie tend à aligner sa trajectoire sur son orientation.
     if (speed > 35 && this.idleFlightState !== 'dropping') {
       const alignment = Phaser.Math.Clamp(
-        (speed / MAX_VERTICAL_SPEED) * VELOCITY_ALIGNMENT * deltaSeconds,
+        (speed / MAX_VERTICAL_SPEED) *
+          VELOCITY_ALIGNMENT *
+          controlFactor *
+          deltaSeconds,
         0,
         0.075,
       );
@@ -5801,6 +5838,14 @@ export class GameplayScene extends Phaser.Scene {
       leftMultiplier = FLIGHT_IDLE_DROP_WING_MULTIPLIER;
       rightMultiplier = FLIGHT_IDLE_DROP_WING_MULTIPLIER;
     }
+
+    const spaceWingMultiplier = Phaser.Math.Linear(
+      1,
+      SPACE_MIN_WING_SPEED_MULTIPLIER,
+      this.getSpaceFatigueProgress(),
+    );
+    leftMultiplier *= spaceWingMultiplier;
+    rightMultiplier *= spaceWingMultiplier;
 
     const radiansPerSecond = BASE_WING_BEATS_PER_SECOND * Math.PI * 2;
     this.leftWingPhase += radiansPerSecond * leftMultiplier * deltaSeconds;
@@ -6007,15 +6052,6 @@ export class GameplayScene extends Phaser.Scene {
     this.currentAltitude = altitude;
     this.currentSpeed = speed;
 
-    if (
-      this.playerStateReady &&
-      altitude >= SPACE_ZERO_GRAVITY_ALTITUDE &&
-      !this.hasCompleteAstronautEquipment()
-    ) {
-      void this.finishGame('space', false);
-      return;
-    }
-
     if (altitude > this.bestAltitude) {
       this.bestAltitude = altitude;
       this.updateGroundRecordText();
@@ -6030,6 +6066,51 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.emitHud();
+  }
+
+  private updateSpaceExposure(deltaSeconds: number): boolean {
+    if (!this.playerStateReady) {
+      this.spaceExposure = 0;
+      return false;
+    }
+
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+    const isUnprotectedInSpace =
+      altitude >= SPACE_ZERO_GRAVITY_ALTITUDE &&
+      !this.hasCompleteAstronautEquipment();
+    const exposureDelta = isUnprotectedInSpace
+      ? deltaSeconds / SPACE_UNPROTECTED_SURVIVAL_SECONDS
+      : -deltaSeconds / SPACE_EXPOSURE_RECOVERY_SECONDS;
+
+    this.spaceExposure = Phaser.Math.Clamp(
+      this.spaceExposure + exposureDelta,
+      0,
+      1,
+    );
+
+    if (this.spaceExposure < 1) {
+      return false;
+    }
+
+    void this.finishGame('space', false);
+    return true;
+  }
+
+  private getSpaceFatigueProgress(): number {
+    const normalizedExposure = Phaser.Math.Clamp(
+      (this.spaceExposure - SPACE_CONTROL_LOSS_START) /
+        (SPACE_CONTROL_LOSS_END - SPACE_CONTROL_LOSS_START),
+      0,
+      1,
+    );
+
+    return normalizedExposure *
+      normalizedExposure *
+      (3 - 2 * normalizedExposure);
+  }
+
+  private getSpaceControlFactor(): number {
+    return 1 - this.getSpaceFatigueProgress();
   }
 
   private hasCompleteAstronautEquipment(): boolean {
