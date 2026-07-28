@@ -57,6 +57,7 @@ export interface ShopObjectInventory {
 
 export interface PlayerProfile {
   watermelons: number;
+  adsRemoved: boolean;
   ownedItemIds: string[];
   equipped: EquippedCosmetics;
   shopObjects: ShopObjectInventory;
@@ -131,6 +132,7 @@ export function createEmptyShopObjectInventory(): ShopObjectInventory {
 export function createEmptyPlayerProfile(): PlayerProfile {
   return {
     watermelons: 0,
+    adsRemoved: false,
     ownedItemIds: [],
     equipped: createEmptyEquippedCosmetics(),
     shopObjects: createEmptyShopObjectInventory(),
@@ -143,6 +145,7 @@ export function createEmptyPlayerProfile(): PlayerProfile {
 function cloneProfile(profile: PlayerProfile): PlayerProfile {
   return {
     watermelons: profile.watermelons,
+    adsRemoved: profile.adsRemoved,
     ownedItemIds: [...profile.ownedItemIds],
     equipped: { ...profile.equipped },
     shopObjects: { ...profile.shopObjects },
@@ -177,6 +180,7 @@ function normalizeProfile(value: unknown): PlayerProfile {
       source.watermelons > 0
         ? Math.floor(source.watermelons)
         : 0,
+    adsRemoved: source.adsRemoved === true,
     ownedItemIds: Array.isArray(source.ownedItemIds)
       ? [...new Set(source.ownedItemIds.filter((id): id is string => typeof id === 'string'))]
       : [],
@@ -279,6 +283,24 @@ export function addWatermelons(amount: number): Promise<PlayerProfile> {
     const next: PlayerProfile = {
       ...current,
       watermelons: current.watermelons + safeAmount,
+    };
+
+    await persistProfile(next);
+    return cloneProfile(next);
+  });
+}
+
+export function unlockFullGame(): Promise<PlayerProfile> {
+  return enqueueProfileMutation(async () => {
+    const current = await loadPlayerProfile();
+
+    if (current.adsRemoved) {
+      return cloneProfile(current);
+    }
+
+    const next: PlayerProfile = {
+      ...current,
+      adsRemoved: true,
     };
 
     await persistProfile(next);

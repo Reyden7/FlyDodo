@@ -20,6 +20,11 @@ const isTesting =
 let initializationPromise: Promise<boolean> | null = null;
 let interstitialInFlight = false;
 let rewardedInFlight = false;
+let forcedAdsDisabled = false;
+
+export function setForcedAdsDisabled(disabled: boolean): void {
+  forcedAdsDisabled = disabled;
+}
 
 function isNativeAdsPlatform(): boolean {
   return Capacitor.getPlatform() === 'android';
@@ -60,7 +65,7 @@ export function initializeAds(): Promise<boolean> {
 }
 
 export async function showInterstitialAd(): Promise<boolean> {
-  if (!isNativeAdsPlatform() || interstitialInFlight) {
+  if (forcedAdsDisabled || !isNativeAdsPlatform() || interstitialInFlight) {
     return false;
   }
 

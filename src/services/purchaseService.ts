@@ -25,7 +25,9 @@ export const WATERMELON_PRODUCT_IDS: Readonly<
   mountain: 'flydodo_watermelons_150',
 };
 
-export type WatermelonPurchaseResult =
+export const FULL_GAME_PRODUCT_ID = 'flydodo_full_game';
+
+export type StorePurchaseResult =
   | { status: 'purchased'; simulated: boolean }
   | { status: 'cancelled' }
   | { status: 'unavailable' }
@@ -67,7 +69,7 @@ async function configurePurchases(): Promise<boolean> {
 
 export async function purchaseWatermelonPack(
   packId: WatermelonPackId,
-): Promise<WatermelonPurchaseResult> {
+): Promise<StorePurchaseResult> {
   // Le navigateur Vite permet de tester tout le flux sans déclencher de paiement.
   if (import.meta.env.DEV && Capacitor.getPlatform() === 'web') {
     return { status: 'purchased', simulated: true };
@@ -102,5 +104,61 @@ export async function purchaseWatermelonPack(
 
     console.error("L'achat intégré a échoué.", error);
     return { status: 'failed' };
+  }
+}
+
+export async function purchaseFullGame(): Promise<StorePurchaseResult> {
+  if (import.meta.env.DEV && Capacitor.getPlatform() === 'web') {
+    return { status: 'purchased', simulated: true };
+  }
+
+  if (!(await configurePurchases())) {
+    return { status: 'unavailable' };
+  }
+
+  try {
+    const { products } = await Purchases.getProducts({
+      productIdentifiers: [FULL_GAME_PRODUCT_ID],
+      type: PRODUCT_CATEGORY.NON_SUBSCRIPTION,
+    });
+    const product = products.find(
+      (candidate) => candidate.identifier === FULL_GAME_PRODUCT_ID,
+    );
+
+    if (!product) {
+      console.error(
+        `Produit Google Play introuvable : ${FULL_GAME_PRODUCT_ID}`,
+      );
+      return { status: 'unavailable' };
+    }
+
+    await Purchases.purchaseStoreProduct({ product });
+    return { status: 'purchased', simulated: false };
+  } catch (error) {
+    if (
+      isPurchasesError(error) &&
+      error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR
+    ) {
+      return { status: 'cancelled' };
+    }
+
+    console.error("L'achat du jeu complet a échoué.", error);
+    return { status: 'failed' };
+  }
+}
+
+export async function restoreFullGamePurchase(): Promise<boolean> {
+  if (!(await configurePurchases())) {
+    return false;
+  }
+
+  try {
+    const { customerInfo } = await Purchases.restorePurchases();
+    return customerInfo.allPurchasedProductIdentifiers.includes(
+      FULL_GAME_PRODUCT_ID,
+    );
+  } catch (error) {
+    console.warn("Impossible de restaurer l'achat du jeu complet.", error);
+    return false;
   }
 }

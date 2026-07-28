@@ -68,17 +68,21 @@ import {
   refundControlTalentLevel,
   refundEndurancePhoenixTalent,
   refundEnduranceTalentLevel,
+  unlockFullGame,
   unequipShopItem,
   type PlayerProfile,
   type ShopObjectId,
 } from './services/saveService';
 import {
   initializeAds,
+  setForcedAdsDisabled,
   showInterstitialAd,
   showRewardedAd,
 } from './services/adService';
 import {
+  purchaseFullGame,
   purchaseWatermelonPack,
+  restoreFullGamePurchase,
   type WatermelonPackId,
 } from './services/purchaseService';
 import {
@@ -593,6 +597,8 @@ export default function App(): React.JSX.Element {
     useState<ShopObjectId | null>(null);
   const [pendingWatermelonPackId, setPendingWatermelonPackId] =
     useState<WatermelonPackId | null>(null);
+  const [isFullGamePurchasePending, setIsFullGamePurchasePending] =
+    useState(false);
   const [pendingTalentAction, setPendingTalentAction] = useState<string | null>(
     null,
   );
@@ -909,11 +915,22 @@ export default function App(): React.JSX.Element {
   }, [altitude, audioSettings]);
 
   useEffect(() => {
-    void initializeAds();
-    void loadLatestPlayerProfile().then((profile) => {
+    void (async () => {
+      let profile = await loadLatestPlayerProfile();
+      setForcedAdsDisabled(profile.adsRemoved);
+
+      if (!profile.adsRemoved && (await restoreFullGamePurchase())) {
+        profile = await unlockFullGame();
+        setForcedAdsDisabled(true);
+      }
+
       setPlayerProfile(profile);
       emitShopObjectsUpdated({ shopObjects: profile.shopObjects });
-    });
+
+      if (!profile.adsRemoved) {
+        void initializeAds();
+      }
+    })();
 
     const onHud = (event: Event): void => {
       const hud = (event as CustomEvent<FlightHudDetail>).detail;
@@ -1647,6 +1664,50 @@ export default function App(): React.JSX.Element {
       );
     } finally {
       setPendingWatermelonPackId(null);
+    }
+  };
+
+  const handleFullGamePurchase = async (): Promise<void> => {
+    if (isFullGamePurchasePending || playerProfile.adsRemoved) {
+      return;
+    }
+
+    setIsFullGamePurchasePending(true);
+    setShopNotice(null);
+
+    try {
+      const result = await purchaseFullGame();
+
+      if (result.status === 'cancelled') {
+        setShopNotice(t('shop.paymentCancelled'));
+        return;
+      }
+
+      if (result.status === 'unavailable') {
+        playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+        setShopNotice(t('shop.paymentUnavailable'));
+        return;
+      }
+
+      if (result.status === 'failed') {
+        playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+        setShopNotice(t('shop.paymentFailed'));
+        return;
+      }
+
+      const profile = await unlockFullGame();
+      setPlayerProfile(profile);
+      setForcedAdsDisabled(true);
+      playInterfaceSound(SHOP_BUY_SOUND_PATH);
+      setShopNotice(
+        t(
+          result.simulated
+            ? 'shop.fullGameSimulated'
+            : 'shop.fullGamePurchased',
+        ),
+      );
+    } finally {
+      setIsFullGamePurchasePending(false);
     }
   };
 
@@ -3130,6 +3191,33 @@ export default function App(): React.JSX.Element {
                     />
                     {t('shop.watermelonUse')}
                   </p>
+
+                  <section
+                    className={`full-game-offer${
+                      playerProfile.adsRemoved ? ' is-owned' : ''
+                    }`}
+                  >
+                    <div className="full-game-offer__icon" aria-hidden="true">
+                      ★
+                    </div>
+                    <div className="full-game-offer__copy">
+                      <strong>{t('shop.fullGameTitle')}</strong>
+                      <span>{t('shop.fullGameDescription')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={
+                        isFullGamePurchasePending || playerProfile.adsRemoved
+                      }
+                      onClick={() => void handleFullGamePurchase()}
+                    >
+                      {isFullGamePurchasePending
+                        ? '...'
+                        : playerProfile.adsRemoved
+                          ? t('shop.fullGameOwned')
+                          : '4,99 €'}
+                    </button>
+                  </section>
                 </div>
               )}
 
