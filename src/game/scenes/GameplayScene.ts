@@ -104,6 +104,9 @@ const PLAYER_SCREEN_Y_RATIO = 0.88;
 const CAMERA_FALL_SCREEN_Y_RATIO = 0.97;
 const CAMERA_FALL_FOLLOW_SPEED = 0.72;
 const CAMERA_MAX_FALL_CATCHUP = 260;
+const SPACE_CAMERA_SCREEN_Y_RATIO = 0.5;
+const SPACE_CAMERA_TRANSITION_METRES = 600;
+const SPACE_CAMERA_FOLLOW_SPEED = 3.2;
 
 const GRAVITY_Y = 800;
 const SPACE_ZERO_GRAVITY_ALTITUDE = 7_000;
@@ -114,6 +117,18 @@ const SPACE_CONTROL_LOSS_START = 0.08;
 const SPACE_CONTROL_LOSS_END = 0.84;
 const SPACE_MIN_WING_SPEED_MULTIPLIER = 0.08;
 const SPACE_MAX_FLAP_INTERVAL_MULTIPLIER = 4;
+const SPACE_FLIGHT_TRANSITION_METRES = 350;
+const SPACE_FLAP_IMPULSE_MULTIPLIER = 0.91;
+const SPACE_SIDE_IMPULSE_MULTIPLIER = 1.25;
+const SPACE_TURN_IMPULSE_MULTIPLIER = 1.15;
+const SPACE_MAX_TURN_RATE_MULTIPLIER = 1.7;
+const SPACE_TURN_DAMPING = 0.72;
+const SPACE_AUTO_LEVEL_MULTIPLIER = 0.18;
+const SPACE_VELOCITY_ALIGNMENT_MULTIPLIER = 0.12;
+const SPACE_MAX_HORIZONTAL_SPEED_MULTIPLIER = 0.72;
+const SPACE_MAX_VERTICAL_SPEED_MULTIPLIER = 0.78;
+const SPACE_VELOCITY_DAMPING = 0.58;
+const SPACE_BALANCED_FLAP_WOBBLE = 9;
 const ASTRONAUT_HELMET_ITEM_ID = 'hat-astronaute';
 const ASTRONAUT_OUTFIT_ITEM_ID = 'outfit-astronaute';
 const BASE_FLAP_UPWARD_IMPULSE = 160;
@@ -211,6 +226,64 @@ const LIGHTNING_HIT_CAMERA_SHAKE_DURATION_MS = 440;
 const LIGHTNING_HIT_CAMERA_SHAKE_INTENSITY = 0.012;
 const SATELLITE_TEXTURE_KEY = 'space-satellite';
 const ASTEROID_TEXTURE_KEY = 'space-asteroid';
+const UFO_TEXTURE_KEY = 'space-ending-ufo';
+const UFO_BEAM_TEXTURE_KEY = 'space-ending-ufo-beam';
+const UFO_ARRIVAL_CUE_SOUND_KEY = 'space-ending-ufo-arrival-cue';
+const UFO_ALIEN_CUE_SOUND_KEY = 'space-ending-alien-cue';
+const UFO_ARRIVE_AND_STOP_SOUND_KEY = 'space-ending-ufo-arrive-stop';
+const UFO_KIDNAPPING_SOUND_KEY = 'space-ending-ufo-kidnapping';
+const UFO_ARRIVAL_CUE_ALTITUDE = 8_500;
+const UFO_ALIEN_CUE_ALTITUDE = 9_000;
+const UFO_CAPTURE_ALTITUDE = 9_500;
+const UFO_DISPLAY_WIDTH = 350;
+const UFO_TARGET_SCREEN_Y = 112;
+const UFO_BEAM_SCREEN_Y = 224;
+const UFO_BEAM_DISPLAY_WIDTH = 310;
+const UFO_CAPTURE_TARGET_SCREEN_Y = 220;
+const UFO_KIDNAPPING_DURATION_MS = 3_000;
+const UFO_MIN_ARRIVAL_DURATION_MS = 900;
+const UFO_MAX_ARRIVAL_DURATION_MS = 4_000;
+const UFO_DEFAULT_ARRIVAL_DURATION_MS = 1_600;
+const UFO_DEFAULT_DEPARTURE_DURATION_MS = 1_400;
+const UFO_SOUND_VOLUME = 0.8;
+const UFO_DEPTH = 90;
+const UFO_BEAM_DEPTH = 80;
+const FLOATING_ASTEROID_TEXTURES = [
+  {
+    key: 'space-floating-asteroid-stone-2',
+    path: '/assets/obstacles/space/asteroide2.png',
+  },
+  {
+    key: 'space-floating-asteroid-stone-3',
+    path: '/assets/obstacles/space/asteroide3.png',
+  },
+  {
+    key: 'space-floating-asteroid-ice',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33.png',
+  },
+  {
+    key: 'space-floating-asteroid-lava',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie.png',
+  },
+  {
+    key: 'space-floating-asteroid-crystal',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (2).png',
+  },
+  {
+    key: 'space-floating-asteroid-forest',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (3).png',
+  },
+  {
+    key: 'space-floating-asteroid-blue',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (4).png',
+  },
+  {
+    key: 'space-floating-asteroid-gold',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (5).png',
+  },
+] as const;
+const FLOATING_ASTEROID_NEUTRAL_TEXTURE_COUNT = 2;
+const FLOATING_ASTEROID_COLORED_CHANCE = 0.2;
 const LAVA_TEXTURE_PREFIX = 'lava-flow';
 const LAVA_ANIMATION_KEY = 'lava-flow-animation';
 const LAVA_FRAME_COUNT = 36;
@@ -264,6 +337,23 @@ const ASTEROID_CLUSTER_SIZE_MIN = 2;
 const ASTEROID_CLUSTER_SIZE_MAX = 3;
 const ASTEROID_CLUSTER_INNER_SPACING_MIN_METRES = 5;
 const ASTEROID_CLUSTER_INNER_SPACING_MAX_METRES = 10;
+const FLOATING_ASTEROID_ZONES = [
+  { minAltitude: 7_200, maxAltitude: 7_400, count: 14 },
+  { minAltitude: 7_900, maxAltitude: 8_100, count: 15 },
+  { minAltitude: 8_600, maxAltitude: 8_800, count: 16 },
+  { minAltitude: 9_300, maxAltitude: 9_500, count: 17 },
+] as const;
+const FLOATING_ASTEROID_WIDTH_MIN = 46;
+const FLOATING_ASTEROID_WIDTH_MAX = 94;
+const FLOATING_ASTEROID_SPEED_X_MIN = 7;
+const FLOATING_ASTEROID_SPEED_X_MAX = 19;
+const FLOATING_ASTEROID_SPEED_Y_MIN = 4;
+const FLOATING_ASTEROID_SPEED_Y_MAX = 13;
+const FLOATING_ASTEROID_MAX_SPEED = 34;
+const FLOATING_ASTEROID_BOUNCE = 0.94;
+const FLOATING_ASTEROID_ROTATION_MIN = 3;
+const FLOATING_ASTEROID_ROTATION_MAX = 12;
+const FLOATING_ASTEROID_PLACEMENT_PADDING = 12;
 const LIGHTNING_TRIGGER_DISTANCE_METRES = 28;
 const LIGHTNING_HITBOX_WIDTH_RATIO = 0.58;
 const LIGHTNING_HITBOX_HEIGHT_RATIO = 0.82;
@@ -328,7 +418,14 @@ type PlayerDamageReason =
   | 'mosquito'
   | 'lightning'
   | 'space';
-type FinishGameReason = PlayerDamageReason | 'default';
+type FinishGameReason = PlayerDamageReason | 'ufo' | 'default';
+
+type UfoEndingState =
+  | 'idle'
+  | 'arriving'
+  | 'abducting'
+  | 'departing'
+  | 'complete';
 
 interface ObstacleKind {
   id: ObstacleKindId;
@@ -452,6 +549,14 @@ interface AsteroidPassageMotion {
   verticalDirection: 1 | -1;
   rotationDirection: 1 | -1;
   launched: boolean;
+}
+
+interface FloatingAsteroidMotion {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  zoneTopY: number;
+  zoneBottomY: number;
+  collisionRadius: number;
+  rotationSpeed: number;
 }
 
 interface LightningFlashMotion {
@@ -1346,10 +1451,12 @@ export class GameplayScene extends Phaser.Scene {
   private keyD!: Phaser.Input.Keyboard.Key;
   private watermelonCollectables!: Phaser.Physics.Arcade.StaticGroup;
   private obstacleGroup!: Phaser.Physics.Arcade.Group;
+  private floatingAsteroidGroup!: Phaser.Physics.Arcade.Group;
   private mosquitoCircleMotions: MosquitoCircleMotion[] = [];
   private pterodactylPatrols: PterodactylPatrolMotion[] = [];
   private satelliteDriftMotions: SatelliteDriftMotion[] = [];
   private asteroidPassageMotions: AsteroidPassageMotion[] = [];
+  private floatingAsteroidMotions: FloatingAsteroidMotion[] = [];
   private lightningFlashMotions: LightningFlashMotion[] = [];
   private stormCloudObstacles: Phaser.Physics.Arcade.Sprite[] = [];
   private lightningScreenFlash!: Phaser.GameObjects.Rectangle;
@@ -1481,6 +1588,14 @@ export class GameplayScene extends Phaser.Scene {
   private lava!: Phaser.GameObjects.Sprite;
   private lavaTopY = LAVA_START_Y;
   private runStartTime = 0;
+  private ufoEndingState: UfoEndingState = 'idle';
+  private ufoArrivalCuePlayed = false;
+  private ufoAlienCuePlayed = false;
+  private ufoKidnappingElapsedMs = 0;
+  private ufo!: Phaser.GameObjects.Image;
+  private ufoBeam!: Phaser.GameObjects.Image;
+  private ufoBeamGlow!: Phaser.GameObjects.Image;
+  private reversedUfoDepartureSource?: AudioBufferSourceNode;
 
   constructor() {
     super('GameplayScene');
@@ -1491,6 +1606,24 @@ export class GameplayScene extends Phaser.Scene {
     this.load.audio(LIGHTNING_SOUND_KEY, LIGHTNING_SOUND_PATH);
     this.load.audio(GAME_OVER_SOUND_KEY, GAME_OVER_SOUND_PATH);
     this.load.audio(SKY_WIND_SOUND_KEY, SKY_WIND_SOUND_PATH);
+    this.load.audio(
+      UFO_ARRIVAL_CUE_SOUND_KEY,
+      '/assets/sounds/ufoArrive.mp3',
+    );
+    this.load.audio(
+      UFO_ALIEN_CUE_SOUND_KEY,
+      '/assets/sounds/aliensound.mp3',
+    );
+    this.load.audio(
+      UFO_ARRIVE_AND_STOP_SOUND_KEY,
+      '/assets/sounds/UFOArriveAndStOP.mp3',
+    );
+    this.load.audio(
+      UFO_KIDNAPPING_SOUND_KEY,
+      '/assets/sounds/UFOKidnaping.mp3',
+    );
+    this.load.image(UFO_TEXTURE_KEY, '/assets/Decors/Alien.png');
+    this.load.image(UFO_BEAM_TEXTURE_KEY, '/assets/Decors/rayon.png');
     this.load.audio(
       ZONE_TRANSITION_SOUND_KEY,
       ZONE_TRANSITION_SOUND_PATH,
@@ -1570,6 +1703,9 @@ export class GameplayScene extends Phaser.Scene {
     }
     this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.png');
     this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.png');
+    for (const asteroidTexture of FLOATING_ASTEROID_TEXTURES) {
+      this.load.image(asteroidTexture.key, asteroidTexture.path);
+    }
     for (let index = 0; index < LAVA_FRAME_COUNT; index += 1) {
       const paddedIndex = index.toString().padStart(3, '0');
       this.load.image(
@@ -1674,6 +1810,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createGroundRecord();
     this.createLava();
     this.createLightningScreenFlash();
+    this.createUfoEndingObjects();
 
     this.leftWing = this.add.image(
       GAME_WIDTH / 2,
@@ -1740,6 +1877,10 @@ export class GameplayScene extends Phaser.Scene {
 
     this.createWatermelonCollectables();
     this.createAltitudeObstacles();
+    this.physics.add.collider(
+      this.floatingAsteroidGroup,
+      this.floatingAsteroidGroup,
+    );
     this.physics.add.overlap(
       this.player,
       this.watermelonCollectables,
@@ -1758,7 +1899,7 @@ export class GameplayScene extends Phaser.Scene {
       this.player,
       this.obstacleGroup,
       this.handleObstacleHit,
-      this.shouldProcessBranchCollision,
+      this.shouldProcessSolidObstacleCollision,
       this,
     );
 
@@ -1842,6 +1983,14 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    if (this.updateUfoEnding(deltaSeconds)) {
+      this.updateWingBeats(0, deltaSeconds);
+      this.updateDodoJuice(deltaSeconds);
+      this.updateAltitudeAndHud();
+      this.offscreenIndicator.setVisible(false);
+      return;
+    }
+
     if (this.updateSpaceExposure(deltaSeconds)) {
       return;
     }
@@ -1852,6 +2001,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updatePterodactylPatrols(time);
     this.updateSatelliteDrifts(time, deltaSeconds);
     this.updateAsteroidPassages(deltaSeconds);
+    this.updateFloatingAsteroids(deltaSeconds);
     this.updateLightningFlashes();
     this.updateFlight(direction, deltaSeconds);
     this.updateSkyWind(deltaSeconds);
@@ -1879,6 +2029,12 @@ export class GameplayScene extends Phaser.Scene {
     this.sound.stopByKey(LIGHTNING_SOUND_KEY);
     this.sound.stopByKey(GAME_OVER_SOUND_KEY);
     this.sound.stopByKey(ZONE_TRANSITION_SOUND_KEY);
+    this.sound.stopByKey(UFO_ARRIVAL_CUE_SOUND_KEY);
+    this.sound.stopByKey(UFO_ALIEN_CUE_SOUND_KEY);
+    this.sound.stopByKey(UFO_ARRIVE_AND_STOP_SOUND_KEY);
+    this.sound.stopByKey(UFO_KIDNAPPING_SOUND_KEY);
+    this.reversedUfoDepartureSource?.stop();
+    this.reversedUfoDepartureSource = undefined;
     this.destroyFruitDetectorButton();
     this.events.off(
       Phaser.Scenes.Events.POST_UPDATE,
@@ -2447,6 +2603,11 @@ export class GameplayScene extends Phaser.Scene {
     this.gameOver = false;
     this.deathReason = null;
     this.gamePaused = false;
+    this.ufoEndingState = 'idle';
+    this.ufoArrivalCuePlayed = false;
+    this.ufoAlienCuePlayed = false;
+    this.ufoKidnappingElapsedMs = 0;
+    this.reversedUfoDepartureSource = undefined;
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
     this.lastWarningReason = null;
@@ -2526,6 +2687,7 @@ export class GameplayScene extends Phaser.Scene {
     this.pterodactylPatrols = [];
     this.satelliteDriftMotions = [];
     this.asteroidPassageMotions = [];
+    this.floatingAsteroidMotions = [];
     this.lightningFlashMotions = [];
     this.stormCloudObstacles = [];
     this.lavaTopY = LAVA_START_Y;
@@ -4088,6 +4250,51 @@ export class GameplayScene extends Phaser.Scene {
       .setVisible(false);
   }
 
+  private createUfoEndingObjects(): void {
+    this.ufoBeamGlow = this.add
+      .image(
+        GAME_WIDTH / 2,
+        UFO_BEAM_SCREEN_Y,
+        UFO_BEAM_TEXTURE_KEY,
+      )
+      .setOrigin(0.5, 0)
+      .setDisplaySize(
+        UFO_BEAM_DISPLAY_WIDTH * 1.12,
+        UFO_BEAM_DISPLAY_WIDTH * 1.12 * (567 / 465),
+      )
+      .setScrollFactor(0)
+      .setDepth(UFO_BEAM_DEPTH - 1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xa8ffd1)
+      .setAlpha(0)
+      .setVisible(false);
+    this.ufoBeam = this.add
+      .image(
+        GAME_WIDTH / 2,
+        UFO_BEAM_SCREEN_Y,
+        UFO_BEAM_TEXTURE_KEY,
+      )
+      .setOrigin(0.5, 0)
+      .setDisplaySize(
+        UFO_BEAM_DISPLAY_WIDTH,
+        UFO_BEAM_DISPLAY_WIDTH * (567 / 465),
+      )
+      .setScrollFactor(0)
+      .setDepth(UFO_BEAM_DEPTH)
+      .setAlpha(0)
+      .setVisible(false);
+    this.ufo = this.add
+      .image(
+        GAME_WIDTH / 2,
+        -UFO_DISPLAY_WIDTH,
+        UFO_TEXTURE_KEY,
+      )
+      .setDisplaySize(UFO_DISPLAY_WIDTH, UFO_DISPLAY_WIDTH)
+      .setScrollFactor(0)
+      .setDepth(UFO_DEPTH)
+      .setVisible(false);
+  }
+
   private playLightningScreenFlash(): void {
     this.tweens.killTweensOf(this.lightningScreenFlash);
     this.lightningScreenFlash
@@ -4139,6 +4346,10 @@ export class GameplayScene extends Phaser.Scene {
     this.obstacleGroup = this.physics.add.group({
       allowGravity: false,
       immovable: true,
+    });
+    this.floatingAsteroidGroup = this.physics.add.group({
+      allowGravity: false,
+      immovable: false,
     });
 
     for (const level of ALTITUDE_LEVELS) {
@@ -4243,6 +4454,144 @@ export class GameplayScene extends Phaser.Scene {
 
       if (level.id === 'space') {
         this.createAsteroidClusters(level, maxAltitude);
+      }
+    }
+
+    this.createFloatingAsteroidZones();
+  }
+
+  private createFloatingAsteroidZones(): void {
+    for (const zone of FLOATING_ASTEROID_ZONES) {
+      const zoneTopY = this.altitudeToWorldY(zone.maxAltitude);
+      const zoneBottomY = this.altitudeToWorldY(zone.minAltitude);
+      const placedAsteroids: Array<{ x: number; y: number; radius: number }> = [];
+
+      for (let index = 0; index < zone.count; index += 1) {
+        const useColoredTexture =
+          Math.random() < FLOATING_ASTEROID_COLORED_CHANCE;
+        const textureIndex = useColoredTexture
+          ? Phaser.Math.Between(
+              FLOATING_ASTEROID_NEUTRAL_TEXTURE_COUNT,
+              FLOATING_ASTEROID_TEXTURES.length - 1,
+            )
+          : Phaser.Math.Between(
+              0,
+              FLOATING_ASTEROID_NEUTRAL_TEXTURE_COUNT - 1,
+            );
+        const texture = FLOATING_ASTEROID_TEXTURES[textureIndex];
+        const displayWidth = Phaser.Math.Between(
+          FLOATING_ASTEROID_WIDTH_MIN,
+          FLOATING_ASTEROID_WIDTH_MAX,
+        );
+        const asteroid = this.physics.add.sprite(
+          GAME_WIDTH / 2,
+          (zoneTopY + zoneBottomY) / 2,
+          texture.key,
+        );
+        const displayHeight = displayWidth * (asteroid.height / asteroid.width);
+        const collisionRadius = Math.min(displayWidth, displayHeight) * 0.38;
+        let positionX = GAME_WIDTH / 2;
+        let positionY = Phaser.Math.Between(
+          Math.ceil(zoneTopY + collisionRadius),
+          Math.floor(zoneBottomY - collisionRadius),
+        );
+
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          const candidateX = Phaser.Math.Between(
+            Math.ceil(collisionRadius + 6),
+            Math.floor(GAME_WIDTH - collisionRadius - 6),
+          );
+          const candidateY = Phaser.Math.Between(
+            Math.ceil(zoneTopY + collisionRadius),
+            Math.floor(zoneBottomY - collisionRadius),
+          );
+          const overlapsAnotherAsteroid = placedAsteroids.some((placed) => {
+            const minimumDistance =
+              collisionRadius +
+              placed.radius +
+              FLOATING_ASTEROID_PLACEMENT_PADDING;
+
+            return (
+              Phaser.Math.Distance.Between(
+                candidateX,
+                candidateY,
+                placed.x,
+                placed.y,
+              ) < minimumDistance
+            );
+          });
+
+          if (!overlapsAnotherAsteroid) {
+            positionX = candidateX;
+            positionY = candidateY;
+            break;
+          }
+        }
+
+        asteroid
+          .setPosition(positionX, positionY)
+          .setOrigin(0.5)
+          .setDisplaySize(displayWidth, displayHeight)
+          .setDepth(OBSTACLE_DEPTH)
+          .setAlpha(OBSTACLE_ALPHA)
+          .setAngle(Phaser.Math.Between(0, 359))
+          .setData('level', 'space')
+          .setData('levelLabel', 'Espace')
+          .setData('kind', 'asteroid')
+          .setData(
+            'altitude',
+            Math.round((START_Y - positionY) / 10),
+          );
+
+        this.obstacleGroup.add(asteroid);
+        this.floatingAsteroidGroup.add(asteroid);
+
+        const sourceRadius =
+          Math.min(asteroid.width, asteroid.height) * 0.38;
+        asteroid.body.setAllowGravity(false);
+        asteroid.body.setImmovable(false);
+        asteroid.body.setCircle(
+          sourceRadius,
+          (asteroid.width - sourceRadius * 2) / 2,
+          (asteroid.height - sourceRadius * 2) / 2,
+        );
+        asteroid.body.setMass(Math.max(1, displayWidth / 44));
+        asteroid.body.setBounce(
+          FLOATING_ASTEROID_BOUNCE,
+          FLOATING_ASTEROID_BOUNCE,
+        );
+        asteroid.body.setMaxVelocity(
+          FLOATING_ASTEROID_MAX_SPEED,
+          FLOATING_ASTEROID_MAX_SPEED,
+        );
+        asteroid.body.reset(asteroid.x, asteroid.y);
+        asteroid.body.setVelocity(
+          Phaser.Math.Between(
+            FLOATING_ASTEROID_SPEED_X_MIN,
+            FLOATING_ASTEROID_SPEED_X_MAX,
+          ) * (Phaser.Math.Between(0, 1) === 0 ? -1 : 1),
+          Phaser.Math.Between(
+            FLOATING_ASTEROID_SPEED_Y_MIN,
+            FLOATING_ASTEROID_SPEED_Y_MAX,
+          ) * (Phaser.Math.Between(0, 1) === 0 ? -1 : 1),
+        );
+
+        placedAsteroids.push({
+          x: positionX,
+          y: positionY,
+          radius: collisionRadius,
+        });
+        this.floatingAsteroidMotions.push({
+          sprite: asteroid,
+          zoneTopY,
+          zoneBottomY,
+          collisionRadius,
+          rotationSpeed:
+            Phaser.Math.Between(
+              FLOATING_ASTEROID_ROTATION_MIN,
+              FLOATING_ASTEROID_ROTATION_MAX,
+            ) * (Phaser.Math.Between(0, 1) === 0 ? -1 : 1),
+        });
       }
     }
   }
@@ -4573,6 +4922,44 @@ export class GameplayScene extends Phaser.Scene {
 
       if (isOutOnRight || isOutOnLeft) {
         sprite.disableBody(true, true);
+      }
+    }
+  }
+
+  private updateFloatingAsteroids(deltaSeconds: number): void {
+    for (const motion of this.floatingAsteroidMotions) {
+      const { sprite, collisionRadius } = motion;
+
+      if (!sprite.active) {
+        continue;
+      }
+
+      sprite.setAngle(
+        sprite.angle + motion.rotationSpeed * deltaSeconds,
+      );
+
+      if (
+        sprite.x - collisionRadius <= 0 &&
+        sprite.body.velocity.x < 0
+      ) {
+        sprite.body.setVelocityX(Math.abs(sprite.body.velocity.x));
+      } else if (
+        sprite.x + collisionRadius >= GAME_WIDTH &&
+        sprite.body.velocity.x > 0
+      ) {
+        sprite.body.setVelocityX(-Math.abs(sprite.body.velocity.x));
+      }
+
+      if (
+        sprite.y - collisionRadius <= motion.zoneTopY &&
+        sprite.body.velocity.y < 0
+      ) {
+        sprite.body.setVelocityY(Math.abs(sprite.body.velocity.y));
+      } else if (
+        sprite.y + collisionRadius >= motion.zoneBottomY &&
+        sprite.body.velocity.y > 0
+      ) {
+        sprite.body.setVelocityY(-Math.abs(sprite.body.velocity.y));
       }
     }
   }
@@ -5004,17 +5391,27 @@ export class GameplayScene extends Phaser.Scene {
     const obstacle = obstacleObject as Phaser.Physics.Arcade.Image;
     const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
 
-    return obstacleKind !== 'branchLeft' && obstacleKind !== 'branchRight';
+    return (
+      obstacleKind !== 'branchLeft' &&
+      obstacleKind !== 'branchRight' &&
+      obstacleKind !== 'asteroid' &&
+      obstacleKind !== 'satellite'
+    );
   };
 
-  private shouldProcessBranchCollision: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
+  private shouldProcessSolidObstacleCollision: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
     _playerObject,
     obstacleObject,
   ): boolean => {
     const obstacle = obstacleObject as Phaser.Physics.Arcade.Image;
     const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
 
-    return obstacleKind === 'branchLeft' || obstacleKind === 'branchRight';
+    return (
+      obstacleKind === 'branchLeft' ||
+      obstacleKind === 'branchRight' ||
+      obstacleKind === 'asteroid' ||
+      obstacleKind === 'satellite'
+    );
   };
 
   private handleObstacleHit: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (
@@ -5537,27 +5934,67 @@ export class GameplayScene extends Phaser.Scene {
     const hasFlap = direction !== 0;
     const hasBalancedFlap = direction === 2;
     const controlFactor = this.getSpaceControlFactor();
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+    const spaceFlightProgress = Phaser.Math.Clamp(
+      (altitude - SPACE_ZERO_GRAVITY_ALTITUDE) /
+        SPACE_FLIGHT_TRANSITION_METRES,
+      0,
+      1,
+    );
+    const spaceTurnImpulseMultiplier = Phaser.Math.Linear(
+      1,
+      SPACE_TURN_IMPULSE_MULTIPLIER,
+      spaceFlightProgress,
+    );
     let flapImpulseMultiplier = 1;
 
     if (direction === -1 || direction === 1) {
       this.angularVelocity +=
-        direction * this.controlStats.flapTurnImpulse * controlFactor;
+        direction *
+        this.controlStats.flapTurnImpulse *
+        spaceTurnImpulseMultiplier *
+        controlFactor;
+    } else if (hasBalancedFlap && spaceFlightProgress > 0) {
+      this.angularVelocity +=
+        Math.sin(this.time.now * 0.011) *
+        SPACE_BALANCED_FLAP_WOBBLE *
+        spaceFlightProgress *
+        controlFactor;
     }
 
-    const effectiveTurnDamping = Phaser.Math.Linear(
+    const baseTurnDamping = Phaser.Math.Linear(
       TURN_DAMPING,
-      TURN_DAMPING * 0.2,
+      SPACE_TURN_DAMPING,
+      spaceFlightProgress,
+    );
+    const effectiveTurnDamping = Phaser.Math.Linear(
+      baseTurnDamping,
+      baseTurnDamping * 0.2,
       this.getSpaceFatigueProgress(),
     );
     this.angularVelocity *= Math.exp(-effectiveTurnDamping * deltaSeconds);
     this.player.angle *= Math.exp(
-      -this.controlStats.autoLevelSpeed * controlFactor * deltaSeconds,
+      -this.controlStats.autoLevelSpeed *
+        Phaser.Math.Linear(
+          1,
+          SPACE_AUTO_LEVEL_MULTIPLIER,
+          spaceFlightProgress,
+        ) *
+        controlFactor *
+        deltaSeconds,
     );
 
+    const maxTurnRate =
+      MAX_TURN_RATE *
+      Phaser.Math.Linear(
+        1,
+        SPACE_MAX_TURN_RATE_MULTIPLIER,
+        spaceFlightProgress,
+      );
     this.angularVelocity = Phaser.Math.Clamp(
       this.angularVelocity,
-      -MAX_TURN_RATE,
-      MAX_TURN_RATE,
+      -maxTurnRate,
+      maxTurnRate,
     );
 
     this.player.angle += this.angularVelocity * deltaSeconds;
@@ -5565,8 +6002,25 @@ export class GameplayScene extends Phaser.Scene {
     const headingX = Math.sin(this.player.rotation);
     const headingY = -Math.cos(this.player.rotation);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const spaceVelocityDamping = Math.exp(
+      -SPACE_VELOCITY_DAMPING * spaceFlightProgress * deltaSeconds,
+    );
+    body.velocity.scale(spaceVelocityDamping);
     const speed = body.velocity.length();
-    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+    body.setMaxVelocity(
+      MAX_HORIZONTAL_SPEED *
+        Phaser.Math.Linear(
+          1,
+          SPACE_MAX_HORIZONTAL_SPEED_MULTIPLIER,
+          spaceFlightProgress,
+        ),
+      MAX_VERTICAL_SPEED *
+        Phaser.Math.Linear(
+          1,
+          SPACE_MAX_VERTICAL_SPEED_MULTIPLIER,
+          spaceFlightProgress,
+        ),
+    );
     const targetGravityFactor =
       altitude >= SPACE_ZERO_GRAVITY_ALTITUDE ? 0 : 1;
     const gravitySmoothing =
@@ -5657,6 +6111,11 @@ export class GameplayScene extends Phaser.Scene {
     const flapImpulse =
       this.controlStats.flapUpwardImpulse *
       flapImpulseMultiplier *
+      Phaser.Math.Linear(
+        1,
+        SPACE_FLAP_IMPULSE_MULTIPLIER,
+        spaceFlightProgress,
+      ) *
       controlFactor;
 
     if (hasBalancedFlap) {
@@ -5665,7 +6124,14 @@ export class GameplayScene extends Phaser.Scene {
     } else if (hasFlap) {
       body.velocity.x +=
         headingX * flapImpulse +
-        direction * FLAP_SIDE_IMPULSE * controlFactor;
+        direction *
+          FLAP_SIDE_IMPULSE *
+          Phaser.Math.Linear(
+            1,
+            SPACE_SIDE_IMPULSE_MULTIPLIER,
+            spaceFlightProgress,
+          ) *
+          controlFactor;
       body.velocity.y += headingY * flapImpulse;
     } else if (
       this.idleFlightState !== 'dropping' &&
@@ -5686,6 +6152,11 @@ export class GameplayScene extends Phaser.Scene {
       const alignment = Phaser.Math.Clamp(
         (speed / MAX_VERTICAL_SPEED) *
           VELOCITY_ALIGNMENT *
+          Phaser.Math.Linear(
+            1,
+            SPACE_VELOCITY_ALIGNMENT_MULTIPLIER,
+            spaceFlightProgress,
+          ) *
           controlFactor *
           deltaSeconds,
         0,
@@ -5914,6 +6385,12 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    if (this.deathReason === 'ufo') {
+      this.setDodoCaptureVisibility(false);
+      this.lastDodoPose = null;
+      return;
+    }
+
     if (this.deathReason === 'lightning') {
       if (this.lastDodoPose !== 'lightning') {
         this.player
@@ -5992,7 +6469,46 @@ export class GameplayScene extends Phaser.Scene {
 
   private updateCamera(deltaSeconds: number): void {
     const camera = this.cameras.main;
+
+    if (this.ufoEndingState !== 'idle') {
+      return;
+    }
+
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+
+    if (altitude >= SPACE_ZERO_GRAVITY_ALTITUDE) {
+      const spaceCameraProgress = Phaser.Math.Clamp(
+        (altitude - SPACE_ZERO_GRAVITY_ALTITUDE) /
+          SPACE_CAMERA_TRANSITION_METRES,
+        0,
+        1,
+      );
+      const playerScreenYRatio = Phaser.Math.Linear(
+        PLAYER_SCREEN_Y_RATIO,
+        SPACE_CAMERA_SCREEN_Y_RATIO,
+        spaceCameraProgress,
+      );
+      const desiredScrollY =
+        this.player.y - GAME_HEIGHT * playerScreenYRatio;
+      const highestAllowedScrollY =
+        GROUND_Y - GAME_HEIGHT * PLAYER_SCREEN_Y_RATIO;
+      const clampedDesiredScrollY = Phaser.Math.Clamp(
+        desiredScrollY,
+        0,
+        highestAllowedScrollY,
+      );
+      const smoothing =
+        1 - Math.exp(-SPACE_CAMERA_FOLLOW_SPEED * deltaSeconds);
+
+      camera.scrollY = Phaser.Math.Linear(
+        camera.scrollY,
+        clampedDesiredScrollY,
+        smoothing,
+      );
+      return;
+    }
+
     const playerScreenYRatio =
       body.velocity.y > 0
         ? CAMERA_FALL_SCREEN_Y_RATIO
@@ -6094,6 +6610,312 @@ export class GameplayScene extends Phaser.Scene {
 
     void this.finishGame('space', false);
     return true;
+  }
+
+  private updateUfoEnding(deltaSeconds: number): boolean {
+    const altitude = Math.max(0, (this.startAltitudeY - this.player.y) / 10);
+
+    if (this.ufoEndingState === 'idle') {
+      if (altitude >= UFO_CAPTURE_ALTITUDE) {
+        this.startUfoArrival();
+        return true;
+      }
+
+      if (
+        altitude >= UFO_ALIEN_CUE_ALTITUDE &&
+        !this.ufoAlienCuePlayed
+      ) {
+        this.ufoAlienCuePlayed = true;
+        this.ufoArrivalCuePlayed = true;
+        this.sound.play(UFO_ALIEN_CUE_SOUND_KEY, {
+          volume: UFO_SOUND_VOLUME * this.audioSettings.transition,
+        });
+      } else if (
+        altitude >= UFO_ARRIVAL_CUE_ALTITUDE &&
+        !this.ufoArrivalCuePlayed
+      ) {
+        this.ufoArrivalCuePlayed = true;
+        this.sound.play(UFO_ARRIVAL_CUE_SOUND_KEY, {
+          volume: UFO_SOUND_VOLUME * this.audioSettings.transition,
+        });
+      }
+
+      return false;
+    }
+
+    if (this.ufoEndingState === 'abducting') {
+      this.updateUfoAbduction(deltaSeconds);
+    }
+
+    return true;
+  }
+
+  private startUfoArrival(): void {
+    if (this.ufoEndingState !== 'idle') {
+      return;
+    }
+
+    this.ufoEndingState = 'arriving';
+    this.ufoArrivalCuePlayed = true;
+    this.ufoAlienCuePlayed = true;
+    this.heldPointerSides.clear();
+    this.stopFlightSounds();
+    this.angularVelocity = 0;
+    this.offscreenIndicator.setVisible(false);
+
+    const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
+    playerBody.setVelocity(0, 0);
+    playerBody.setAcceleration(0, 0);
+    playerBody.enable = false;
+
+    const arrivalSound = this.sound.add(
+      UFO_ARRIVE_AND_STOP_SOUND_KEY,
+      {
+        volume: UFO_SOUND_VOLUME * this.audioSettings.transition,
+      },
+    );
+    const arrivalDuration = Phaser.Math.Clamp(
+      arrivalSound.duration > 0
+        ? arrivalSound.duration * 1_000
+        : UFO_DEFAULT_ARRIVAL_DURATION_MS,
+      UFO_MIN_ARRIVAL_DURATION_MS,
+      UFO_MAX_ARRIVAL_DURATION_MS,
+    );
+
+    arrivalSound.once(
+      Phaser.Sound.Events.COMPLETE,
+      () => arrivalSound.destroy(),
+    );
+    arrivalSound.play();
+
+    this.ufo
+      .setPosition(GAME_WIDTH / 2, -UFO_DISPLAY_WIDTH)
+      .setAlpha(1)
+      .setVisible(true);
+    this.tweens.add({
+      targets: this.ufo,
+      y: UFO_TARGET_SCREEN_Y,
+      duration: arrivalDuration,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        if (this.ufoEndingState === 'arriving') {
+          this.startUfoAbduction();
+        }
+      },
+    });
+  }
+
+  private startUfoAbduction(): void {
+    this.ufoEndingState = 'abducting';
+    this.ufoKidnappingElapsedMs = 0;
+    this.ufoBeam
+      .setPosition(GAME_WIDTH / 2, UFO_BEAM_SCREEN_Y)
+      .setAlpha(0)
+      .setVisible(true);
+    this.ufoBeamGlow
+      .setPosition(GAME_WIDTH / 2, UFO_BEAM_SCREEN_Y)
+      .setScale(1)
+      .setAlpha(0)
+      .setVisible(true);
+
+    this.tweens.add({
+      targets: this.ufoBeam,
+      alpha: 0.82,
+      duration: 180,
+      ease: 'Quad.easeOut',
+    });
+    this.tweens.add({
+      targets: this.ufoBeamGlow,
+      alpha: { from: 0.16, to: 0.38 },
+      scaleX: { from: 1, to: 1.05 },
+      scaleY: { from: 1, to: 1.025 },
+      duration: 520,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.sound.play(UFO_KIDNAPPING_SOUND_KEY, {
+      volume: UFO_SOUND_VOLUME * this.audioSettings.transition,
+    });
+  }
+
+  private updateUfoAbduction(deltaSeconds: number): void {
+    this.ufoKidnappingElapsedMs += deltaSeconds * 1_000;
+    const progress = Phaser.Math.Clamp(
+      this.ufoKidnappingElapsedMs / UFO_KIDNAPPING_DURATION_MS,
+      0,
+      1,
+    );
+    const attractionProgress = progress * progress;
+    const attractionSmoothing =
+      1 -
+      Math.exp(
+        -(0.8 + attractionProgress * 9.2) * deltaSeconds,
+      );
+    const targetWorldY =
+      this.cameras.main.scrollY + UFO_CAPTURE_TARGET_SCREEN_Y;
+
+    this.player.setPosition(
+      Phaser.Math.Linear(
+        this.player.x,
+        GAME_WIDTH / 2,
+        attractionSmoothing,
+      ),
+      Phaser.Math.Linear(
+        this.player.y,
+        targetWorldY,
+        attractionSmoothing,
+      ),
+    );
+    this.player.angle = Phaser.Math.Linear(
+      this.player.angle,
+      0,
+      attractionSmoothing,
+    );
+
+    const fadeProgress = Phaser.Math.Clamp(
+      (progress - 0.76) / 0.24,
+      0,
+      1,
+    );
+    this.setDodoCaptureAlpha(1 - fadeProgress);
+
+    if (progress >= 1) {
+      this.finishUfoAbduction();
+    }
+  }
+
+  private finishUfoAbduction(): void {
+    if (this.ufoEndingState !== 'abducting') {
+      return;
+    }
+
+    this.ufoEndingState = 'departing';
+    this.setDodoCaptureVisibility(false);
+    this.tweens.killTweensOf(this.ufoBeam);
+    this.tweens.killTweensOf(this.ufoBeamGlow);
+    this.tweens.add({
+      targets: [this.ufoBeam, this.ufoBeamGlow],
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.ufoBeam.setVisible(false);
+        this.ufoBeamGlow.setVisible(false);
+      },
+    });
+
+    const departureDuration = this.playReversedUfoDepartureSound();
+    this.tweens.add({
+      targets: this.ufo,
+      y: -UFO_DISPLAY_WIDTH,
+      duration: departureDuration,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        this.ufo.setVisible(false);
+        this.ufoEndingState = 'complete';
+        void this.finishGame('ufo', false);
+      },
+    });
+  }
+
+  private playReversedUfoDepartureSound(): number {
+    const soundManager = this.sound;
+    const audioData = this.cache.audio.get(
+      UFO_ARRIVE_AND_STOP_SOUND_KEY,
+    ) as unknown;
+
+    if (
+      soundManager instanceof Phaser.Sound.WebAudioSoundManager &&
+      typeof AudioBuffer !== 'undefined' &&
+      audioData instanceof AudioBuffer
+    ) {
+      const context = soundManager.context;
+      const reversedBuffer = context.createBuffer(
+        audioData.numberOfChannels,
+        audioData.length,
+        audioData.sampleRate,
+      );
+
+      for (
+        let channelIndex = 0;
+        channelIndex < audioData.numberOfChannels;
+        channelIndex += 1
+      ) {
+        const reversedChannel =
+          reversedBuffer.getChannelData(channelIndex);
+        const originalChannel = audioData.getChannelData(channelIndex);
+
+        for (
+          let sampleIndex = 0;
+          sampleIndex < originalChannel.length;
+          sampleIndex += 1
+        ) {
+          reversedChannel[sampleIndex] =
+            originalChannel[originalChannel.length - 1 - sampleIndex];
+        }
+      }
+
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      gain.gain.value =
+        UFO_SOUND_VOLUME * this.audioSettings.transition;
+      source.buffer = reversedBuffer;
+      source.connect(gain);
+      gain.connect(soundManager.destination);
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+        if (this.reversedUfoDepartureSource === source) {
+          this.reversedUfoDepartureSource = undefined;
+        }
+      };
+      source.start();
+      this.reversedUfoDepartureSource = source;
+
+      return Phaser.Math.Clamp(
+        reversedBuffer.duration * 1_000,
+        UFO_MIN_ARRIVAL_DURATION_MS,
+        UFO_MAX_ARRIVAL_DURATION_MS,
+      );
+    }
+
+    this.sound.play(UFO_ARRIVE_AND_STOP_SOUND_KEY, {
+      volume: UFO_SOUND_VOLUME * this.audioSettings.transition,
+    });
+    return UFO_DEFAULT_DEPARTURE_DURATION_MS;
+  }
+
+  private setDodoCaptureAlpha(alpha: number): void {
+    this.player.setAlpha(alpha);
+    this.leftWing.setAlpha(alpha);
+    this.rightWing.setAlpha(alpha);
+    this.groundFeet.setAlpha(alpha);
+    this.flightFeet.setAlpha(alpha);
+
+    for (const image of this.cosmeticImages.values()) {
+      image.setAlpha(alpha);
+    }
+
+    for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+      fallbackText.setAlpha(alpha);
+    }
+  }
+
+  private setDodoCaptureVisibility(visible: boolean): void {
+    this.player.setVisible(visible);
+    this.leftWing.setVisible(visible);
+    this.rightWing.setVisible(visible);
+    this.groundFeet.setVisible(visible);
+    this.flightFeet.setVisible(visible);
+
+    for (const image of this.cosmeticImages.values()) {
+      image.setVisible(visible && image.alpha > 0);
+    }
+
+    for (const fallbackText of this.cosmeticFallbackTexts.values()) {
+      fallbackText.setVisible(visible && fallbackText.alpha > 0);
+    }
   }
 
   private getSpaceFatigueProgress(): number {
@@ -6300,7 +7122,7 @@ export class GameplayScene extends Phaser.Scene {
     amount = 1,
     reason: PlayerDamageReason = 'obstacle',
   ): Promise<void> {
-    if (this.gameOver) {
+    if (this.gameOver || this.ufoEndingState !== 'idle') {
       return;
     }
 

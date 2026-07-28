@@ -78,6 +78,10 @@ import {
   showRewardedAd,
 } from './services/adService';
 import {
+  purchaseWatermelonPack,
+  type WatermelonPackId,
+} from './services/purchaseService';
+import {
   getShopItemImagePath,
   SHOP_CATEGORY_OPTIONS,
   SHOP_ITEMS,
@@ -188,8 +192,23 @@ const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
 const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
 const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
 const MENU_BUTTON_SOUND_PATH = '/assets/menu/sounds/button.mp3';
+const STORY_INTRO_IMAGE_PATH = '/assets/story/intro.png';
+const STORY_INTRO_STORAGE_KEY = 'flydodo.story-intro-seen.v2';
+const STORY_INTRO_PANEL_COUNT = 6;
+const STORY_INTRO_PANEL_DURATION_MS = 5_200;
+const END_STORY_IMAGES = [
+  '/assets/story/End1.png',
+  '/assets/story/End2.png',
+  '/assets/story/End3.png',
+] as const;
+const END_STORY_PANEL_DURATION_MS = 4_800;
 const GAME_MUSIC_PATH = '/assets/sounds/musique.mp3';
 const GAME_MUSIC_VOLUME = 0.5;
+const SPACE_MUSIC_FILTER_START_ALTITUDE = 7_000;
+const SPACE_MUSIC_FILTER_END_ALTITUDE = 7_500;
+const SPACE_MUSIC_NORMAL_CUTOFF_HZ = 20_000;
+const SPACE_MUSIC_MUFFLED_CUTOFF_HZ = 520;
+const SPACE_MUSIC_MUFFLED_VOLUME_MULTIPLIER = 0.62;
 const GAME_OVER_DEATH_IMAGES: Record<PlayerDeathReason, string> = {
   default: '/assets/ui/GameOver/deadByOther.png',
   obstacle: '/assets/ui/GameOver/deadByOther.png',
@@ -197,6 +216,7 @@ const GAME_OVER_DEATH_IMAGES: Record<PlayerDeathReason, string> = {
   lava: '/assets/ui/GameOver/deadLava.png',
   lightning: '/assets/ui/GameOver/deadLightning.png',
   space: '/assets/dodo/SpriteDodo/degats/deadSpace.png',
+  ufo: '/assets/dodo/SpriteDodo/degats/alien.png',
 };
 const MENU_POP_SOUND_DELAYS_MS = [180, 760, 1280, 1390] as const;
 const MAIN_MENU_CLICK_DELAY_MS = 140;
@@ -247,7 +267,7 @@ const SHOP_OBJECT_SLOTS: ReadonlyArray<{
 ] as const;
 
 const WATERMELON_PACKS: ReadonlyArray<{
-  id: string;
+  id: WatermelonPackId;
   title: string;
   amount: string;
   price: string;
@@ -509,6 +529,14 @@ function AudioOptionsPanel({
 }
 
 export default function App(): React.JSX.Element {
+  const [isStoryIntroOpen, setIsStoryIntroOpen] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem(STORY_INTRO_STORAGE_KEY) !== 'true',
+  );
+  const [storyIntroPanel, setStoryIntroPanel] = useState(0);
+  const [isEndStoryOpen, setIsEndStoryOpen] = useState(false);
+  const [endStoryPanel, setEndStoryPanel] = useState(0);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
   const [clickedMainMenuButton, setClickedMainMenuButton] =
     useState<MainMenuButton | null>(null);
@@ -563,6 +591,8 @@ export default function App(): React.JSX.Element {
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [pendingShopObjectId, setPendingShopObjectId] =
     useState<ShopObjectId | null>(null);
+  const [pendingWatermelonPackId, setPendingWatermelonPackId] =
+    useState<WatermelonPackId | null>(null);
   const [pendingTalentAction, setPendingTalentAction] = useState<string | null>(
     null,
   );
@@ -584,6 +614,8 @@ export default function App(): React.JSX.Element {
   const blueTalentSheetCloseTimerRef = useRef<number | null>(null);
   const menuMusicRef = useRef<HTMLAudioElement | null>(null);
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
+  const gameMusicSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gameMusicFilterRef = useRef<BiquadFilterNode | null>(null);
   const audioSettingsRef = useRef(audioSettings);
   const menuPopTimersRef = useRef<number[]>([]);
   const mainMenuActionTimerRef = useRef<number | null>(null);
@@ -610,6 +642,76 @@ export default function App(): React.JSX.Element {
     void sound.play().catch(() => undefined);
   };
 
+  const getSpaceMusicEffect = (
+    currentAltitude: number,
+  ): { cutoff: number; volumeMultiplier: number } => {
+    const rawProgress =
+      (currentAltitude - SPACE_MUSIC_FILTER_START_ALTITUDE) /
+      (SPACE_MUSIC_FILTER_END_ALTITUDE -
+        SPACE_MUSIC_FILTER_START_ALTITUDE);
+    const progress = Math.max(0, Math.min(1, rawProgress));
+    const smoothProgress = progress * progress * (3 - 2 * progress);
+    const cutoff =
+      SPACE_MUSIC_NORMAL_CUTOFF_HZ *
+      Math.pow(
+        SPACE_MUSIC_MUFFLED_CUTOFF_HZ /
+          SPACE_MUSIC_NORMAL_CUTOFF_HZ,
+        smoothProgress,
+      );
+
+    return {
+      cutoff,
+      volumeMultiplier:
+        1 -
+        smoothProgress * (1 - SPACE_MUSIC_MUFFLED_VOLUME_MULTIPLIER),
+    };
+  };
+
+  const ensureGameMusicFilter = (
+    music: HTMLAudioElement,
+  ): BiquadFilterNode | null => {
+    if (gameMusicFilterRef.current) {
+      return gameMusicFilterRef.current;
+    }
+
+    try {
+      const context = getInterfaceAudioContext();
+      const source = context.createMediaElementSource(music);
+      const filter = context.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = 0.85;
+      source.connect(filter);
+      filter.connect(context.destination);
+      gameMusicSourceRef.current = source;
+      gameMusicFilterRef.current = filter;
+      return filter;
+    } catch {
+      return null;
+    }
+  };
+
+  const applySpaceMusicEffect = (
+    music: HTMLAudioElement,
+    currentAltitude: number,
+  ): void => {
+    const { cutoff, volumeMultiplier } =
+      getSpaceMusicEffect(currentAltitude);
+    music.volume =
+      GAME_MUSIC_VOLUME *
+      audioSettingsRef.current.music *
+      volumeMultiplier;
+
+    const filter = ensureGameMusicFilter(music);
+    const context = interfaceAudioContextRef.current;
+
+    if (!filter || !context) {
+      return;
+    }
+
+    filter.frequency.cancelScheduledValues(context.currentTime);
+    filter.frequency.setTargetAtTime(cutoff, context.currentTime, 0.18);
+  };
+
   const startGameMusic = (): void => {
     let music = gameMusicRef.current;
 
@@ -617,11 +719,14 @@ export default function App(): React.JSX.Element {
       music = new Audio(GAME_MUSIC_PATH);
       music.loop = true;
       music.preload = 'auto';
-      music.volume = GAME_MUSIC_VOLUME * audioSettingsRef.current.music;
       gameMusicRef.current = music;
     }
 
-    music.volume = GAME_MUSIC_VOLUME * audioSettingsRef.current.music;
+    applySpaceMusicEffect(music, altitude);
+    const context = interfaceAudioContextRef.current;
+    if (context?.state === 'suspended') {
+      void context.resume().catch(() => undefined);
+    }
     music.pause();
     music.currentTime = 0;
     void music.play().catch(() => undefined);
@@ -757,6 +862,41 @@ export default function App(): React.JSX.Element {
   }, [language]);
 
   useEffect(() => {
+    if (!isStoryIntroOpen) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (storyIntroPanel >= STORY_INTRO_PANEL_COUNT - 1) {
+        window.localStorage.setItem(STORY_INTRO_STORAGE_KEY, 'true');
+        setIsStoryIntroOpen(false);
+        return;
+      }
+
+      setStoryIntroPanel((currentPanel) => currentPanel + 1);
+    }, STORY_INTRO_PANEL_DURATION_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [isStoryIntroOpen, storyIntroPanel]);
+
+  useEffect(() => {
+    if (!isEndStoryOpen) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (endStoryPanel >= END_STORY_IMAGES.length - 1) {
+        setIsEndStoryOpen(false);
+        return;
+      }
+
+      setEndStoryPanel((currentPanel) => currentPanel + 1);
+    }, END_STORY_PANEL_DURATION_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [endStoryPanel, isEndStoryOpen]);
+
+  useEffect(() => {
     audioSettingsRef.current = audioSettings;
 
     if (menuMusicRef.current) {
@@ -764,9 +904,9 @@ export default function App(): React.JSX.Element {
     }
 
     if (gameMusicRef.current) {
-      gameMusicRef.current.volume = GAME_MUSIC_VOLUME * audioSettings.music;
+      applySpaceMusicEffect(gameMusicRef.current, altitude);
     }
-  }, [audioSettings]);
+  }, [altitude, audioSettings]);
 
   useEffect(() => {
     void initializeAds();
@@ -812,6 +952,11 @@ export default function App(): React.JSX.Element {
       const { reason } = (event as CustomEvent<PlayerDiedDetail>).detail;
       setPlayerDeathReason(reason);
       setIsGamePaused(false);
+
+      if (reason === 'ufo') {
+        setEndStoryPanel(0);
+        setIsEndStoryOpen(true);
+      }
 
       const gameMusic = gameMusicRef.current;
 
@@ -1036,6 +1181,10 @@ export default function App(): React.JSX.Element {
 
       if (gameMusic) {
         gameMusic.pause();
+        gameMusicSourceRef.current?.disconnect();
+        gameMusicFilterRef.current?.disconnect();
+        gameMusicSourceRef.current = null;
+        gameMusicFilterRef.current = null;
         gameMusic.removeAttribute('src');
         gameMusic.load();
         gameMusicRef.current = null;
@@ -1051,6 +1200,8 @@ export default function App(): React.JSX.Element {
   const resetRunState = (): void => {
     setIsShopOpen(false);
     setIsGameOver(false);
+    setIsEndStoryOpen(false);
+    setEndStoryPanel(0);
     setPlayerDeathReason('default');
     setFallSeconds(null);
     setWarningReason('fall');
@@ -1453,11 +1604,50 @@ export default function App(): React.JSX.Element {
     }
   };
 
-  const handleWatermelonPackAction = (
+  const handleWatermelonPackAction = async (
     pack: (typeof WATERMELON_PACKS)[number],
-  ): void => {
-    playInterfaceSound(SHOP_BUY_SOUND_PATH);
-    setShopNotice(t('shop.paymentSoon', { amount: pack.amount }));
+  ): Promise<void> => {
+    if (pendingWatermelonPackId) {
+      return;
+    }
+
+    setPendingWatermelonPackId(pack.id);
+    setShopNotice(null);
+
+    try {
+      const result = await purchaseWatermelonPack(pack.id);
+
+      if (result.status === 'cancelled') {
+        setShopNotice(t('shop.paymentCancelled'));
+        return;
+      }
+
+      if (result.status === 'unavailable') {
+        playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+        setShopNotice(t('shop.paymentUnavailable'));
+        return;
+      }
+
+      if (result.status === 'failed') {
+        playInterfaceSound(SHOP_ERROR_SOUND_PATH);
+        setShopNotice(t('shop.paymentFailed'));
+        return;
+      }
+
+      const profile = await addWatermelons(Number(pack.amount));
+      setPlayerProfile(profile);
+      playInterfaceSound(SHOP_BUY_SOUND_PATH);
+      setShopNotice(
+        t(
+          result.simulated
+            ? 'shop.paymentSimulated'
+            : 'shop.paymentSuccessful',
+          { amount: pack.amount },
+        ),
+      );
+    } finally {
+      setPendingWatermelonPackId(null);
+    }
   };
 
   const selectControlTalent = (target: SelectedControlTalent): void => {
@@ -2083,6 +2273,33 @@ export default function App(): React.JSX.Element {
     setTutorialStep(null);
   };
 
+  const finishStoryIntro = (): void => {
+    window.localStorage.setItem(STORY_INTRO_STORAGE_KEY, 'true');
+    setIsStoryIntroOpen(false);
+  };
+
+  const advanceStoryIntro = (): void => {
+    if (storyIntroPanel >= STORY_INTRO_PANEL_COUNT - 1) {
+      finishStoryIntro();
+      return;
+    }
+
+    setStoryIntroPanel((currentPanel) => currentPanel + 1);
+  };
+
+  const finishEndStory = (): void => {
+    setIsEndStoryOpen(false);
+  };
+
+  const advanceEndStory = (): void => {
+    if (endStoryPanel >= END_STORY_IMAGES.length - 1) {
+      finishEndStory();
+      return;
+    }
+
+    setEndStoryPanel((currentPanel) => currentPanel + 1);
+  };
+
   return (
     <main className="app-shell">
       {!isMainMenuOpen && (
@@ -2133,6 +2350,164 @@ export default function App(): React.JSX.Element {
           >
             <span aria-hidden="true">⚙</span>
           </button>
+        </section>
+      )}
+
+      {isStoryIntroOpen && (
+        <section
+          className="story-intro"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('story.title')}
+          onClick={advanceStoryIntro}
+        >
+          <div className="story-intro__ambient-glow" aria-hidden="true" />
+
+          <header className="story-intro__header">
+            <p>{t('story.eyebrow')}</p>
+            <h1>{t('story.title')}</h1>
+          </header>
+
+          <button
+            type="button"
+            className="story-intro__skip"
+            onClick={(event) => {
+              event.stopPropagation();
+              finishStoryIntro();
+            }}
+          >
+            {t('story.skip')}
+          </button>
+
+          <div
+            className="story-intro__panel"
+            key={storyIntroPanel}
+            role="img"
+            aria-label={t('story.panel', {
+              current: storyIntroPanel + 1,
+              total: STORY_INTRO_PANEL_COUNT,
+            })}
+          >
+            <div
+              className={`story-intro__panel-art story-intro__panel-art--${storyIntroPanel}`}
+              style={
+                {
+                  '--story-intro-image': `url("${STORY_INTRO_IMAGE_PATH}")`,
+                } as CSSProperties
+              }
+            />
+            <div className="story-intro__shine" aria-hidden="true" />
+          </div>
+
+          <div className="story-intro__footer">
+            <div className="story-intro__progress" aria-hidden="true">
+              {Array.from({ length: STORY_INTRO_PANEL_COUNT }, (_, index) => (
+                <span
+                  className={
+                    index < storyIntroPanel
+                      ? 'is-complete'
+                      : index === storyIntroPanel
+                        ? 'is-active'
+                        : ''
+                  }
+                  key={index}
+                />
+              ))}
+            </div>
+
+            <p>{t('story.tap')}</p>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                advanceStoryIntro();
+              }}
+            >
+              {t(
+                storyIntroPanel === STORY_INTRO_PANEL_COUNT - 1
+                  ? 'story.start'
+                  : 'story.next',
+              )}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {isEndStoryOpen && !isStoryIntroOpen && (
+        <section
+          className="story-intro story-ending"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('story.endTitle')}
+          onClick={advanceEndStory}
+        >
+          <div className="story-intro__ambient-glow" aria-hidden="true" />
+
+          <header className="story-intro__header">
+            <p>{t('story.endEyebrow')}</p>
+            <h1>{t('story.endTitle')}</h1>
+          </header>
+
+          <button
+            type="button"
+            className="story-intro__skip"
+            onClick={(event) => {
+              event.stopPropagation();
+              finishEndStory();
+            }}
+          >
+            {t('story.skip')}
+          </button>
+
+          <div
+            className="story-intro__panel story-ending__panel"
+            key={endStoryPanel}
+            role="img"
+            aria-label={t('story.panel', {
+              current: endStoryPanel + 1,
+              total: END_STORY_IMAGES.length,
+            })}
+          >
+            <img
+              className="story-ending__image"
+              src={END_STORY_IMAGES[endStoryPanel]}
+              alt=""
+              aria-hidden="true"
+            />
+            <div className="story-intro__shine" aria-hidden="true" />
+          </div>
+
+          <div className="story-intro__footer">
+            <div className="story-intro__progress" aria-hidden="true">
+              {END_STORY_IMAGES.map((image, index) => (
+                <span
+                  className={
+                    index < endStoryPanel
+                      ? 'is-complete'
+                      : index === endStoryPanel
+                        ? 'is-active'
+                        : ''
+                  }
+                  key={image}
+                />
+              ))}
+            </div>
+
+            <p>{t('story.tap')}</p>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                advanceEndStory();
+              }}
+            >
+              {t(
+                endStoryPanel === END_STORY_IMAGES.length - 1
+                  ? 'story.seeEnding'
+                  : 'story.next',
+              )}
+            </button>
+          </div>
         </section>
       )}
 
@@ -2309,7 +2684,7 @@ export default function App(): React.JSX.Element {
         </section>
       )}
 
-      {!isMainMenuOpen && isGameOver && !isShopOpen && (
+      {!isMainMenuOpen && isGameOver && !isShopOpen && !isEndStoryOpen && (
         <section
           className={`game-over${
             playerDeathReason === 'space' ? ' game-over--space' : ''
@@ -2326,7 +2701,19 @@ export default function App(): React.JSX.Element {
             >
               <span aria-hidden="true">⚙</span>
             </button>
-            <h1>{t('gameOver.title')}</h1>
+            <h1
+              className={
+                playerDeathReason === 'ufo'
+                  ? 'game-over__victory-title'
+                  : undefined
+              }
+            >
+              {t(
+                playerDeathReason === 'ufo'
+                  ? 'gameOver.victoryTitle'
+                  : 'gameOver.title',
+              )}
+            </h1>
 
             <img
               className={`game-over__death-visual game-over__death-visual--${playerDeathReason}`}
@@ -2350,7 +2737,9 @@ export default function App(): React.JSX.Element {
             </div>
 
             <div className="game-over__actions">
-              {!hasUsedRewardedRevive && playerDeathReason !== 'space' && (
+              {!hasUsedRewardedRevive &&
+                playerDeathReason !== 'space' &&
+                playerDeathReason !== 'ufo' && (
                 <button
                   type="button"
                   className="game-over__revive-button"
@@ -2723,9 +3112,11 @@ export default function App(): React.JSX.Element {
                         <button
                           type="button"
                           className="watermelon-pack-card__button"
-                          onClick={() => handleWatermelonPackAction(pack)}
+                          aria-label={`${t('common.buy')} ${pack.amount} ${t('shop.watermelons')}`}
+                          disabled={pendingWatermelonPackId !== null}
+                          onClick={() => void handleWatermelonPackAction(pack)}
                         >
-                          {pack.price}
+                          {pendingWatermelonPackId === pack.id ? '...' : pack.price}
                         </button>
                       </article>
                     ))}

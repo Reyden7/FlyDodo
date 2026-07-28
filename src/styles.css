@@ -49,6 +49,320 @@ button {
   isolation: isolate;
 }
 
+.story-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  grid-template-rows: minmax(88px, 14dvh) minmax(0, 1fr) minmax(120px, 19dvh);
+  place-items: center;
+  overflow: hidden;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    14px
+    max(18px, env(safe-area-inset-bottom));
+  color: #fff7d6;
+  background:
+    radial-gradient(circle at 50% 38%, rgb(63 137 173 / 42%), transparent 46%),
+    linear-gradient(180deg, #071a2b 0%, #102f3d 50%, #07131e 100%);
+  isolation: isolate;
+}
+
+.story-intro__ambient-glow {
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 18% 22%, rgb(255 146 50 / 18%), transparent 25%),
+    radial-gradient(circle at 82% 74%, rgb(109 210 255 / 15%), transparent 26%);
+  animation: story-intro-ambient 6s ease-in-out infinite alternate;
+}
+
+.story-intro__header {
+  align-self: start;
+  text-align: center;
+  filter: drop-shadow(0 4px 3px rgb(0 0 0 / 55%));
+}
+
+.story-intro__header p,
+.story-intro__header h1,
+.story-intro__footer p {
+  margin: 0;
+}
+
+.story-intro__header p {
+  color: #ffc95e;
+  font-size: clamp(0.67rem, 2.8vw, 0.92rem);
+  font-weight: 1000;
+  letter-spacing: 0.15em;
+}
+
+.story-intro__header h1 {
+  margin-top: 4px;
+  font-size: clamp(1.45rem, 6.5vw, 2.6rem);
+  font-weight: 1000;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  text-shadow:
+    0 3px 0 #85420d,
+    0 6px 7px rgb(0 0 0 / 55%);
+}
+
+.story-intro__skip {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: 14px;
+  padding: 7px 11px;
+  border: 1px solid rgb(255 237 184 / 55%);
+  border-radius: 999px;
+  color: #fff4d1;
+  background: rgb(3 14 24 / 58%);
+  box-shadow: 0 3px 9px rgb(0 0 0 / 32%);
+  font-size: 0.7rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.story-intro__panel {
+  position: relative;
+  width: min(94vw, 620px);
+  max-height: 62dvh;
+  aspect-ratio: 1.12;
+  align-self: center;
+  overflow: hidden;
+  border: clamp(4px, 1.4vw, 8px) solid #f8e3b0;
+  border-radius: 11px;
+  background: #e7d9b7;
+  box-shadow:
+    0 0 0 3px #16120d,
+    0 14px 30px rgb(0 0 0 / 62%),
+    0 0 32px rgb(94 198 255 / 18%);
+  animation: story-intro-panel-enter 540ms cubic-bezier(0.18, 0.9, 0.24, 1.08)
+    both;
+}
+
+.story-intro__panel-art {
+  position: absolute;
+  inset: 0;
+  background-image: var(--story-intro-image);
+  background-repeat: no-repeat;
+  background-size: 200% 300%;
+  animation: story-intro-camera 5.2s ease-out both;
+  will-change: transform;
+}
+
+.story-intro__panel-art--0 {
+  background-position: 0% 0%;
+  --story-pan-x: -0.24%;
+  --story-pan-y: -0.16%;
+}
+
+.story-intro__panel-art--1 {
+  background-position: 100% 0%;
+  --story-pan-x: 0.24%;
+  --story-pan-y: -0.16%;
+}
+
+.story-intro__panel-art--2 {
+  background-position: 0% 50%;
+  --story-pan-x: -0.16%;
+  --story-pan-y: 0.16%;
+}
+
+.story-intro__panel-art--3 {
+  background-position: 100% 50%;
+  --story-pan-x: 0.16%;
+  --story-pan-y: 0.16%;
+}
+
+.story-intro__panel-art--4 {
+  background-position: 0% 100%;
+  --story-pan-x: -0.24%;
+  --story-pan-y: -0.16%;
+}
+
+.story-intro__panel-art--5 {
+  background-position: 100% 100%;
+  --story-pan-x: 0.24%;
+  --story-pan-y: -0.16%;
+}
+
+.story-intro__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    112deg,
+    transparent 25%,
+    rgb(255 255 255 / 13%) 44%,
+    transparent 61%
+  );
+  transform: translateX(-130%);
+  animation: story-intro-shine 1.1s ease-out 380ms both;
+  pointer-events: none;
+}
+
+.story-ending {
+  background:
+    radial-gradient(circle at 50% 40%, rgb(96 71 173 / 46%), transparent 48%),
+    linear-gradient(180deg, #070d25 0%, #171943 52%, #080c1f 100%);
+}
+
+.story-ending__panel {
+  background: #17152c;
+  box-shadow:
+    0 0 0 3px #16120d,
+    0 14px 30px rgb(0 0 0 / 66%),
+    0 0 38px rgb(134 107 255 / 28%);
+}
+
+.story-ending__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: story-ending-camera 4.8s ease-out both;
+  will-change: filter, transform;
+}
+
+.story-ending .story-intro__progress span.is-active::after {
+  animation-duration: 4.8s;
+}
+
+.story-intro__footer {
+  display: grid;
+  width: min(92vw, 470px);
+  align-self: end;
+  justify-items: center;
+  gap: 9px;
+}
+
+.story-intro__progress {
+  display: flex;
+  width: 100%;
+  gap: 7px;
+}
+
+.story-intro__progress span {
+  position: relative;
+  height: 5px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 20%);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.story-intro__progress span::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff9d21, #ffe279);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.story-intro__progress span.is-complete::after {
+  transform: scaleX(1);
+}
+
+.story-intro__progress span.is-active::after {
+  animation: story-intro-progress 5.2s linear both;
+}
+
+.story-intro__footer p {
+  color: rgb(255 247 220 / 78%);
+  font-size: clamp(0.7rem, 2.8vw, 0.88rem);
+  font-weight: 750;
+}
+
+.story-intro__footer button {
+  min-width: min(72vw, 310px);
+  padding: 11px 22px;
+  border: 2px solid #ffe99b;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(#22c0ea, #0879bf 54%, #07518e);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 58%),
+    0 4px 0 #063b68,
+    0 8px 16px rgb(0 0 0 / 38%);
+  font-size: clamp(0.82rem, 3.5vw, 1.05rem);
+  font-weight: 1000;
+  cursor: pointer;
+}
+
+.story-intro__footer button:active,
+.story-intro__skip:active {
+  transform: translateY(2px) scale(0.98);
+}
+
+@keyframes story-intro-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.88) rotate(-1.5deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+
+@keyframes story-intro-camera {
+  from {
+    filter: brightness(0.94) saturate(0.94);
+    transform: translate(0, 0) scale(1);
+  }
+
+  to {
+    filter: brightness(1.03) saturate(1.06);
+    transform:
+      translate(var(--story-pan-x), var(--story-pan-y))
+      scale(1.008);
+  }
+}
+
+@keyframes story-intro-shine {
+  to {
+    transform: translateX(130%);
+  }
+}
+
+@keyframes story-ending-camera {
+  from {
+    filter: brightness(0.86) saturate(0.88);
+    transform: scale(1.04) rotate(-0.4deg);
+  }
+
+  to {
+    filter: brightness(1.05) saturate(1.08);
+    transform: scale(1.11) rotate(0.35deg);
+  }
+}
+
+@keyframes story-intro-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes story-intro-ambient {
+  to {
+    transform: translate3d(2%, -1.5%, 0) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-intro__ambient-glow,
+  .story-intro__panel,
+  .story-intro__panel-art,
+  .story-ending__image,
+  .story-intro__shine {
+    animation: none;
+  }
+}
+
 .game-canvas {
   position: absolute;
   inset: 0;
@@ -929,6 +1243,16 @@ button {
   transform: rotate(-2deg);
 }
 
+.game-over__card .game-over__victory-title {
+  top: 20.5%;
+  right: 8%;
+  left: 8%;
+  font-size: clamp(1.55rem, 7.2vw, 2.65rem);
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  transform: rotate(-1deg);
+}
+
 .game-over__card p {
   margin: 0;
   font-weight: 800;
@@ -979,6 +1303,15 @@ button {
   height: 23%;
   border-radius: 12%;
   filter: drop-shadow(0 7px 7px rgb(5 20 45 / 34%));
+}
+
+.game-over__death-visual--ufo {
+  top: 33%;
+  left: 22%;
+  width: 56%;
+  height: 21%;
+  border-radius: 14%;
+  filter: drop-shadow(0 7px 7px rgb(90 48 8 / 30%));
 }
 
 .game-over__stats {
@@ -1894,17 +2227,33 @@ button {
   background-size: contain;
 
   box-shadow: none;
-  color: transparent;
-  font-size: 0;
+  color: #fff8e8;
   cursor: pointer;
   filter: drop-shadow(0 4px 2px rgb(55 27 5 / 22%));
   -webkit-tap-highlight-color: transparent;
 }
 
 
-.shop-main-tab--watermelons img,
-.shop-main-tab--watermelons span {
+.shop-main-tab--watermelons img {
   display: none;
+}
+
+.shop-main-tab--watermelons span {
+  display: flex;
+  width: 72%;
+  height: 100%;
+  margin-left: 25%;
+  padding: 3px 4px 5px 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: clamp(0.55rem, 1.85vw, 0.72rem);
+  font-weight: 1000;
+  line-height: 0.95;
+  text-align: center;
+  text-shadow:
+    0 1px 0 rgb(91 20 25 / 95%),
+    0 2px 2px rgb(56 8 13 / 65%);
 }
 
 .shop-main-tab--watermelons.is-active,
@@ -2443,6 +2792,12 @@ button {
     inset 0 1px 0 rgb(255 255 255 / 30%),
     0 2px 0 #24570a,
     0 4px 7px rgb(58 30 5 / 16%);
+}
+
+.watermelon-pack-card__button:disabled {
+  cursor: wait;
+  filter: grayscale(0.35);
+  opacity: 0.72;
 }
 
 .watermelon-shop__note {
