@@ -4,6 +4,8 @@ dist
 *.local
 *.jks
 *.keystore
+flydodo-*.json
+*service-account*.json
 .idea
 .vscode/*
 !.vscode/extensions.json

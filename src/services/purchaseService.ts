@@ -3,6 +3,7 @@ import {
   PRODUCT_CATEGORY,
   PURCHASES_ERROR_CODE,
   Purchases,
+  type CustomerInfo,
   type PurchasesError,
 } from '@revenuecat/purchases-capacitor';
 
@@ -26,6 +27,7 @@ export const WATERMELON_PRODUCT_IDS: Readonly<
 };
 
 export const FULL_GAME_PRODUCT_ID = 'flydodo_full_game';
+export const FULL_GAME_ENTITLEMENT_ID = 'full_game';
 
 export type StorePurchaseResult =
   | { status: 'purchased'; simulated: boolean }
@@ -44,6 +46,13 @@ function isPurchasesError(error: unknown): error is PurchasesError {
     error !== null &&
     'code' in error &&
     typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+function hasFullGameEntitlement(customerInfo: CustomerInfo): boolean {
+  return (
+    customerInfo.entitlements.active[FULL_GAME_ENTITLEMENT_ID]?.isActive ===
+    true
   );
 }
 
@@ -132,7 +141,15 @@ export async function purchaseFullGame(): Promise<StorePurchaseResult> {
       return { status: 'unavailable' };
     }
 
-    await Purchases.purchaseStoreProduct({ product });
+    const { customerInfo } = await Purchases.purchaseStoreProduct({ product });
+
+    if (!hasFullGameEntitlement(customerInfo)) {
+      console.error(
+        `L'achat a réussi, mais l'entitlement RevenueCat "${FULL_GAME_ENTITLEMENT_ID}" n'est pas actif.`,
+      );
+      return { status: 'failed' };
+    }
+
     return { status: 'purchased', simulated: false };
   } catch (error) {
     if (
@@ -153,10 +170,15 @@ export async function restoreFullGamePurchase(): Promise<boolean> {
   }
 
   try {
-    const { customerInfo } = await Purchases.restorePurchases();
-    return customerInfo.allPurchasedProductIdentifiers.includes(
-      FULL_GAME_PRODUCT_ID,
-    );
+    const { customerInfo } = await Purchases.getCustomerInfo();
+
+    if (hasFullGameEntitlement(customerInfo)) {
+      return true;
+    }
+
+    const { customerInfo: restoredCustomerInfo } =
+      await Purchases.restorePurchases();
+    return hasFullGameEntitlement(restoredCustomerInfo);
   } catch (error) {
     console.warn("Impossible de restaurer l'achat du jeu complet.", error);
     return false;
