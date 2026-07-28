@@ -46,7 +46,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
   {
     id: 'heart',
     title: 'Coeur',
-    icon: '/assets/competences/Endurance/coeur.png',
+    icon: '/assets/competences/Endurance/coeur.webp',
     description: 'Ajoute une vie au dodo pour survivre plus longtemps.',
     levels: [2, 3, 4],
     costs: [10, 25, 40],
@@ -55,7 +55,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
   {
     id: 'regeneration',
     title: 'Regeneration',
-    icon: '/assets/competences/Endurance/Regen.png',
+    icon: '/assets/competences/Endurance/Regen.webp',
     description:
       'Regagne une vie apres 7 secondes sans subir de degats.',
     levels: [1],
@@ -70,7 +70,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
   {
     id: 'shield',
     title: 'Bouclier',
-    icon: '/assets/competences/Endurance/bouclier.png',
+    icon: '/assets/competences/Endurance/bouclier.webp',
     description:
       'Ajoute un bouclier qui bloque les moustiques du niveau Forest.',
     levels: [1],
@@ -85,7 +85,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
   {
     id: 'recharge',
     title: 'Recharge',
-    icon: '/assets/competences/Endurance/Recharge.png',
+    icon: '/assets/competences/Endurance/Recharge.webp',
     description:
       'Repare le bouclier 10 secondes apres sa destruction.',
     levels: [1],
@@ -102,7 +102,7 @@ export const ENDURANCE_TALENTS: readonly EnduranceTalentDefinition[] = [
 export const ENDURANCE_PHOENIX_TALENT = {
   id: 'phoenix',
   title: 'Phoenix',
-  icon: '/assets/competences/Endurance/phoenix.png',
+  icon: '/assets/competences/Endurance/phoenix.webp',
   description:
     'Une fois par partie, le dodo renait la ou il est mort avec ses vies et son bouclier.',
   cost: ENDURANCE_PHOENIX_COST,

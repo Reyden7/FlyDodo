@@ -383,8 +383,8 @@ button {
   inset: 0;
   z-index: 5;
   background:
-    url("/assets/Decors/ground.png") center bottom / auto 31% no-repeat,
-    url("/assets/Decors/bg-segments/bg_19.png") center / cover no-repeat,
+    url("/assets/Decors/ground.webp") center bottom / auto 31% no-repeat,
+    url("/assets/Decors/bg-segments/bg_19.webp") center / cover no-repeat,
     #73d8ff;
   opacity: 1;
   pointer-events: none;
@@ -408,7 +408,7 @@ button {
     max(18px, env(safe-area-inset-top))
     18px
     max(28px, env(safe-area-inset-bottom));
-  background: url("/assets/menu/bg.png") center / cover no-repeat;
+  background: url("/assets/menu/bg.webp") center / cover no-repeat;
 }
 
 .main-menu__title {
@@ -416,7 +416,7 @@ button {
   height: min(45vw, 230px);
   align-self: start;
   margin-top: clamp(10px, 3.8dvh, 34px);
-  background: url("/assets/menu/titre.png") top center / 100% auto no-repeat;
+  background: url("/assets/menu/titre.webp") top center / 100% auto no-repeat;
   filter: drop-shadow(0 8px 8px rgb(47 21 4 / 30%));
   opacity: 0;
   transform: scale(0.2);
@@ -443,13 +443,13 @@ button {
   width: min(67vw, 330px);
   aspect-ratio: 1;
   align-self: center;
-  background-image: url("/assets/menu/bt/play-normal.png");
+  background-image: url("/assets/menu/bt/play-normal.webp");
   animation: main-menu-pop 620ms cubic-bezier(0.19, 1.2, 0.28, 1) 760ms both;
 }
 
 .main-menu__button--play.is-clicked,
 .main-menu__button--play:active {
-  background-image: url("/assets/menu/bt/play-pressed.png");
+  background-image: url("/assets/menu/bt/play-pressed.webp");
   transform: scale(0.94);
 }
 
@@ -516,22 +516,22 @@ button {
 }
 
 .main-menu__button--shop {
-  background-image: url("/assets/menu/bt/shop-normal.png");
+  background-image: url("/assets/menu/bt/shop-normal.webp");
 }
 
 .main-menu__button--shop.is-clicked,
 .main-menu__button--shop:active {
-  background-image: url("/assets/menu/bt/shop-pressed.png");
+  background-image: url("/assets/menu/bt/shop-pressed.webp");
   transform: scale(0.94);
 }
 
 .main-menu__button--tutorial {
-  background-image: url("/assets/menu/bt/tuto-normal.png");
+  background-image: url("/assets/menu/bt/tuto-normal.webp");
 }
 
 .main-menu__button--tutorial.is-clicked,
 .main-menu__button--tutorial:active {
-  background-image: url("/assets/menu/bt/tuto-pressed.png");
+  background-image: url("/assets/menu/bt/tuto-pressed.webp");
   transform: scale(0.94);
 }
 
@@ -941,14 +941,14 @@ button {
   height: 74px;
   padding: 0;
   border: 0;
-  background: url("/assets/ui/bt/shop-normal.png") center / contain no-repeat;
+  background: url("/assets/ui/bt/shop-normal.webp") center / contain no-repeat;
   cursor: pointer;
   filter: drop-shadow(0 7px 7px rgb(35 68 84 / 26%));
   -webkit-tap-highlight-color: transparent;
 }
 
 .floating-shop-button:active {
-  background-image: url("/assets/ui/bt/shop-clicked.png");
+  background-image: url("/assets/ui/bt/shop-clicked.webp");
   transform: translateY(2px);
   filter: drop-shadow(0 4px 5px rgb(35 68 84 / 22%));
 }
@@ -1094,7 +1094,7 @@ button {
   color: #482006;
   background:
     linear-gradient(rgb(255 241 190 / 88%), rgb(255 221 137 / 88%)),
-    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+    url("/assets/ui/bg-tuile-accessoire.webp") center / cover;
   box-shadow:
     inset 0 0 0 3px #fff1ae,
     0 8px 0 #6d3b0c,
@@ -1203,7 +1203,7 @@ button {
   padding: 0;
   border: 0;
   color: #12365a;
-  background: url("/assets/ui/GameOver/bg.png") center / 100% 100% no-repeat;
+  background: url("/assets/ui/GameOver/bg.webp") center / 100% 100% no-repeat;
   filter: drop-shadow(0 18px 24px rgb(0 0 0 / 42%));
   text-align: center;
   animation: game-over-card-drop 680ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
@@ -1412,11 +1412,11 @@ button {
 }
 
 .game-over__replay-button {
-  background-image: url("/assets/ui/GameOver/bt-rejouer-normal.png");
+  background-image: url("/assets/ui/GameOver/bt-rejouer-normal.webp");
 }
 
 .game-over__revive-button {
-  background-image: url("/assets/ui/GameOver/bt-rejouer-normal.png");
+  background-image: url("/assets/ui/GameOver/bt-rejouer-normal.webp");
   filter:
     hue-rotate(165deg)
     saturate(1.15)
@@ -1424,16 +1424,16 @@ button {
 }
 
 .game-over__revive-button:active {
-  background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.png");
+  background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.webp");
 }
 
 .game-over__replay-button:active {
-  background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.png");
+  background-image: url("/assets/ui/GameOver/bt-rejouer-clicked.webp");
 }
 
 .game-over__card .game-over__shop-button {
   color: #642900;
-  background-image: url("/assets/ui/GameOver/bt-boutique-normal.png");
+  background-image: url("/assets/ui/GameOver/bt-boutique-normal.webp");
   text-shadow: 0 2px 1px rgb(255 255 255 / 48%);
 }
 
@@ -1450,7 +1450,7 @@ button {
 }
 
 .game-over__card .game-over__shop-button:active {
-  background-image: url("/assets/ui/GameOver/bt-boutique-clicked.png");
+  background-image: url("/assets/ui/GameOver/bt-boutique-clicked.webp");
   box-shadow: none;
 }
 
@@ -2023,7 +2023,7 @@ button {
   left: 0;
   z-index: 1;
   height: 124px;
-  background: url("/assets/Decors/boutique-transistion.png") center top / cover no-repeat;
+  background: url("/assets/Decors/boutique-transistion.webp") center top / cover no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -2033,7 +2033,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: 20;
-  background: url("/assets/ui/cadre.png") center top / 100% 100% no-repeat;
+  background: url("/assets/ui/cadre.webp") center top / 100% 100% no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -2043,7 +2043,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: 20;
-  background: url("/assets/ui/cadre.png") center top / 100% 100% no-repeat;
+  background: url("/assets/ui/cadre.webp") center top / 100% 100% no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -2057,14 +2057,14 @@ button {
   height: 60px;
   padding: 0;
   border: 0;
-  background: url("/assets/ui/bt/return-normal.png") center / contain no-repeat;
+  background: url("/assets/ui/bt/return-normal.webp") center / contain no-repeat;
   cursor: pointer;
   filter: drop-shadow(0 5px 5px rgb(36 62 43 / 25%));
   -webkit-tap-highlight-color: transparent;
 }
 
 .shop-back-button:active {
-  background-image: url("/assets/ui/bt/return-clicked.png");
+  background-image: url("/assets/ui/bt/return-clicked.webp");
   transform: translateY(2px);
   filter: drop-shadow(0 3px 4px rgb(36 62 43 / 20%));
 }
@@ -2078,7 +2078,7 @@ button {
     max(16px, env(safe-area-inset-right))
     18px
     max(15px, env(safe-area-inset-left));
-  background: url("/assets/ui/shop-cadre.png") center top / 100% 100% no-repeat;
+  background: url("/assets/ui/shop-cadre.webp") center top / 100% 100% no-repeat;
   text-align: center;
 }
 
@@ -2194,26 +2194,26 @@ button {
 }
 
 .shop-main-tab--accessories {
-  background-image: url("/assets/ui/bt/multiLangue/accessoir-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/accessoir-normal.webp");
 }
 
 .shop-main-tab--accessories.is-active,
 .shop-main-tab--accessories:active {
-  background-image: url("/assets/ui/bt/multiLangue/accessoir-clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/accessoir-clicked.webp");
 }
 
 .shop-main-tab--items {
-  background-image: url("/assets/ui/bt/multiLangue/objet-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/objet-normal.webp");
 }
 
 .shop-main-tab--items.is-active,
 .shop-main-tab--items:active {
-  background-image: url("/assets/ui/bt/multiLangue/objet-clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/objet-clicked.webp");
 }
 
 .shop-main-tab--talents {
   color: #f7fbff;
-  background-image: url("/assets/ui/bt/multiLangue/competences-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/competences-normal.webp");
 }
 
 .shop-main-tab--talents .shop-main-tab__label {
@@ -2229,7 +2229,7 @@ button {
 
 .shop-main-tab--talents.is-active,
 .shop-main-tab--talents:active {
-  background-image: url("/assets/ui/bt/multiLangue/competences-clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/competences-clicked.webp");
 }
 
 .shop-main-tab--watermelons {
@@ -2239,7 +2239,7 @@ button {
   border: 0;
   border-radius: 0;
   background-color: transparent;
-  background-image: url("/assets/shopPasteque/bt-normal.png");
+  background-image: url("/assets/shopPasteque/bt-normal.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
@@ -2276,7 +2276,7 @@ button {
 
 .shop-main-tab--watermelons.is-active,
 .shop-main-tab--watermelons:active {
-  background-image: url("/assets/shopPasteque/bt-clicked.png");
+  background-image: url("/assets/shopPasteque/bt-clicked.webp");
 }
 
 .shop-main-tab--watermelons:active {
@@ -2319,7 +2319,7 @@ button {
   min-height: 63px;
   gap: 1px;
   padding: 0 20px 20px 28px;
-  background: url("/assets/ui/bg-filter.png") center / 100% 140% no-repeat;
+  background: url("/assets/ui/bg-filter.webp") center / 100% 140% no-repeat;
   text-align: center;
 }
 
@@ -2349,7 +2349,7 @@ button {
   border: 0;
   margin-bottom: -20px;
   background-color: transparent;
-  background-image: url("/assets/ui/bt/filtre-accessoire-normal.png");
+  background-image: url("/assets/ui/bt/filtre-accessoire-normal.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
@@ -2368,7 +2368,7 @@ button {
 .shop-filter__button.is-active,
 .shop-filter__button:active {
   color: #fff8d9;
-  background-image: url("/assets/ui/bt/filtre-accessoire-clicked.png");
+  background-image: url("/assets/ui/bt/filtre-accessoire-clicked.webp");
   text-shadow:
     0 2px 0 rgb(2 37 91 / 90%),
     0 0 4px rgb(72 176 255 / 55%);
@@ -2388,7 +2388,7 @@ button {
   gap: 3px;
   padding: 7px 9px 8px 12px;
   color: #ffe8a8;
-  background: url("/assets/ui/pasteque-cadre.png") center / contain no-repeat;
+  background: url("/assets/ui/pasteque-cadre.webp") center / contain no-repeat;
   text-shadow:
     0 2px 0 rgb(39 19 4 / 80%),
     0 0 6px rgb(255 218 99 / 35%);
@@ -2524,7 +2524,7 @@ button {
   z-index: 1;
   padding: 94px 16px 28px;
   background:
-    url("/assets/ui/bg-shop.png")
+    url("/assets/ui/bg-shop.webp")
     center top / calc(100% + 32px) 100%
     no-repeat;
 }
@@ -2534,7 +2534,7 @@ button {
   z-index: 1;
   padding: 38px 16px 28px;
   background:
-    url("/assets/ui/bg-shop.png")
+    url("/assets/ui/bg-shop.webp")
     center top / calc(100% + 32px) 100%
     no-repeat;
 }
@@ -2547,7 +2547,7 @@ button {
   position: relative;
   z-index: 1;
   padding: 32px 16px 28px;
-  background: url("/assets/ui/bg-shop.png") center top / 100% 100% no-repeat;
+  background: url("/assets/ui/bg-shop.webp") center top / 100% 100% no-repeat;
 }
 
 .shop-content--talents {
@@ -2578,7 +2578,7 @@ button {
   gap: 0px;
   padding: 18px 15px 20px;
   border: 0;
-  background: url("/assets/ui/bg-tuile-accessoire.png") center / 125% 100% no-repeat;
+  background: url("/assets/ui/bg-tuile-accessoire.webp") center / 125% 100% no-repeat;
   box-shadow: none;
   text-align: center;
 }
@@ -2621,7 +2621,7 @@ button {
   margin: 0 auto 1px;
   padding: 4px 12px 7px;
   color: #45280a;
-  background: url("/assets/ui/tuile-pasteque.png") center / 100% 100% no-repeat;
+  background: url("/assets/ui/tuile-pasteque.webp") center / 100% 100% no-repeat;
   text-shadow: 0 1px 0 rgb(255 242 180 / 70%);
 }
 
@@ -2643,7 +2643,7 @@ button {
   padding: 0;
   border: 0;
   color: transparent;
-  background: transparent url("/assets/ui/bt/acheter-normal.png") center / 100% 100% no-repeat;
+  background: transparent url("/assets/ui/bt/acheter-normal.webp") center / 100% 100% no-repeat;
   box-shadow: none;
   cursor: pointer;
   font-size: 0;
@@ -2653,7 +2653,7 @@ button {
 
 .shop-object-card__button:active {
   transform: translateY(2px);
-  background-image: url("/assets/ui/bt/acheter-clicked.png");
+  background-image: url("/assets/ui/bt/acheter-clicked.webp");
   filter: drop-shadow(0 1px 1px rgb(48 24 5 / 18%));
 }
 
@@ -2682,7 +2682,7 @@ button {
   padding: 0px clamp(45px, 14vw, 75px);
 
   background:
-    url("/assets/shopPasteque/panneauSansEcriture.png")
+    url("/assets/shopPasteque/panneauSansEcriture.webp")
     center / 80% 90%
     no-repeat;
 
@@ -2730,7 +2730,7 @@ button {
   min-width: 0;
   gap: 0px;
   padding: 16px 12px 18px;
-  background: url("/assets/ui/bg-tuile-accessoire.png") center / 125% 100% no-repeat;
+  background: url("/assets/ui/bg-tuile-accessoire.webp") center / 125% 100% no-repeat;
   text-align: center;
 }
 
@@ -2852,7 +2852,7 @@ button {
   color: #3b1c07;
   background:
     linear-gradient(180deg, rgb(255 246 190 / 92%), rgb(244 194 85 / 94%)),
-    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+    url("/assets/ui/bg-tuile-accessoire.webp") center / cover;
   box-shadow:
     inset 0 2px 0 rgb(255 255 255 / 55%),
     0 4px 0 #673607,
@@ -2974,7 +2974,7 @@ button {
   color: #482006;
   background:
     linear-gradient(rgb(255 241 190 / 94%), rgb(255 221 137 / 96%)),
-    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+    url("/assets/ui/bg-tuile-accessoire.webp") center / cover;
   box-shadow:
     inset 0 0 0 3px #fff1ae,
     0 7px 0 #6d3b0c,
@@ -3063,7 +3063,7 @@ button {
   color: #fff5bd;
   background:
     linear-gradient(180deg, rgb(62 73 15 / 97%), rgb(37 48 9 / 98%)),
-    url("/assets/ui/bg-tuile-accessoire.png") center / cover;
+    url("/assets/ui/bg-tuile-accessoire.webp") center / cover;
   box-shadow:
     inset 0 0 0 2px rgb(255 244 170 / 45%),
     0 6px 0 #5e3b09,
@@ -3197,32 +3197,32 @@ button {
 
 /* Contrôle */
 .talent-tree-tab--control {
-  background-image: url("/assets/competences/icon/controle-normal.png");
+  background-image: url("/assets/competences/icon/controle-normal.webp");
 }
 
 .talent-tree-tab--control.is-active,
 .talent-tree-tab--control:active {
-  background-image: url("/assets/competences/icon/controle-clicked.png");
+  background-image: url("/assets/competences/icon/controle-clicked.webp");
 }
 
 /* Endurance */
 .talent-tree-tab--endurance {
-  background-image: url("/assets/competences/icon/Endu-normal.png");
+  background-image: url("/assets/competences/icon/Endu-normal.webp");
 }
 
 .talent-tree-tab--endurance.is-active,
 .talent-tree-tab--endurance:active {
-  background-image: url("/assets/competences/icon/endu-clicled.png");
+  background-image: url("/assets/competences/icon/endu-clicled.webp");
 }
 
 /* Talents */
 .talent-tree-tab--talents {
-  background-image: url("/assets/competences/icon/talent-normal.png");
+  background-image: url("/assets/competences/icon/talent-normal.webp");
 }
 
 .talent-tree-tab--talents.is-active,
 .talent-tree-tab--talents:active {
-  background-image: url("/assets/competences/icon/talent-clicked.png");
+  background-image: url("/assets/competences/icon/talent-clicked.webp");
 }
 
 .talent-tree-tab:active {
@@ -3248,15 +3248,15 @@ button {
 }
 
 .talent-tree-stage--control {
-  background-image: url("/assets/competences/Controle/bg-controle.png");
+  background-image: url("/assets/competences/Controle/bg-controle.webp");
 }
 
 .talent-tree-stage--endurance {
-  background-image: url("/assets/competences/Endurance/bg-endurance.png");
+  background-image: url("/assets/competences/Endurance/bg-endurance.webp");
 }
 
 .talent-tree-stage--talents {
-  background-image: url("/assets/competences/Talents/bg-talent.png");
+  background-image: url("/assets/competences/Talents/bg-talent.webp");
 }
 
 .control-talent-tree {
@@ -3622,20 +3622,20 @@ button {
 }
 
 .talent-detail-sheet__buy {
-  background-image: url("/assets/ui/bt/acheter-normal.png");
+  background-image: url("/assets/ui/bt/acheter-normal.webp");
   background-size: 112px 38px;
 }
 
 .talent-detail-sheet__buy:active {
-  background-image: url("/assets/ui/bt/acheter-clicked.png");
+  background-image: url("/assets/ui/bt/acheter-clicked.webp");
 }
 
 .talent-detail-sheet__refund {
-  background-image: url("/assets/ui/bt/remboursement-normal.png");
+  background-image: url("/assets/ui/bt/remboursement-normal.webp");
 }
 
 .talent-detail-sheet__refund:active {
-  background-image: url("/assets/ui/bt/remboursement-clicked.png");
+  background-image: url("/assets/ui/bt/remboursement-clicked.webp");
 }
 
 .talent-detail-sheet__buy:disabled,
@@ -3676,7 +3676,7 @@ button {
   gap: 0px;
   padding: 17px 13px 18px;
   border: 0;
-  background: url("/assets/ui/bg-tuile-accessoire.png") center / 135% 100% no-repeat;
+  background: url("/assets/ui/bg-tuile-accessoire.webp") center / 135% 100% no-repeat;
   box-shadow: none;
   text-align: center;
 }
@@ -3711,27 +3711,27 @@ button {
 }
 
 .shop-item__icon--gold {
-  background-image: url("/assets/ui/tone/gold.png");
+  background-image: url("/assets/ui/tone/gold.webp");
 }
 
 .shop-item__icon--berry {
-  background-image: url("/assets/ui/tone/berry.png");
+  background-image: url("/assets/ui/tone/berry.webp");
 }
 
 .shop-item__icon--ocean {
-  background-image: url("/assets/ui/tone/ocean.png");
+  background-image: url("/assets/ui/tone/ocean.webp");
 }
 
 .shop-item__icon--leaf {
-  background-image: url("/assets/ui/tone/leaf.png");
+  background-image: url("/assets/ui/tone/leaf.webp");
 }
 
 .shop-item__icon--sunset {
-  background-image: url("/assets/ui/tone/sunset.png");
+  background-image: url("/assets/ui/tone/sunset.webp");
 }
 
 .shop-item__icon--violet {
-  background-image: url("/assets/ui/tone/violet.png");
+  background-image: url("/assets/ui/tone/violet.webp");
 }
 
 .shop-item__equipped-badge {
@@ -3787,7 +3787,7 @@ button {
   margin: 0 auto 1px;
   padding: 4px 12px 7px;
   color: #45280a;
-  background: url("/assets/ui/tuile-pasteque.png") center / 100% 100% no-repeat;
+  background: url("/assets/ui/tuile-pasteque.webp") center / 100% 100% no-repeat;
   text-shadow: 0 1px 0 rgb(255 242 180 / 70%);
 }
 
@@ -3810,7 +3810,7 @@ button {
   border: 0;
   color: #fff8d9;
   background-color: transparent;
-  background-image: url("/assets/ui/bt/multiLangue/Acheter-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/Acheter-normal.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
@@ -3832,11 +3832,11 @@ button {
 }
 
 .shop-item__button.is-owned {
-  background-image: url("/assets/ui/bt/multiLangue/Equipper-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/Equipper-normal.webp");
 }
 
 .shop-item__button.is-equipped {
-  background-image: url("/assets/ui/bt/multiLangue/Desequiper-normal.png");
+  background-image: url("/assets/ui/bt/multiLangue/Desequiper-normal.webp");
 }
 
 .shop-item__button:disabled {
@@ -3849,15 +3849,15 @@ button {
 }
 
 .shop-item__button:not(:disabled):active {
-  background-image: url("/assets/ui/bt/multiLangue/Acheter-clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/Acheter-clicked.webp");
 }
 
 .shop-item__button.is-owned:not(:disabled):active {
-  background-image: url("/assets/ui/bt/multiLangue/Equipper%20clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/Equipper%20clicked.webp");
 }
 
 .shop-item__button.is-equipped:not(:disabled):active {
-  background-image: url("/assets/ui/bt/multiLangue/Desequiper%20clicked.png");
+  background-image: url("/assets/ui/bt/multiLangue/Desequiper%20clicked.webp");
 }
 
 @keyframes shop-notice-appear {

@@ -86,7 +86,7 @@ const DODO_FLIGHT_FEET_OFFSET_X = 0;
 const DODO_FLIGHT_FEET_OFFSET_Y = 15;
 const DODO_INDICATOR_SCALE = 0.045;
 const DODO_LIGHTNING_DEATH_TEXTURE_KEY = 'dodo-lightning-death';
-const DODO_LIGHTNING_DEATH_TEXTURE_PATH = '/assets/dodo/deadLightning.png';
+const DODO_LIGHTNING_DEATH_TEXTURE_PATH = '/assets/dodo/deadLightning.webp';
 const DODO_LIGHTNING_DEATH_SCALE = 0.125;
 const DODO_LAVA_DEATH_TEXTURE_PREFIX = 'dodo-lava-death';
 const DODO_LAVA_DEATH_ANIMATION_KEY = 'dodo-lava-death-animation';
@@ -98,7 +98,7 @@ const DODO_LAVA_DEATH_SCALE = 0.28;
 const DODO_LAVA_DEATH_OFFSET_Y = 48;
 const DODO_LAVA_DEATH_DEPTH = 12;
 const PHOENIX_REVIVAL_TEXTURE_KEY = 'dodo-phoenix-revival';
-const PHOENIX_REVIVAL_TEXTURE_PATH = '/assets/dodo/pheonix.png';
+const PHOENIX_REVIVAL_TEXTURE_PATH = '/assets/dodo/pheonix.webp';
 const PHOENIX_REVIVAL_DEPTH = 1_003;
 const PHOENIX_REVIVAL_FLASH_DEPTH = 1_001;
 const PHOENIX_REVIVAL_SPARK_DEPTH = 1_002;
@@ -171,13 +171,13 @@ const SAFE_GROUND_TOUCH_ALTITUDE = 50;
 const GROUND_DIRT_HEIGHT = 85;
 const GROUND_TEXTURE_KEY = 'ground-decor';
 const GROUND_TEXTURE_FRAME = 'ground-cropped';
-const GROUND_TEXTURE_PATH = '/assets/Decors/ground.png';
+const GROUND_TEXTURE_PATH = '/assets/Decors/ground.webp';
 const PARALLAX_FAR_SCROLL_FACTOR = 0.2;
 const PARALLAX_MID_SCROLL_FACTOR = 0.6;
 const PARALLAX_NEAR_SCROLL_FACTOR = 1;
 const PARALLAX_FOREGROUND_SCROLL_FACTOR = 1.12;
 const BACKGROUND_GROUND_TEXTURE_KEY = 'forest-background-ground';
-const BACKGROUND_GROUND_TEXTURE_PATH = '/assets/Decors/ground2.png';
+const BACKGROUND_GROUND_TEXTURE_PATH = '/assets/Decors/ground2.webp';
 const BACKGROUND_GROUND_SOURCE_WIDTH = 2_172;
 const BACKGROUND_GROUND_SOURCE_SURFACE_Y = 150;
 const BACKGROUND_GROUND_SCROLL_FACTOR = PARALLAX_MID_SCROLL_FACTOR;
@@ -253,35 +253,35 @@ const UFO_BEAM_DEPTH = 80;
 const FLOATING_ASTEROID_TEXTURES = [
   {
     key: 'space-floating-asteroid-stone-2',
-    path: '/assets/obstacles/space/asteroide2.png',
+    path: '/assets/obstacles/space/asteroide2.webp',
   },
   {
     key: 'space-floating-asteroid-stone-3',
-    path: '/assets/obstacles/space/asteroide3.png',
+    path: '/assets/obstacles/space/asteroide3.webp',
   },
   {
     key: 'space-floating-asteroid-ice',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33.png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33.webp',
   },
   {
     key: 'space-floating-asteroid-lava',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie.png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie.webp',
   },
   {
     key: 'space-floating-asteroid-crystal',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (2).png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (2).webp',
   },
   {
     key: 'space-floating-asteroid-forest',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (3).png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (3).webp',
   },
   {
     key: 'space-floating-asteroid-blue',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (4).png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (4).webp',
   },
   {
     key: 'space-floating-asteroid-gold',
-    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (5).png',
+    path: '/assets/obstacles/space/ChatGPT Image 28 juil. 2026, 11_33_33 - Copie (5).webp',
   },
 ] as const;
 const FLOATING_ASTEROID_NEUTRAL_TEXTURE_COUNT = 2;
@@ -928,29 +928,29 @@ const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
 ];
 
 const WATERMELON_TEXTURE_KEY = 'watermelon-collectable';
-const WATERMELON_TEXTURE_PATH = '/assets/collectable/pastequeN.png';
+const WATERMELON_TEXTURE_PATH = '/assets/collectable/pastequeN.webp';
 const WATERMELON_TAKE_TEXTURE_KEY = 'watermelon-collect-take';
-const WATERMELON_TAKE_TEXTURE_PATH = '/assets/collectable/pastèque take.png';
+const WATERMELON_TAKE_TEXTURE_PATH = '/assets/collectable/pastèque take.webp';
 const WATERMELON_SCORE_TEXTURES = [
-  { amount: 1, key: 'watermelon-collect-score-1', path: '/assets/collectable/score.png' },
-  { amount: 2, key: 'watermelon-collect-score-2', path: '/assets/collectable/s2.png' },
-  { amount: 3, key: 'watermelon-collect-score-3', path: '/assets/collectable/s3.png' },
-  { amount: 4, key: 'watermelon-collect-score-4', path: '/assets/collectable/s4.png' },
-  { amount: 5, key: 'watermelon-collect-score-5', path: '/assets/collectable/s5.png' },
-  { amount: 6, key: 'watermelon-collect-score-6', path: '/assets/collectable/s6.png' },
-  { amount: 7, key: 'watermelon-collect-score-7', path: '/assets/collectable/s7.png' },
-  { amount: 8, key: 'watermelon-collect-score-8', path: '/assets/collectable/s8.png' },
+  { amount: 1, key: 'watermelon-collect-score-1', path: '/assets/collectable/score.webp' },
+  { amount: 2, key: 'watermelon-collect-score-2', path: '/assets/collectable/s2.webp' },
+  { amount: 3, key: 'watermelon-collect-score-3', path: '/assets/collectable/s3.webp' },
+  { amount: 4, key: 'watermelon-collect-score-4', path: '/assets/collectable/s4.webp' },
+  { amount: 5, key: 'watermelon-collect-score-5', path: '/assets/collectable/s5.webp' },
+  { amount: 6, key: 'watermelon-collect-score-6', path: '/assets/collectable/s6.webp' },
+  { amount: 7, key: 'watermelon-collect-score-7', path: '/assets/collectable/s7.webp' },
+  { amount: 8, key: 'watermelon-collect-score-8', path: '/assets/collectable/s8.webp' },
 ] as const;
 const WATERMELON_SEEDS_TEXTURE_KEY = 'watermelon-collect-seeds';
-const WATERMELON_SEEDS_TEXTURE_PATH = '/assets/collectable/pepin.png';
+const WATERMELON_SEEDS_TEXTURE_PATH = '/assets/collectable/pepin.webp';
 const WATERMELON_JUICE_TEXTURE_KEY = 'watermelon-collect-juice';
-const WATERMELON_JUICE_TEXTURE_PATH = '/assets/collectable/jus.png';
+const WATERMELON_JUICE_TEXTURE_PATH = '/assets/collectable/jus.webp';
 const WATERMELON_FRAGMENT_TEXTURES = [
-  { key: 'watermelon-fragment-1', path: '/assets/collectable/m1.png' },
-  { key: 'watermelon-fragment-2', path: '/assets/collectable/m2.png' },
-  { key: 'watermelon-fragment-3', path: '/assets/collectable/m3.png' },
-  { key: 'watermelon-fragment-4', path: '/assets/collectable/m4.png' },
-  { key: 'watermelon-fragment-5', path: '/assets/collectable/m5.png' },
+  { key: 'watermelon-fragment-1', path: '/assets/collectable/m1.webp' },
+  { key: 'watermelon-fragment-2', path: '/assets/collectable/m2.webp' },
+  { key: 'watermelon-fragment-3', path: '/assets/collectable/m3.webp' },
+  { key: 'watermelon-fragment-4', path: '/assets/collectable/m4.webp' },
+  { key: 'watermelon-fragment-5', path: '/assets/collectable/m5.webp' },
 ] as const;
 const FRUIT_DETECTOR_TEXTURE_KEY = 'fruit-detector-talent-button';
 const WATERMELON_COLLECT_SOUNDS = [
@@ -994,17 +994,17 @@ const WIND_STREAK_POOL_SIZE = 16;
 const FEATHER_TEXTURES = [
   {
     key: 'dodo-feather-small',
-    path: '/assets/dodo/feather-small.png',
+    path: '/assets/dodo/feather-small.webp',
     scale: 0.04,
   },
   {
     key: 'dodo-feather-medium',
-    path: '/assets/dodo/feather-medium.png',
+    path: '/assets/dodo/feather-medium.webp',
     scale: 0.026,
   },
   {
     key: 'dodo-feather-large',
-    path: '/assets/dodo/feather-large.png',
+    path: '/assets/dodo/feather-large.webp',
     scale: 0.019,
   },
 ] as const;
@@ -1271,19 +1271,19 @@ const AMBIENT_CLOUD_TEXTURES: readonly AmbientCloudTextureConfig[] = [
   {
     sourceKey: 'ambient-cloud-1-source',
     textureKey: 'ambient-cloud-1',
-    texturePath: '/assets/Decors/nuage1.png',
+    texturePath: '/assets/Decors/nuage1.webp',
     crop: { x: 78, y: 320, width: 640, height: 370 },
   },
   {
     sourceKey: 'ambient-cloud-2-source',
     textureKey: 'ambient-cloud-2',
-    texturePath: '/assets/Decors/nuage2.png',
+    texturePath: '/assets/Decors/nuage2.webp',
     crop: { x: 92, y: 300, width: 570, height: 380 },
   },
   {
     sourceKey: 'ambient-cloud-3-source',
     textureKey: 'ambient-cloud-3',
-    texturePath: '/assets/Decors/nuage3.png',
+    texturePath: '/assets/Decors/nuage3.webp',
     crop: { x: 105, y: 375, width: 1_245, height: 365 },
   },
 ];
@@ -1586,8 +1586,8 @@ export class GameplayScene extends Phaser.Scene {
       UFO_KIDNAPPING_SOUND_KEY,
       '/assets/sounds/UFOKidnaping.mp3',
     );
-    this.load.image(UFO_TEXTURE_KEY, '/assets/Decors/Alien.png');
-    this.load.image(UFO_BEAM_TEXTURE_KEY, '/assets/Decors/rayon.png');
+    this.load.image(UFO_TEXTURE_KEY, '/assets/Decors/Alien.webp');
+    this.load.image(UFO_BEAM_TEXTURE_KEY, '/assets/Decors/rayon.webp');
     this.load.audio(
       ZONE_TRANSITION_SOUND_KEY,
       ZONE_TRANSITION_SOUND_PATH,
@@ -1605,7 +1605,7 @@ export class GameplayScene extends Phaser.Scene {
       .padStart(3, '0');
     this.load.image(
       `${DODO_LAVA_DEATH_TEXTURE_PREFIX}-${firstLavaDeathFrame}`,
-      `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${firstLavaDeathFrame}.png`,
+      `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${firstLavaDeathFrame}.webp`,
     );
     this.load.image(GROUND_TEXTURE_KEY, GROUND_TEXTURE_PATH);
     this.load.image(
@@ -1616,7 +1616,7 @@ export class GameplayScene extends Phaser.Scene {
       const paddedIndex = index.toString().padStart(2, '0');
       this.load.image(
         `${SKY_BACKGROUND_TEXTURE_PREFIX}-${index}`,
-        `/assets/Decors/bg-segments/bg_${paddedIndex}.png`,
+        `/assets/Decors/bg-segments/bg_${paddedIndex}.webp`,
       );
     }
     this.load.font(
@@ -1627,65 +1627,65 @@ export class GameplayScene extends Phaser.Scene {
     for (const cloudTexture of AMBIENT_CLOUD_TEXTURES) {
       this.load.image(cloudTexture.sourceKey, cloudTexture.texturePath);
     }
-    this.load.image(FOREST_VOLCANO_KEY, '/assets/Decors/volcan.png');
-    this.load.image(FOREST_TREE_1_KEY, '/assets/Decors/arbre1.png');
-    this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.png');
-    this.load.image(FOREST_FERN_1_KEY, '/assets/Decors/fougere1.png');
-    this.load.image(FOREST_FERN_2_KEY, '/assets/Decors/fougère2.png');
-    this.load.image(FOREST_GRASS_1_KEY, '/assets/Decors/h1.png');
-    this.load.image(FOREST_GRASS_2_KEY, '/assets/Decors/h2.png');
-    this.load.image(FOREST_GRASS_3_KEY, '/assets/Decors/h3.png');
-    this.load.image(FOREST_GRASS_4_KEY, '/assets/Decors/h4.png');
+    this.load.image(FOREST_VOLCANO_KEY, '/assets/Decors/volcan.webp');
+    this.load.image(FOREST_TREE_1_KEY, '/assets/Decors/arbre1.webp');
+    this.load.image(FOREST_TREE_2_KEY, '/assets/Decors/arbre2.webp');
+    this.load.image(FOREST_FERN_1_KEY, '/assets/Decors/fougere1.webp');
+    this.load.image(FOREST_FERN_2_KEY, '/assets/Decors/fougère2.webp');
+    this.load.image(FOREST_GRASS_1_KEY, '/assets/Decors/h1.webp');
+    this.load.image(FOREST_GRASS_2_KEY, '/assets/Decors/h2.webp');
+    this.load.image(FOREST_GRASS_3_KEY, '/assets/Decors/h3.webp');
+    this.load.image(FOREST_GRASS_4_KEY, '/assets/Decors/h4.webp');
     this.load.image(
       FOREST_BRANCH_RIGHT_SOURCE_KEY,
-      '/assets/obstacles/forest/branche-d.png',
+      '/assets/obstacles/forest/branche-d.webp',
     );
     this.load.image(
       FOREST_BRANCH_LEFT_SOURCE_KEY,
-      '/assets/obstacles/forest/branche-g.png',
+      '/assets/obstacles/forest/branche-g.webp',
     );
     for (let index = 1; index <= FOREST_MOSQUITO_FRAME_COUNT; index += 1) {
       const paddedIndex = index.toString().padStart(2, '0');
       this.load.image(
         `${FOREST_MOSQUITO_TEXTURE_PREFIX}-${paddedIndex}`,
-        `/assets/obstacles/forest/moustik/${paddedIndex}.png`,
+        `/assets/obstacles/forest/moustik/${paddedIndex}.webp`,
       );
     }
     this.load.image(
       `${PTERODACTYL_TEXTURE_PREFIX}-000`,
-      '/assets/obstacles/lowSky/pterodactyl/frame_000.png',
+      '/assets/obstacles/lowSky/pterodactyl/frame_000.webp',
     );
     this.load.image(
       `${STORM_CLOUD_TEXTURE_PREFIX}-000`,
-      '/assets/obstacles/midSky/nuage/frame_000.png',
+      '/assets/obstacles/midSky/nuage/frame_000.webp',
     );
     this.load.image(
       `${LIGHTNING_TEXTURE_PREFIX}-000`,
-      '/assets/obstacles/midSky/eclaire/frame_000.png',
+      '/assets/obstacles/midSky/eclaire/frame_000.webp',
     );
-    this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.png');
-    this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.png');
+    this.load.image(SATELLITE_TEXTURE_KEY, '/assets/obstacles/space/satelite.webp');
+    this.load.image(ASTEROID_TEXTURE_KEY, '/assets/obstacles/space/asteroide.webp');
     for (const asteroidTexture of FLOATING_ASTEROID_TEXTURES) {
       this.load.image(asteroidTexture.key, asteroidTexture.path);
     }
     this.load.image(
       `${LAVA_TEXTURE_PREFIX}-000`,
-      '/assets/obstacles/lave/frame_000.png',
+      '/assets/obstacles/lave/frame_000.webp',
     );
     this.load.image(
       FRUIT_DETECTOR_TEXTURE_KEY,
-      '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
+      '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.webp',
     );
-    this.load.image('dodo-body-flight', '/assets/dodo/runtime/body_flight.png');
-    this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.png');
-    this.load.image('dodo-pose-ground', '/assets/dodo/runtime/ground.png');
-    this.load.image('dodo-ground-feet', '/assets/dodo/optimized/foot-ground.png');
+    this.load.image('dodo-body-flight', '/assets/dodo/runtime/body_flight.webp');
+    this.load.image('dodo-pose-flight', '/assets/dodo/optimized/flight.webp');
+    this.load.image('dodo-pose-ground', '/assets/dodo/runtime/ground.webp');
+    this.load.image('dodo-ground-feet', '/assets/dodo/optimized/foot-ground.webp');
     FEATHER_TEXTURES.forEach(({ key, path }) => {
       this.load.image(key, path);
     });
     this.load.image(
       'dodo-flight-feet-default',
-      '/assets/dodo/runtime/flight_feet.png',
+      '/assets/dodo/runtime/flight_feet.webp',
     );
     this.load.image(WATERMELON_TEXTURE_KEY, WATERMELON_TEXTURE_PATH);
     this.load.image(WATERMELON_TAKE_TEXTURE_KEY, WATERMELON_TAKE_TEXTURE_PATH);
@@ -1710,11 +1710,11 @@ export class GameplayScene extends Phaser.Scene {
     for (let index = 1; index <= 14; index += 1) {
       this.load.image(
         `dodo-wing-left-${index}`,
-        `/assets/dodo/runtime/wing_left_${index}.png`,
+        `/assets/dodo/runtime/wing_left_${index}.webp`,
       );
       this.load.image(
         `dodo-wing-right-${index}`,
-        `/assets/dodo/runtime/wing_right_${index}.png`,
+        `/assets/dodo/runtime/wing_right_${index}.webp`,
       );
     }
   }
@@ -3318,7 +3318,7 @@ export class GameplayScene extends Phaser.Scene {
         if (!this.textures.exists(textureKey)) {
           this.load.image(
             textureKey,
-            `${assetDirectory}/frame_${paddedIndex}.png`,
+            `${assetDirectory}/frame_${paddedIndex}.webp`,
           );
           queuedAssets += 1;
         }
@@ -3348,7 +3348,7 @@ export class GameplayScene extends Phaser.Scene {
       if (!this.textures.exists(textureKey)) {
         this.load.image(
           textureKey,
-          `/assets/obstacles/lave/frame_${paddedIndex}.png`,
+          `/assets/obstacles/lave/frame_${paddedIndex}.webp`,
         );
         queuedAssets += 1;
       }
@@ -3361,7 +3361,7 @@ export class GameplayScene extends Phaser.Scene {
       if (!this.textures.exists(textureKey)) {
         this.load.image(
           textureKey,
-          `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${paddedIndex}.png`,
+          `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${paddedIndex}.webp`,
         );
         queuedAssets += 1;
       }

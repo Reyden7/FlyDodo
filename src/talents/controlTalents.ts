@@ -41,7 +41,7 @@ export const CONTROL_TALENTS: readonly ControlTalentDefinition[] = [
   {
     id: 'lift',
     title: 'Portance',
-    icon: '/assets/competences/Controle/portance.png',
+    icon: '/assets/competences/Controle/portance.webp',
     description:
       'Ralentit la chute libre du dodo quand le joueur relache les commandes.',
     levels: [45, 75, 110, 145],
@@ -51,7 +51,7 @@ export const CONTROL_TALENTS: readonly ControlTalentDefinition[] = [
   {
     id: 'rotation',
     title: 'Rotation',
-    icon: '/assets/competences/Controle/Rotation.png',
+    icon: '/assets/competences/Controle/Rotation.webp',
     description:
       'Augmente la vitesse de rotation produite par chaque battement lateral.',
     levels: [70, 80, 90, 100],
@@ -61,7 +61,7 @@ export const CONTROL_TALENTS: readonly ControlTalentDefinition[] = [
   {
     id: 'gyroscope',
     title: 'Gyroscope',
-    icon: '/assets/competences/Controle/gyroscope.png',
+    icon: '/assets/competences/Controle/gyroscope.webp',
     description:
       'Accelere le retour naturel du dodo vers une posture stable.',
     levels: [0.25, 0.4, 0.65, 0.85],
@@ -71,7 +71,7 @@ export const CONTROL_TALENTS: readonly ControlTalentDefinition[] = [
   {
     id: 'wing',
     title: 'Aile',
-    icon: '/assets/competences/Controle/aile.png',
+    icon: '/assets/competences/Controle/aile.webp',
     description:
       'Augmente la puissance verticale d un battement d aile.',
     levels: [165, 170, 180, 190],
@@ -83,7 +83,7 @@ export const CONTROL_TALENTS: readonly ControlTalentDefinition[] = [
 export const CONTROL_MASTER_TALENT = {
   id: 'master',
   title: 'Maitre',
-  icon: '/assets/competences/Controle/Maître.png',
+  icon: '/assets/competences/Controle/Maître.webp',
   description:
     'Debloque le meilleur controle possible pour toutes les competences.',
   cost: CONTROL_MASTER_COST,

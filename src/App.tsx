@@ -197,14 +197,14 @@ const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
 const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
 const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
 const MENU_BUTTON_SOUND_PATH = '/assets/menu/sounds/button.mp3';
-const STORY_INTRO_IMAGE_PATH = '/assets/story/intro.png';
+const STORY_INTRO_IMAGE_PATH = '/assets/story/intro.webp';
 const STORY_INTRO_STORAGE_KEY = 'flydodo.story-intro-seen.v2';
 const STORY_INTRO_PANEL_COUNT = 6;
 const STORY_INTRO_PANEL_DURATION_MS = 5_200;
 const END_STORY_IMAGES = [
-  '/assets/story/End1.png',
-  '/assets/story/End2.png',
-  '/assets/story/End3.png',
+  '/assets/story/End1.webp',
+  '/assets/story/End2.webp',
+  '/assets/story/End3.webp',
 ] as const;
 const END_STORY_PANEL_DURATION_MS = 4_800;
 const GAME_MUSIC_PATH = '/assets/sounds/musique.mp3';
@@ -215,13 +215,13 @@ const SPACE_MUSIC_NORMAL_CUTOFF_HZ = 20_000;
 const SPACE_MUSIC_MUFFLED_CUTOFF_HZ = 520;
 const SPACE_MUSIC_MUFFLED_VOLUME_MULTIPLIER = 0.62;
 const GAME_OVER_DEATH_IMAGES: Record<PlayerDeathReason, string> = {
-  default: '/assets/ui/GameOver/deadByOther.png',
-  obstacle: '/assets/ui/GameOver/deadByOther.png',
-  mosquito: '/assets/ui/GameOver/deadByMosquito.png',
-  lava: '/assets/ui/GameOver/deadLava.png',
-  lightning: '/assets/ui/GameOver/deadLightning.png',
-  space: '/assets/dodo/SpriteDodo/degats/deadSpace.png',
-  ufo: '/assets/dodo/SpriteDodo/degats/alien.png',
+  default: '/assets/ui/GameOver/deadByOther.webp',
+  obstacle: '/assets/ui/GameOver/deadByOther.webp',
+  mosquito: '/assets/ui/GameOver/deadByMosquito.webp',
+  lava: '/assets/ui/GameOver/deadLava.webp',
+  lightning: '/assets/ui/GameOver/deadLightning.webp',
+  space: '/assets/dodo/SpriteDodo/degats/deadSpace.webp',
+  ufo: '/assets/dodo/SpriteDodo/degats/alien.webp',
 };
 const MENU_POP_SOUND_DELAYS_MS = [180, 760, 1280, 1390] as const;
 const MAIN_MENU_CLICK_DELAY_MS = 140;
@@ -260,13 +260,13 @@ const SHOP_OBJECT_SLOTS: ReadonlyArray<{
   {
     id: 'life-vial',
     title: 'Fiole de vie',
-    icon: '/assets/objets/fioleVie.png',
+    icon: '/assets/objets/fioleVie.webp',
     price: 10,
   },
   {
     id: 'watermelon-magnet',
     title: 'Aimant à pastèque',
-    icon: '/assets/objets/aimant.png',
+    icon: '/assets/objets/aimant.webp',
     price: 5,
   },
 ] as const;
@@ -279,12 +279,12 @@ const WATERMELON_PACKS: ReadonlyArray<{
   pile: number;
   src:string;
 }> = [
-  { id: 'small', title: 'Petit sac', amount: '5', price: '2,29 €', pile: 1, src:"/assets/shopPasteque/petitSac.png" },
-  { id: 'medium', title: 'Sac moyen', amount: '10', price: '4,49 €', pile: 1 , src:"/assets/shopPasteque/sacMoyen.png"},
-  { id: 'large', title: 'Grand sac', amount: '15', price: '8,99 €', pile: 1, src:"/assets/shopPasteque/GrandSac.png" },
-  { id: 'chest', title: 'Coffre de pastèques', amount: '50', price: '17,99 €', pile: 1, src:"/assets/shopPasteque/Coffre.png" },
-  { id: 'barrel', title: 'Tonneau de pastèques', amount: '75', price: '32,99 €', pile: 1 , src:"/assets/shopPasteque/Tonneau.png"},
-  { id: 'mountain', title: 'Montagne de pastèques', amount: '150', price: '64,99 €', pile: 1, src:"/assets/shopPasteque/Montagne.png" },
+  { id: 'small', title: 'Petit sac', amount: '5', price: '2,29 €', pile: 1, src:"/assets/shopPasteque/petitSac.webp" },
+  { id: 'medium', title: 'Sac moyen', amount: '10', price: '4,49 €', pile: 1 , src:"/assets/shopPasteque/sacMoyen.webp"},
+  { id: 'large', title: 'Grand sac', amount: '15', price: '8,99 €', pile: 1, src:"/assets/shopPasteque/GrandSac.webp" },
+  { id: 'chest', title: 'Coffre de pastèques', amount: '50', price: '17,99 €', pile: 1, src:"/assets/shopPasteque/Coffre.webp" },
+  { id: 'barrel', title: 'Tonneau de pastèques', amount: '75', price: '32,99 €', pile: 1 , src:"/assets/shopPasteque/Tonneau.webp"},
+  { id: 'mountain', title: 'Montagne de pastèques', amount: '150', price: '64,99 €', pile: 1, src:"/assets/shopPasteque/Montagne.webp" },
 ] as const;
 
 function isShopObjectActive(
@@ -502,8 +502,8 @@ function AudioOptionsPanel({
                   <img
                     src={
                       isMuted
-                        ? '/assets/ui/volume-barré.png'
-                        : '/assets/ui/volume.png'
+                        ? '/assets/ui/volume-barré.webp'
+                        : '/assets/ui/volume.webp'
                     }
                     alt=""
                     aria-hidden="true"
@@ -2632,13 +2632,13 @@ export default function App(): React.JSX.Element {
                 label={t('common.life')}
                 current={visibleHeartCount}
                 max={visibleHeartMax}
-                fullSrc="/assets/ui/vie/1.png"
-                emptySrc="/assets/ui/vie/2.png"
+                fullSrc="/assets/ui/vie/1.webp"
+                emptySrc="/assets/ui/vie/2.webp"
               />
               {lifeVialActive && (
                 <img
                   className="survival-icons__life-vial"
-                  src="/assets/objets/fioleVie.png"
+                  src="/assets/objets/fioleVie.webp"
                   alt=""
                   aria-hidden="true"
                 />
@@ -2648,8 +2648,8 @@ export default function App(): React.JSX.Element {
               label={t('common.shield')}
               current={shield}
               max={maxShield}
-              fullSrc="/assets/ui/bouclier/1.png"
-              emptySrc="/assets/ui/bouclier/2.png"
+              fullSrc="/assets/ui/bouclier/1.webp"
+              emptySrc="/assets/ui/bouclier/2.webp"
             />
           </div>
         </section>
@@ -2894,7 +2894,7 @@ export default function App(): React.JSX.Element {
                 <div className="shop-wallet" aria-label={t('shop.wallet')}>
                 <strong>{playerProfile.watermelons}</strong>
                 <img
-                  src="/assets/collectable/pasteque.png"
+                  src="/assets/collectable/pasteque.webp"
                   alt=""
                   aria-hidden="true"
                 />
@@ -2971,7 +2971,7 @@ export default function App(): React.JSX.Element {
                   onClick={() => selectShopTab('watermelons')}
                 >
                   <img
-                    src="/assets/collectable/pasteque.png"
+                    src="/assets/collectable/pasteque.webp"
                     alt=""
                     aria-hidden="true"
                   />
@@ -3008,7 +3008,7 @@ export default function App(): React.JSX.Element {
                 <div className="shop-wallet shop-wallet--toolbar" aria-label={t('shop.wallet')}>
                   <strong>{playerProfile.watermelons}</strong>
                   <img
-                    src="/assets/collectable/pasteque.png"
+                    src="/assets/collectable/pasteque.webp"
                     alt=""
                     aria-hidden="true"
                   />
@@ -3089,7 +3089,7 @@ export default function App(): React.JSX.Element {
 
                       <div className="shop-item__price">
                         <img
-                          src="/assets/collectable/pasteque.png"
+                          src="/assets/collectable/pasteque.webp"
                           alt=""
                           aria-hidden="true"
                         />
@@ -3134,7 +3134,7 @@ export default function App(): React.JSX.Element {
                         <h2>{t(`shop.object.${item.id}`)}</h2>
                         <div className="shop-object-card__price">
                           <img
-                            src="/assets/collectable/pasteque.png"
+                            src="/assets/collectable/pasteque.webp"
                             alt=""
                             aria-hidden="true"
                           />
@@ -3163,7 +3163,7 @@ export default function App(): React.JSX.Element {
                   <header className="watermelon-shop__hero">
                     <h2>
                       <img
-                        src="/assets/collectable/pasteque.png"
+                        src="/assets/collectable/pasteque.webp"
                         alt=""
                         aria-hidden="true"
                       />
@@ -3190,7 +3190,7 @@ export default function App(): React.JSX.Element {
                         </div>
                         <div className="watermelon-pack-card__amount">
                           <img
-                            src="/assets/collectable/pasteque.png"
+                            src="/assets/collectable/pasteque.webp"
                             alt=""
                             aria-hidden="true"
                           />
@@ -3211,7 +3211,7 @@ export default function App(): React.JSX.Element {
 
                   <p className="watermelon-shop__note">
                     <img
-                      src="/assets/collectable/pasteque.png"
+                      src="/assets/collectable/pasteque.webp"
                       alt=""
                       aria-hidden="true"
                     />
@@ -3302,7 +3302,7 @@ export default function App(): React.JSX.Element {
                           </span>
                           <span className="control-talent-node__price">
                             <img
-                              src="/assets/collectable/pasteque.png"
+                              src="/assets/collectable/pasteque.webp"
                               alt=""
                               aria-hidden="true"
                             />
@@ -3362,7 +3362,7 @@ export default function App(): React.JSX.Element {
                                       </span>
                                       <span className="control-talent-node__price">
                                         <img
-                                          src="/assets/collectable/pasteque.png"
+                                          src="/assets/collectable/pasteque.webp"
                                           alt=""
                                           aria-hidden="true"
                                         />
@@ -3469,7 +3469,7 @@ export default function App(): React.JSX.Element {
                           </span>
                           <span className="control-talent-node__price">
                             <img
-                              src="/assets/collectable/pasteque.png"
+                              src="/assets/collectable/pasteque.webp"
                               alt=""
                               aria-hidden="true"
                             />
@@ -3544,7 +3544,7 @@ export default function App(): React.JSX.Element {
                                       </span>
                                       <span className="control-talent-node__price">
                                         <img
-                                          src="/assets/collectable/pasteque.png"
+                                          src="/assets/collectable/pasteque.webp"
                                           alt=""
                                           aria-hidden="true"
                                         />
@@ -3651,7 +3651,7 @@ export default function App(): React.JSX.Element {
                           </span>
                           <span className="control-talent-node__price">
                             <img
-                              src="/assets/collectable/pasteque.png"
+                              src="/assets/collectable/pasteque.webp"
                               alt=""
                               aria-hidden="true"
                             />
@@ -3719,7 +3719,7 @@ export default function App(): React.JSX.Element {
                                 </span>
                                 <span className="control-talent-node__price">
                                   <img
-                                    src="/assets/collectable/pasteque.png"
+                                    src="/assets/collectable/pasteque.webp"
                                     alt=""
                                     aria-hidden="true"
                                   />

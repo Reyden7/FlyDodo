@@ -55,7 +55,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'watermelonMagnet',
     title: 'Aimant à pastèque',
-    icon: '/assets/competences/Talents/aimantPasteque.png',
+    icon: '/assets/competences/Talents/aimantPasteque.webp',
     description:
       "Augmente le rayon d'attraction de l'objet aimant à pastèque.",
     levels: [150, 300, 500],
@@ -65,7 +65,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'fruitMultiplier',
     title: 'Multiplicateur fruite',
-    icon: '/assets/competences/Talents/multiplicateurFruit.png',
+    icon: '/assets/competences/Talents/multiplicateurFruit.webp',
     description:
       'Ajoute des pastèques bonus à chaque pastèque ramassée par le dodo.',
     levels: [1, 2, 3],
@@ -75,7 +75,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'perch',
     title: 'Perchoir',
-    icon: '/assets/competences/Talents/perchoir.png',
+    icon: '/assets/competences/Talents/perchoir.webp',
     description:
       'Permet au dodo de se poser sur les branches du niveau Forest en arrivant par le dessus.',
     levels: [1],
@@ -85,7 +85,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'fruitDetector',
     title: 'Detecteur de fruit',
-    icon: '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.png',
+    icon: '/assets/competences/Talents/D%C3%A9tecteur%20de%20fruit.webp',
     description:
       'Ajoute un bouton qui affiche une fleche vers la prochaine pastèque.',
     levels: [1],
@@ -95,7 +95,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'chainReaction',
     title: 'Reaction en chaine',
-    icon: '/assets/competences/Talents/reactionEnChaine.png',
+    icon: '/assets/competences/Talents/reactionEnChaine.webp',
     description:
       "Multiplie les prochaines pastèques par 2 apres deux collectes d'affilee sans en manquer.",
     levels: [1],
@@ -105,7 +105,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
   {
     id: 'powerTakeoff',
     title: 'Decollage puissant',
-    icon: '/assets/competences/Talents/decolagepuissant.png',
+    icon: '/assets/competences/Talents/decolagepuissant.webp',
     description:
       "Double la puissance du premier battement quand le dodo decolle depuis une branche.",
     levels: [1],
@@ -122,7 +122,7 @@ export const BLUE_TALENTS: readonly BlueTalentDefinition[] = [
 export const BLUE_FEAST_TALENT = {
   id: 'feast',
   title: 'Festin',
-  icon: '/assets/competences/Talents/festin.png',
+  icon: '/assets/competences/Talents/festin.webp',
   description:
     "Attire toutes les pastèques visibles a l'ecran directement vers le dodo.",
   cost: BLUE_FEAST_COST,

@@ -42,7 +42,7 @@ export interface ShopItem {
 
   /**
    * Facultatif. En l'absence de valeur, le chemin est calculé automatiquement :
-   * /assets/Accessoires/<dossier de catégorie>/<id>.png
+   * /assets/Accessoires/<dossier de catégorie>/<id>.webp
    */
   imagePath?: string;
   imagePaths?: Partial<Record<CosmeticPose, string>>;
@@ -227,7 +227,7 @@ export function getShopItemImagePath(
   }
 
   const folder = COSMETIC_CATEGORY_FOLDERS[item.category];
-  return `/assets/Accessoires/${folder}/${item.id}.png`;
+  return `/assets/Accessoires/${folder}/${item.id}.webp`;
 }
 
 export function getShopItemTextureKey(
@@ -264,7 +264,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 25,
     icon: 'hat',
     tone: 'violet',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-magicB.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-magicB.webp',
   },
   {
     id: 'hat-magic-green',
@@ -273,7 +273,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 25,
     icon: 'hat',
     tone: 'leaf',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-magicV.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-magicV.webp',
   },
   {
     id: 'hat-samurai',
@@ -283,7 +283,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     icon: 'hat',
     tone: 'gold',
     imagePath:
-      '/assets/Accessoires/Chapeaux/ChatGPT%20Image%208%20juil.%202026,%2010_50_19%20(5).png',
+      '/assets/Accessoires/Chapeaux/ChatGPT%20Image%208%20juil.%202026,%2010_50_19%20(5).webp',
   },
   {
     id: 'hat-mand',
@@ -292,7 +292,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 45,
     icon: 'hat',
     tone: 'leaf',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-Mand.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-Mand.webp',
   },
   {
     id: 'hat-space-rebel',
@@ -301,7 +301,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 40,
     icon: 'hat',
     tone: 'gold',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-spaceSW.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-spaceSW.webp',
   },
   {
     id: 'hat-space',
@@ -310,7 +310,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 35,
     icon: 'hat',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-space.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-space.webp',
   },
   {
     id: 'hat-astronaute',
@@ -319,7 +319,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 35,
     icon: 'hat',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-astronaute.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-astronaute.webp',
   },
   {
     id: 'hat-pirate',
@@ -328,7 +328,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 15,
     icon: 'hat',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Chapeaux/hat-pirate.png',
+    imagePath: '/assets/Accessoires/Chapeaux/hat-pirate.webp',
   },
   {
     id: 'glasses-hp',
@@ -337,7 +337,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 13,
     icon: 'glasses',
     tone: 'gold',
-    imagePath: '/assets/Accessoires/Lunettes/Glasses-HP.png',
+    imagePath: '/assets/Accessoires/Lunettes/Glasses-HP.webp',
   },
   {
     id: 'glasses-steam',
@@ -346,7 +346,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 28,
     icon: 'glasses',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Lunettes/Glasses-Steam.png',
+    imagePath: '/assets/Accessoires/Lunettes/Glasses-Steam.webp',
   },
   {
     id: 'glasses-rpo',
@@ -355,7 +355,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 38,
     icon: 'glasses',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/Lunettes/Glasses-RPO.png',
+    imagePath: '/assets/Accessoires/Lunettes/Glasses-RPO.webp',
   },
   {
     id: 'glasses-rpov',
@@ -364,7 +364,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 38,
     icon: 'glasses',
     tone: 'violet',
-    imagePath: '/assets/Accessoires/Lunettes/Glasses-RPOV.png',
+    imagePath: '/assets/Accessoires/Lunettes/Glasses-RPOV.webp',
   },
   {
     id: 'glasses-super-hero',
@@ -373,7 +373,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 3,
     icon: 'glasses',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/Lunettes/GlassesSuperHero.png',
+    imagePath: '/assets/Accessoires/Lunettes/GlassesSuperHero.webp',
   },
   {
     id: 'scarf-red',
@@ -382,7 +382,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 17,
     icon: 'scarf',
     tone: 'berry',
-    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-Rouge.png',
+    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-Rouge.webp',
   },
   {
     id: 'scarf-green',
@@ -391,7 +391,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 20,
     icon: 'scarf',
     tone: 'leaf',
-    imagePath: '/assets/Accessoires/%C3%89charpes/Echarpe-Verte.png',
+    imagePath: '/assets/Accessoires/%C3%89charpes/Echarpe-Verte.webp',
   },
   {
     id: 'scarf-wizard',
@@ -400,7 +400,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 23,
     icon: 'scarf',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-HP.png',
+    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-HP.webp',
   },
   {
     id: 'scarf-ice',
@@ -409,7 +409,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 27,
     icon: 'scarf',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-ReinDN.png',
+    imagePath: '/assets/Accessoires/%C3%89charpes/echarpe-ReinDN.webp',
   },
   {
     id: 'shoes-basket-adventure',
@@ -419,8 +419,8 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     icon: 'shoes',
     tone: 'sunset',
     imagePaths: {
-      ground: '/assets/Accessoires/Chaussures/shoes-basket-sol.png',
-      flight: '/assets/Accessoires/Chaussures/shoes-basket-vole.png',
+      ground: '/assets/Accessoires/Chaussures/shoes-basket-sol.webp',
+      flight: '/assets/Accessoires/Chaussures/shoes-basket-vole.webp',
     },
   },
   {
@@ -431,8 +431,8 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     icon: 'shoes',
     tone: 'berry',
     imagePaths: {
-      ground: '/assets/Accessoires/Chaussures/shoes-basketR-sol.png',
-      flight: '/assets/Accessoires/Chaussures/shoes-basketR-vole.png',
+      ground: '/assets/Accessoires/Chaussures/shoes-basketR-sol.webp',
+      flight: '/assets/Accessoires/Chaussures/shoes-basketR-vole.webp',
     },
   },
   {
@@ -443,8 +443,8 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     icon: 'shoes',
     tone: 'ocean',
     imagePaths: {
-      ground: '/assets/Accessoires/Chaussures/shoes-basketN-sol.png',
-      flight: '/assets/Accessoires/Chaussures/shoes-bastketN-vole.png',
+      ground: '/assets/Accessoires/Chaussures/shoes-basketN-sol.webp',
+      flight: '/assets/Accessoires/Chaussures/shoes-bastketN-vole.webp',
     },
   },
   {
@@ -455,8 +455,8 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     icon: 'shoes',
     tone: 'ocean',
     imagePaths: {
-      ground: '/assets/Accessoires/Chaussures/shoes-space-sol.png',
-      flight: '/assets/Accessoires/Chaussures/shoes-space-vole.png',
+      ground: '/assets/Accessoires/Chaussures/shoes-space-sol.webp',
+      flight: '/assets/Accessoires/Chaussures/shoes-space-vole.webp',
     },
   },
   {
@@ -466,7 +466,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-corsaire.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-corsaire.webp',
   },
   {
     id: 'outfit-explorateur',
@@ -475,7 +475,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur.webp',
   },
   {
     id: 'outfit-paladin',
@@ -484,7 +484,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-paladin.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-paladin.webp',
   },
   {
     id: 'outfit-magicien',
@@ -493,7 +493,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-magicien.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-magicien.webp',
   },
   {
     id: 'outfit-pretre',
@@ -502,7 +502,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-pretre.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-pretre.webp',
   },
   {
     id: 'outfit-pirate',
@@ -511,7 +511,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-pirate.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-pirate.webp',
   },
   {
     id: 'outfit-explo2',
@@ -520,7 +520,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 30,
     icon: '🧥',
     tone: 'sunset',
-    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur2.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-explorateur2.webp',
   },
   {
     id: 'outfit-astronaute',
@@ -529,7 +529,7 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     price: 50,
     icon: '🧥',
     tone: 'ocean',
-    imagePath: '/assets/Accessoires/Tenues/outfit-astronaute.png',
+    imagePath: '/assets/Accessoires/Tenues/outfit-astronaute.webp',
   },
   
 ];
