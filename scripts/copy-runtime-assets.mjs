@@ -59,6 +59,9 @@ for (let index = 0; index < 36; index += 1) {
 for (let index = 0; index < 20; index += 1) {
   addAsset(`/assets/Decors/bg-segments/bg_${String(index).padStart(2, '0')}.webp`);
 }
+for (let index = 1; index <= 6; index += 1) {
+  addAsset(`/assets/story/intro-panel-${index}.webp`);
+}
 for (const index of [0, 4, 5, 7, 8, 9, 11, 14, 31, 32, 33, 34, 35]) {
   addAsset(
     `/assets/dodo/sprite-max-px-frames-36-rows-6-cols-6-frames/frame_${String(index).padStart(3, '0')}.webp`,

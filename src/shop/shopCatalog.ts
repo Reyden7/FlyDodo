@@ -241,6 +241,26 @@ export function getShopItemById(itemId: string): ShopItem | undefined {
   return SHOP_ITEMS.find((item) => item.id === itemId);
 }
 
+export function getShopItemToneForPrice(price: number): ShopItemTone {
+  if (price <= 10) {
+    return 'leaf';
+  }
+
+  if (price <= 20) {
+    return 'ocean';
+  }
+
+  if (price <= 30) {
+    return 'berry';
+  }
+
+  if (price <= 40) {
+    return 'gold';
+  }
+
+  return 'violet';
+}
+
 export function getCosmeticTransform(
   item: ShopItem,
   pose: CosmeticPose,

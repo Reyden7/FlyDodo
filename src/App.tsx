@@ -87,6 +87,7 @@ import {
 } from './services/purchaseService';
 import {
   getShopItemImagePath,
+  getShopItemToneForPrice,
   SHOP_CATEGORY_OPTIONS,
   SHOP_ITEMS,
   type ShopFilterCategory,
@@ -188,25 +189,36 @@ type SelectedBlueTalent =
 const getTalentNodePositionStyle = ({
   x,
   y,
-}: TalentNodePosition): CSSProperties => ({
-  left: `${x}%`,
-  top: `${y}%`,
-});
+}: TalentNodePosition, centerOnPosition = false): CSSProperties => {
+  const backgroundAspectRatio = 1122 / 1402;
+  const horizontalOffsetInContainerHeights =
+    (x - 50) * backgroundAspectRatio;
+
+  return {
+    left: `calc(50% + ${horizontalOffsetInContainerHeights}cqh)`,
+    top: centerOnPosition ? `calc(${y}% - 52px)` : `${y}%`,
+  };
+};
 
 const MENU_MUSIC_PATH = '/assets/menu/sounds/openMusic.mp3';
 const MENU_POP_SOUND_PATH = '/assets/menu/sounds/pop.mp3';
 const MENU_PLAY_SOUND_PATH = '/assets/menu/sounds/play.mp3';
 const MENU_BUTTON_SOUND_PATH = '/assets/menu/sounds/button.mp3';
-const STORY_INTRO_IMAGE_PATH = '/assets/story/intro.webp';
+const STORY_INTRO_IMAGES = [
+  '/assets/story/intro-panel-1.webp',
+  '/assets/story/intro-panel-2.webp',
+  '/assets/story/intro-panel-3.webp',
+  '/assets/story/intro-panel-4.webp',
+  '/assets/story/intro-panel-5.webp',
+  '/assets/story/intro-panel-6.webp',
+] as const;
 const STORY_INTRO_STORAGE_KEY = 'flydodo.story-intro-seen.v2';
-const STORY_INTRO_PANEL_COUNT = 6;
-const STORY_INTRO_PANEL_DURATION_MS = 5_200;
+const STORY_INTRO_PANEL_COUNT = STORY_INTRO_IMAGES.length;
 const END_STORY_IMAGES = [
   '/assets/story/End1.webp',
   '/assets/story/End2.webp',
   '/assets/story/End3.webp',
 ] as const;
-const END_STORY_PANEL_DURATION_MS = 4_800;
 const GAME_MUSIC_PATH = '/assets/sounds/musique.mp3';
 const GAME_MUSIC_VOLUME = 0.5;
 const SPACE_MUSIC_FILTER_START_ALTITUDE = 7_000;
@@ -540,6 +552,8 @@ export default function App(): React.JSX.Element {
       window.localStorage.getItem(STORY_INTRO_STORAGE_KEY) !== 'true',
   );
   const [storyIntroPanel, setStoryIntroPanel] = useState(0);
+  const [shouldStartTutorialAfterStory, setShouldStartTutorialAfterStory] =
+    useState(false);
   const [isEndStoryOpen, setIsEndStoryOpen] = useState(false);
   const [endStoryPanel, setEndStoryPanel] = useState(0);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
@@ -572,8 +586,6 @@ export default function App(): React.JSX.Element {
   const [pendingRewardedAd, setPendingRewardedAd] = useState<
     'revive' | 'watermelons' | null
   >(null);
-  const [isQuickWatermelonPending, setIsQuickWatermelonPending] =
-    useState(false);
   const [isInterstitialPending, setIsInterstitialPending] = useState(false);
   const deathsSinceInterstitialRef = useRef(0);
   const nextInterstitialDeathRef = useRef(Math.random() < 0.5 ? 5 : 6);
@@ -876,41 +888,6 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
-
-  useEffect(() => {
-    if (!isStoryIntroOpen) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      if (storyIntroPanel >= STORY_INTRO_PANEL_COUNT - 1) {
-        window.localStorage.setItem(STORY_INTRO_STORAGE_KEY, 'true');
-        setIsStoryIntroOpen(false);
-        return;
-      }
-
-      setStoryIntroPanel((currentPanel) => currentPanel + 1);
-    }, STORY_INTRO_PANEL_DURATION_MS);
-
-    return () => window.clearTimeout(timeout);
-  }, [isStoryIntroOpen, storyIntroPanel]);
-
-  useEffect(() => {
-    if (!isEndStoryOpen) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      if (endStoryPanel >= END_STORY_IMAGES.length - 1) {
-        setIsEndStoryOpen(false);
-        return;
-      }
-
-      setEndStoryPanel((currentPanel) => currentPanel + 1);
-    }, END_STORY_PANEL_DURATION_MS);
-
-    return () => window.clearTimeout(timeout);
-  }, [endStoryPanel, isEndStoryOpen]);
 
   useEffect(() => {
     audioSettingsRef.current = audioSettings;
@@ -1500,24 +1477,6 @@ export default function App(): React.JSX.Element {
       setShopNotice(t('notice.watermelons5'));
     } finally {
       setPendingRewardedAd(null);
-    }
-  };
-
-  const handleQuickWatermelons = async (): Promise<void> => {
-    if (isQuickWatermelonPending) {
-      return;
-    }
-
-    setIsQuickWatermelonPending(true);
-    setShopNotice(null);
-
-    try {
-      const profile = await addWatermelons(100);
-      setPlayerProfile(profile);
-      playInterfaceSound(SHOP_BUY_SOUND_PATH);
-      setShopNotice(t('notice.watermelons100'));
-    } finally {
-      setIsQuickWatermelonPending(false);
     }
   };
 
@@ -2354,6 +2313,17 @@ export default function App(): React.JSX.Element {
   const finishStoryIntro = (): void => {
     window.localStorage.setItem(STORY_INTRO_STORAGE_KEY, 'true');
     setIsStoryIntroOpen(false);
+
+    if (shouldStartTutorialAfterStory) {
+      setShouldStartTutorialAfterStory(false);
+      startGame(true);
+    }
+  };
+
+  const startTutorialWithStory = (): void => {
+    setStoryIntroPanel(0);
+    setShouldStartTutorialAfterStory(true);
+    setIsStoryIntroOpen(true);
   };
 
   const advanceStoryIntro = (): void => {
@@ -2425,7 +2395,9 @@ export default function App(): React.JSX.Element {
                 clickedMainMenuButton === 'tutorial' ? ' is-clicked' : ''
               }`}
               aria-label={t('main.tutorial')}
-              onClick={() => handleMainMenuButtonClick('tutorial', () => startGame(true))}
+              onClick={() =>
+                handleMainMenuButtonClick('tutorial', startTutorialWithStory)
+              }
             />
           </div>
 
@@ -2475,13 +2447,12 @@ export default function App(): React.JSX.Element {
               total: STORY_INTRO_PANEL_COUNT,
             })}
           >
-            <div
-              className={`story-intro__panel-art story-intro__panel-art--${storyIntroPanel}`}
-              style={
-                {
-                  '--story-intro-image': `url("${STORY_INTRO_IMAGE_PATH}")`,
-                } as CSSProperties
-              }
+            <img
+              className="story-intro__panel-art"
+              src={STORY_INTRO_IMAGES[storyIntroPanel]}
+              alt=""
+              aria-hidden="true"
+              draggable="false"
             />
             <div className="story-intro__shine" aria-hidden="true" />
           </div>
@@ -2898,15 +2869,6 @@ export default function App(): React.JSX.Element {
                   alt=""
                   aria-hidden="true"
                 />
-                <button
-                  type="button"
-                  className="shop-quick-watermelon-button"
-                  aria-label={t('shop.quickAdd')}
-                  disabled={isQuickWatermelonPending}
-                  onClick={() => void handleQuickWatermelons()}
-                >
-                  {isQuickWatermelonPending ? '...' : '+100'}
-                </button>
                 {selectedShopTab === 'watermelons' && (
                   <button
                     type="button"
@@ -3073,7 +3035,9 @@ export default function App(): React.JSX.Element {
                       key={item.id}
                     >
                       <div
-                        className={`shop-item__icon shop-item__icon--${item.tone}`}
+                        className={`shop-item__icon shop-item__icon--${getShopItemToneForPrice(
+                          item.price,
+                        )}`}
                         aria-hidden="true"
                       >
                         <ShopItemPreview item={item} />
@@ -3288,8 +3252,15 @@ export default function App(): React.JSX.Element {
                           }`}
                           style={getTalentNodePositionStyle(
                             CONTROL_MASTER_NODE_POSITION,
+                            true,
                           )}
                           onClick={() => selectControlTalent({ kind: 'master' })}
+                          aria-label={localizeTalent(
+                            'control',
+                            'master',
+                            CONTROL_MASTER_TALENT,
+                            language,
+                          ).title}
                         >
                           <img src={CONTROL_MASTER_TALENT.icon} alt="" aria-hidden="true" />
                           <span className="control-talent-node__title">
@@ -3299,14 +3270,6 @@ export default function App(): React.JSX.Element {
                               CONTROL_MASTER_TALENT,
                               language,
                             ).title}
-                          </span>
-                          <span className="control-talent-node__price">
-                            <img
-                              src="/assets/collectable/pasteque.webp"
-                              alt=""
-                              aria-hidden="true"
-                            />
-                            {CONTROL_MASTER_TALENT.cost}
                           </span>
                         </button>
 
@@ -3324,7 +3287,6 @@ export default function App(): React.JSX.Element {
                                     currentLevel + 1 === level;
                                   const isLocked =
                                     !controlTalentState.master && !isOwned && !isNext;
-                                  const price = talent.costs[level - 1] ?? 0;
                                   const position = getControlTalentNodePosition(
                                     talent.id,
                                     level,
@@ -3347,6 +3309,12 @@ export default function App(): React.JSX.Element {
                                           level,
                                         })
                                       }
+                                      aria-label={`${localizeTalent(
+                                        'control',
+                                        talent.id,
+                                        talent,
+                                        language,
+                                      ).title}, ${t('common.level', { value: level })}`}
                                     >
                                       <img src={talent.icon} alt="" aria-hidden="true" />
                                       <span className="control-talent-node__title">
@@ -3355,18 +3323,8 @@ export default function App(): React.JSX.Element {
                                           talent.id,
                                           talent,
                                           language,
-                                        ).title}
-                                      </span>
-                                      <span className="control-talent-node__level">
+                                        ).title}{' '}
                                         {t('common.levelShort', { value: level })}
-                                      </span>
-                                      <span className="control-talent-node__price">
-                                        <img
-                                          src="/assets/collectable/pasteque.webp"
-                                          alt=""
-                                          aria-hidden="true"
-                                        />
-                                        {price}
                                       </span>
                                     </button>
                                   );
@@ -3391,7 +3349,17 @@ export default function App(): React.JSX.Element {
                             />
                             <div className="talent-detail-sheet__copy">
                               <strong>{selectedControlTalentDetails.title}</strong>
-                              <span>{selectedControlTalentDetails.levelLabel}</span>
+                              <span>
+                                {selectedControlTalentDetails.levelLabel} ·{' '}
+                                {t('common.buyPrice', {
+                                  value: selectedControlTalentDetails.price,
+                                })}
+                                <img
+                                  src="/assets/collectable/pasteque.webp"
+                                  alt=""
+                                  aria-hidden="true"
+                                />
+                              </span>
                               <p>{selectedControlTalentDetails.description}</p>
                             </div>
                             {selectedControlTalentDetails.isRefundable ? (
@@ -3451,8 +3419,15 @@ export default function App(): React.JSX.Element {
                           }`}
                           style={getTalentNodePositionStyle(
                             ENDURANCE_PHOENIX_NODE_POSITION,
+                            true,
                           )}
                           onClick={() => selectEnduranceTalent({ kind: 'phoenix' })}
+                          aria-label={localizeTalent(
+                            'endurance',
+                            'phoenix',
+                            ENDURANCE_PHOENIX_TALENT,
+                            language,
+                          ).title}
                         >
                           <img
                             src={ENDURANCE_PHOENIX_TALENT.icon}
@@ -3466,14 +3441,6 @@ export default function App(): React.JSX.Element {
                               ENDURANCE_PHOENIX_TALENT,
                               language,
                             ).title}
-                          </span>
-                          <span className="control-talent-node__price">
-                            <img
-                              src="/assets/collectable/pasteque.webp"
-                              alt=""
-                              aria-hidden="true"
-                            />
-                            {ENDURANCE_PHOENIX_TALENT.cost}
                           </span>
                         </button>
 
@@ -3506,7 +3473,6 @@ export default function App(): React.JSX.Element {
                                   const isLocked =
                                     !enduranceTalentState.phoenix &&
                                     (!isUnlocked || (!isOwned && !isNext));
-                                  const price = talent.costs[level - 1] ?? 0;
                                   const position = getEnduranceTalentNodePosition(
                                     talent.id,
                                     level,
@@ -3529,6 +3495,12 @@ export default function App(): React.JSX.Element {
                                           level,
                                         })
                                       }
+                                      aria-label={`${localizeTalent(
+                                        'endurance',
+                                        talent.id,
+                                        talent,
+                                        language,
+                                      ).title}, ${t('common.level', { value: level })}`}
                                     >
                                       <img src={talent.icon} alt="" aria-hidden="true" />
                                       <span className="control-talent-node__title">
@@ -3537,18 +3509,8 @@ export default function App(): React.JSX.Element {
                                           talent.id,
                                           talent,
                                           language,
-                                        ).title}
-                                      </span>
-                                      <span className="control-talent-node__level">
+                                        ).title}{' '}
                                         {t('common.levelShort', { value: level })}
-                                      </span>
-                                      <span className="control-talent-node__price">
-                                        <img
-                                          src="/assets/collectable/pasteque.webp"
-                                          alt=""
-                                          aria-hidden="true"
-                                        />
-                                        {price}
                                       </span>
                                     </button>
                                   );
@@ -3573,7 +3535,17 @@ export default function App(): React.JSX.Element {
                             />
                             <div className="talent-detail-sheet__copy">
                               <strong>{selectedEnduranceTalentDetails.title}</strong>
-                              <span>{selectedEnduranceTalentDetails.levelLabel}</span>
+                              <span>
+                                {selectedEnduranceTalentDetails.levelLabel} ·{' '}
+                                {t('common.buyPrice', {
+                                  value: selectedEnduranceTalentDetails.price,
+                                })}
+                                <img
+                                  src="/assets/collectable/pasteque.webp"
+                                  alt=""
+                                  aria-hidden="true"
+                                />
+                              </span>
                               <p>{selectedEnduranceTalentDetails.description}</p>
                             </div>
                             {selectedEnduranceTalentDetails.isRefundable ? (
@@ -3633,8 +3605,15 @@ export default function App(): React.JSX.Element {
                           }`}
                           style={getTalentNodePositionStyle(
                             BLUE_FEAST_NODE_POSITION,
+                            true,
                           )}
                           onClick={() => selectBlueTalent({ kind: 'feast' })}
+                          aria-label={localizeTalent(
+                            'blue',
+                            'feast',
+                            BLUE_FEAST_TALENT,
+                            language,
+                          ).title}
                         >
                           <img
                             src={BLUE_FEAST_TALENT.icon}
@@ -3648,14 +3627,6 @@ export default function App(): React.JSX.Element {
                               BLUE_FEAST_TALENT,
                               language,
                             ).title}
-                          </span>
-                          <span className="control-talent-node__price">
-                            <img
-                              src="/assets/collectable/pasteque.webp"
-                              alt=""
-                              aria-hidden="true"
-                            />
-                            {BLUE_FEAST_TALENT.cost}
                           </span>
                         </button>
 
@@ -3685,8 +3656,6 @@ export default function App(): React.JSX.Element {
                             const isLocked =
                               !blueTalentState.feast &&
                               (!isUnlocked || (!isOwned && !isNext));
-                            const price = talent.costs[level - 1] ?? 0;
-
                             return (
                               <button
                                 type="button"
@@ -3704,6 +3673,12 @@ export default function App(): React.JSX.Element {
                                     level,
                                   })
                                 }
+                                aria-label={`${localizeTalent(
+                                  'blue',
+                                  talent.id,
+                                  talent,
+                                  language,
+                                ).title}, ${t('common.level', { value: level })}`}
                               >
                                 <img src={talent.icon} alt="" aria-hidden="true" />
                                 <span className="control-talent-node__title">
@@ -3712,18 +3687,8 @@ export default function App(): React.JSX.Element {
                                     talent.id,
                                     talent,
                                     language,
-                                  ).title}
-                                </span>
-                                <span className="control-talent-node__level">
+                                  ).title}{' '}
                                   {t('common.levelShort', { value: level })}
-                                </span>
-                                <span className="control-talent-node__price">
-                                  <img
-                                    src="/assets/collectable/pasteque.webp"
-                                    alt=""
-                                    aria-hidden="true"
-                                  />
-                                  {price}
                                 </span>
                               </button>
                             );
@@ -3745,7 +3710,17 @@ export default function App(): React.JSX.Element {
                             />
                             <div className="talent-detail-sheet__copy">
                               <strong>{selectedBlueTalentDetails.title}</strong>
-                              <span>{selectedBlueTalentDetails.levelLabel}</span>
+                              <span>
+                                {selectedBlueTalentDetails.levelLabel} ·{' '}
+                                {t('common.buyPrice', {
+                                  value: selectedBlueTalentDetails.price,
+                                })}
+                                <img
+                                  src="/assets/collectable/pasteque.webp"
+                                  alt=""
+                                  aria-hidden="true"
+                                />
+                              </span>
                               <p>{selectedBlueTalentDetails.description}</p>
                             </div>
                             {selectedBlueTalentDetails.isRefundable ? (

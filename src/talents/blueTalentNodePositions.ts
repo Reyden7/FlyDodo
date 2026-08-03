@@ -4,8 +4,8 @@ import type { TalentNodePosition } from './talentNodePositions';
 export type { TalentNodePosition } from './talentNodePositions';
 
 export const BLUE_FEAST_NODE_POSITION: TalentNodePosition = {
-  x: 49,
-  y: 3,
+  x: 50,
+  y: 6.8,
 };
 
 export const BLUE_TALENT_NODE_POSITIONS: Record<
@@ -13,26 +13,26 @@ export const BLUE_TALENT_NODE_POSITIONS: Record<
   Partial<Record<number, TalentNodePosition>>
 > = {
   watermelonMagnet: {
-    3: { x: 10, y: 28 },
-    2: { x: 10, y: 50 },
-    1: { x: 10, y: 72 },
+    3: { x: 24.06, y: 28 },
+    2: { x: 24.06, y: 50 },
+    1: { x: 24.06, y: 72 },
   },
   fruitMultiplier: {
-    3: { x: 49, y: 28 },
-    2: { x: 49, y: 50 },
-    1: { x: 49, y: 72 },
+    3: { x: 49.47, y: 28 },
+    2: { x: 49.47, y: 50 },
+    1: { x: 49.47, y: 72 },
   },
   powerTakeoff: {
-    1: { x: 86, y: 38 },
+    1: { x: 74.51, y: 38 },
   },
   chainReaction: {
-    1: { x: 86, y: 51 },
+    1: { x: 74.51, y: 51 },
   },
   fruitDetector: {
-    1: { x: 86, y: 64 },
+    1: { x: 74.51, y: 64 },
   },
   perch: {
-    1: { x: 86, y: 77 },
+    1: { x: 74.51, y: 77 },
   },
 };
 

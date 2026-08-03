@@ -216,6 +216,10 @@ const LIGHTNING_FRAME_COUNT = 16;
 const LIGHTNING_SOUND_KEY = 'mid-sky-lightning-sound';
 const LIGHTNING_SOUND_PATH = '/assets/sounds/lightning.mp3';
 const LIGHTNING_SOUND_VOLUME = 0.8;
+const LIGHTNING_DAMAGE = 3;
+const LIGHTNING_WARNING_DURATION_MS = 2_000;
+const LIGHTNING_WARNING_DEPTH = 999;
+const LIGHTNING_WARNING_COLOR = 0xbff7ff;
 const LIGHTNING_SCREEN_FLASH_COLOR = 0xeafaff;
 const LIGHTNING_SCREEN_FLASH_ALPHA = 0.25;
 const LIGHTNING_SCREEN_FLASH_FADE_MS = 420;
@@ -563,6 +567,8 @@ interface FloatingAsteroidMotion {
 interface LightningFlashMotion {
   sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   triggerAltitude: number;
+  warningIndicator: Phaser.GameObjects.Graphics;
+  warningRemainingMs: number | null;
   flashed: boolean;
 }
 
@@ -1074,6 +1080,12 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     height: 70,
     displayWidth: 96,
     animationKey: PTERODACTYL_ANIMATION_KEY,
+    hitbox: {
+      widthRatio: 0.86,
+      heightRatio: 0.62,
+      offsetXRatio: 0.12,
+      offsetYRatio: 0.18,
+    },
     fillColor: 0x8a6b5b,
     strokeColor: 0x3a2a23,
   },
@@ -1084,6 +1096,12 @@ const OBSTACLE_KINDS: readonly ObstacleKind[] = [
     height: 220,
     displayWidth: 220,
     animationKey: STORM_CLOUD_ANIMATION_KEY,
+    hitbox: {
+      widthRatio: 0.72,
+      heightRatio: 0.56,
+      offsetXRatio: 0.14,
+      offsetYRatio: 0.22,
+    },
     fillColor: 0x273449,
     strokeColor: 0x101721,
   },
@@ -1964,7 +1982,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateSatelliteDrifts(time, deltaSeconds);
     this.updateAsteroidPassages(deltaSeconds);
     this.updateFloatingAsteroids(deltaSeconds);
-    this.updateLightningFlashes();
+    this.updateLightningFlashes(delta);
     this.updateFlight(direction, deltaSeconds);
     this.updateSkyWind(deltaSeconds);
     this.updateHorizontalScreenBounds();
@@ -5028,26 +5046,57 @@ export class GameplayScene extends Phaser.Scene {
       lightning.disableBody(true, true);
     });
 
+    const warningIndicator = this.add
+      .graphics()
+      .setPosition(lightning.x, 0)
+      .setScrollFactor(0)
+      .setDepth(LIGHTNING_WARNING_DEPTH)
+      .setVisible(false);
+
     this.lightningFlashMotions.push({
       sprite: lightning,
       triggerAltitude: Math.round(altitude) - LIGHTNING_TRIGGER_DISTANCE_METRES,
+      warningIndicator,
+      warningRemainingMs: null,
       flashed: false,
     });
   }
 
-  private updateLightningFlashes(): void {
+  private updateLightningFlashes(deltaMs: number): void {
     for (const motion of this.lightningFlashMotions) {
-      const { sprite } = motion;
+      const { sprite, warningIndicator } = motion;
 
       if (!sprite.active || motion.flashed) {
         continue;
       }
 
-      if (this.currentAltitude < motion.triggerAltitude) {
+      if (motion.warningRemainingMs === null) {
+        if (this.currentAltitude < motion.triggerAltitude) {
+          continue;
+        }
+
+        motion.warningRemainingMs = LIGHTNING_WARNING_DURATION_MS;
+        warningIndicator.setVisible(true);
+        this.renderLightningWarning(warningIndicator, motion.warningRemainingMs);
+        this.playLightningWarningCrackle();
+        continue;
+      }
+
+      motion.warningRemainingMs = Math.max(
+        0,
+        motion.warningRemainingMs - deltaMs,
+      );
+      this.renderLightningWarning(
+        warningIndicator,
+        motion.warningRemainingMs,
+      );
+
+      if (motion.warningRemainingMs > 0) {
         continue;
       }
 
       motion.flashed = true;
+      warningIndicator.clear().setVisible(false);
       sprite.enableBody(true, sprite.x, sprite.y, true, true);
       sprite.play(LIGHTNING_ANIMATION_KEY);
       this.sound.play(LIGHTNING_SOUND_KEY, {
@@ -5059,6 +5108,83 @@ export class GameplayScene extends Phaser.Scene {
         LIGHTNING_CAMERA_SHAKE_INTENSITY,
       );
     }
+  }
+
+  private renderLightningWarning(
+    warning: Phaser.GameObjects.Graphics,
+    remainingMs: number,
+  ): void {
+    const urgency = 1 - remainingMs / LIGHTNING_WARNING_DURATION_MS;
+    const sparkCount = 5 + Math.floor(urgency * 5);
+
+    warning.clear();
+    warning.fillStyle(LIGHTNING_WARNING_COLOR, 0.16 + urgency * 0.18);
+    warning.fillEllipse(0, 4, 66 + urgency * 24, 18 + urgency * 9);
+
+    for (let index = 0; index < sparkCount; index += 1) {
+      const startX = Phaser.Math.Between(-35, 35);
+      const startY = Phaser.Math.Between(0, 11);
+      const endX = startX + Phaser.Math.Between(-10, 10);
+      const endY = startY + Phaser.Math.Between(7, 22);
+      const alpha = Phaser.Math.FloatBetween(0.55, 1);
+
+      warning.lineStyle(
+        Phaser.Math.Between(1, 3),
+        index % 3 === 0 ? 0xffffff : LIGHTNING_WARNING_COLOR,
+        alpha,
+      );
+      warning.beginPath();
+      warning.moveTo(startX, startY);
+      warning.lineTo((startX + endX) / 2 + Phaser.Math.Between(-4, 4), (startY + endY) / 2);
+      warning.lineTo(endX, endY);
+      warning.strokePath();
+    }
+
+    warning.setAlpha(0.72 + Math.random() * 0.28);
+  }
+
+  private playLightningWarningCrackle(): void {
+    const volume = this.audioSettings.lightning;
+    if (volume <= 0) {
+      return;
+    }
+
+    if (!(this.sound instanceof Phaser.Sound.WebAudioSoundManager)) {
+      this.sound.play(THUNDER_SOUND_KEY, {
+        volume: 0.12 * volume,
+        rate: 1.8,
+      });
+      return;
+    }
+
+    const context = this.sound.context;
+    const sampleCount = Math.floor(
+      context.sampleRate * (LIGHTNING_WARNING_DURATION_MS / 1_000),
+    );
+    const buffer = context.createBuffer(1, sampleCount, context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    let burst = 0;
+
+    for (let index = 0; index < samples.length; index += 1) {
+      if (Math.random() < 0.0045) {
+        burst = Phaser.Math.FloatBetween(0.35, 1);
+      }
+      samples[index] = (Math.random() * 2 - 1) * burst;
+      burst *= 0.94;
+    }
+
+    const source = context.createBufferSource();
+    const highPass = context.createBiquadFilter();
+    const gain = context.createGain();
+    highPass.type = 'highpass';
+    highPass.frequency.value = 1_650;
+    highPass.Q.value = 0.7;
+    gain.gain.value = 0.2 * volume;
+    source.buffer = buffer;
+    source.connect(highPass);
+    highPass.connect(gain);
+    gain.connect(this.sound.destination);
+    source.start();
   }
 
   private centeredHitboxesOverlap(
@@ -5478,12 +5604,20 @@ export class GameplayScene extends Phaser.Scene {
     const obstacleKind = obstacle.getData('kind') as ObstacleKindId | undefined;
 
     if (obstacleKind === 'lightning') {
+      if (
+        this.time.now - this.lastPlayerDamageTime <
+        PLAYER_DAMAGE_INVULNERABILITY_MS
+      ) {
+        return;
+      }
+
+      obstacle.disableBody(false, false);
       this.cameras.main.shake(
         LIGHTNING_HIT_CAMERA_SHAKE_DURATION_MS,
         LIGHTNING_HIT_CAMERA_SHAKE_INTENSITY,
         true,
       );
-      void this.finishGame('lightning', false);
+      void this.damagePlayer(LIGHTNING_DAMAGE, 'lightning');
       return;
     }
 

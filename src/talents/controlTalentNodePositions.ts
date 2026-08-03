@@ -2,8 +2,8 @@ import type { ControlTalentId } from './controlTalents';
 import type { TalentNodePosition } from './talentNodePositions';
 
 export const CONTROL_MASTER_NODE_POSITION: TalentNodePosition = {
-  x: 48,
-  y: 3,
+  x: 50,
+  y: 6.8,
 };
 
 export const CONTROL_TALENT_NODE_POSITIONS: Record<
@@ -11,28 +11,28 @@ export const CONTROL_TALENT_NODE_POSITIONS: Record<
   Partial<Record<number, TalentNodePosition>>
 > = {
   lift: {
-    4: { x: 8, y: 38 },
-    3: { x: 8, y: 52 },
-    2: { x: 8, y: 67 },
-    1: { x: 8, y: 82 },
+    4: { x: 20.95, y: 38 },
+    3: { x: 20.95, y: 52 },
+    2: { x: 20.95, y: 67 },
+    1: { x: 20.95, y: 82 },
   },
   rotation: {
-    4: { x: 34, y: 38 },
-    3: { x: 34, y: 52 },
-    2: { x: 34, y: 67 },
-    1: { x: 34, y: 82 },
+    4: { x: 38.86, y: 38 },
+    3: { x: 38.86, y: 52 },
+    2: { x: 38.86, y: 67 },
+    1: { x: 38.86, y: 82 },
   },
   gyroscope: {
-    4: { x: 62, y: 38 },
-    3: { x: 62, y: 52 },
-    2: { x: 62, y: 67 },
-    1: { x: 62, y: 82 },
+    4: { x: 58.65, y: 38 },
+    3: { x: 58.65, y: 52 },
+    2: { x: 58.65, y: 67 },
+    1: { x: 58.65, y: 82 },
   },
   wing: {
-    4: { x: 91, y: 38 },
-    3: { x: 91, y: 52 },
-    2: { x: 91, y: 67 },
-    1: { x: 91, y: 82 },
+    4: { x: 77.81, y: 38 },
+    3: { x: 77.81, y: 52 },
+    2: { x: 77.81, y: 67 },
+    1: { x: 77.81, y: 82 },
   },
 };
 
