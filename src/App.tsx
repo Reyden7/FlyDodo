@@ -553,7 +553,11 @@ export default function App(): React.JSX.Element {
   );
   const [storyIntroPanel, setStoryIntroPanel] = useState(0);
   const [shouldStartTutorialAfterStory, setShouldStartTutorialAfterStory] =
-    useState(false);
+    useState(
+      () =>
+        typeof window !== 'undefined' &&
+        window.localStorage.getItem(STORY_INTRO_STORAGE_KEY) !== 'true',
+    );
   const [isEndStoryOpen, setIsEndStoryOpen] = useState(false);
   const [endStoryPanel, setEndStoryPanel] = useState(0);
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
@@ -636,6 +640,7 @@ export default function App(): React.JSX.Element {
   const gameMusicRef = useRef<HTMLAudioElement | null>(null);
   const gameMusicSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const gameMusicFilterRef = useRef<BiquadFilterNode | null>(null);
+  const bossFightActiveRef = useRef(false);
   const audioSettingsRef = useRef(audioSettings);
   const menuPopTimersRef = useRef<number[]>([]);
   const mainMenuActionTimerRef = useRef<number | null>(null);
@@ -954,6 +959,7 @@ export default function App(): React.JSX.Element {
 
     const onPlayerDied = (event: Event): void => {
       const { reason } = (event as CustomEvent<PlayerDiedDetail>).detail;
+      bossFightActiveRef.current = false;
       setPlayerDeathReason(reason);
       setIsGamePaused(false);
 
@@ -993,6 +999,20 @@ export default function App(): React.JSX.Element {
       setHasMovedThisRun(true);
     };
 
+    const onBossFightStarted = (): void => {
+      bossFightActiveRef.current = true;
+      gameMusicRef.current?.pause();
+    };
+
+    const onBossFightEnded = (): void => {
+      bossFightActiveRef.current = false;
+      const gameMusic = gameMusicRef.current;
+
+      if (gameMusic) {
+        void gameMusic.play().catch(() => undefined);
+      }
+    };
+
     const onGameSceneReady = (): void => {
       setIsGameSceneReady(true);
     };
@@ -1005,6 +1025,8 @@ export default function App(): React.JSX.Element {
     gameEvents.addEventListener('flydodo:game-over', onGameOver);
     gameEvents.addEventListener('flydodo:rewarded-revived', onRewardedRevived);
     gameEvents.addEventListener('flydodo:movement-started', onMovementStarted);
+    gameEvents.addEventListener('flydodo:boss-fight-started', onBossFightStarted);
+    gameEvents.addEventListener('flydodo:boss-fight-ended', onBossFightEnded);
 
     return () => {
       gameEvents.removeEventListener('flydodo:hud', onHud);
@@ -1018,6 +1040,14 @@ export default function App(): React.JSX.Element {
         onRewardedRevived,
       );
       gameEvents.removeEventListener('flydodo:movement-started', onMovementStarted);
+      gameEvents.removeEventListener(
+        'flydodo:boss-fight-started',
+        onBossFightStarted,
+      );
+      gameEvents.removeEventListener(
+        'flydodo:boss-fight-ended',
+        onBossFightEnded,
+      );
     };
   }, []);
 
@@ -1208,6 +1238,7 @@ export default function App(): React.JSX.Element {
   );
 
   const resetRunState = (): void => {
+    bossFightActiveRef.current = false;
     setIsShopOpen(false);
     setIsGameOver(false);
     setIsEndStoryOpen(false);
@@ -1406,9 +1437,9 @@ export default function App(): React.JSX.Element {
 
     const gameMusic = gameMusicRef.current;
 
-    if (gameMusic) {
+    if (gameMusic && !bossFightActiveRef.current) {
       void gameMusic.play().catch(() => undefined);
-    } else {
+    } else if (!gameMusic && !bossFightActiveRef.current) {
       startGameMusic();
     }
   };
@@ -2574,7 +2605,7 @@ export default function App(): React.JSX.Element {
           <div className="hud__left-column">
             <div className="hud-pill hud-pill--speed">
               <span>{t('hud.speed')}</span>
-              <strong>{speed} m/s</strong>
+              <strong>{speed.toFixed(1)} m/s</strong>
             </div>
 
             <div
@@ -2590,8 +2621,16 @@ export default function App(): React.JSX.Element {
 
           </div>
 
-          <div className="hud-pill hud-pill--watermelons">
-            <span>{t('hud.watermelons')}</span>
+          <div
+            className="hud-pill hud-pill--watermelons"
+            aria-label={`${t('hud.watermelons')} : ${watermelons}`}
+          >
+            <img
+              className="hud-pill__watermelon-icon"
+              src="/assets/collectable/pastequeN.webp"
+              alt=""
+              aria-hidden="true"
+            />
             <strong key={watermelons} className="hud-pill__watermelon-count">
               {watermelons}
             </strong>

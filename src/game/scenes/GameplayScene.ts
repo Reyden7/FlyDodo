@@ -12,6 +12,8 @@ import {
 } from '../../i18n/i18n';
 import { getDevStartAltitude } from '../devSettings';
 import {
+  emitBossFightEnded,
+  emitBossFightStarted,
   emitFallWarning,
   emitFlightHud,
   emitGameOver,
@@ -166,7 +168,7 @@ const FALL_LIMIT_BELOW_CAMERA = 5;
 const SIDE_LIMIT_OUTSIDE_CAMERA = 34;
 const GAME_OVER_DELAY_MS = 2_000;
 const LIGHTNING_GAME_OVER_REVEAL_DELAY_MS = 1_000;
-const PIXELS_PER_METRE_PER_SECOND = 82;
+const PIXELS_PER_METRE_PER_SECOND = 10;
 const SAFE_GROUND_TOUCH_ALTITUDE = 50;
 const GROUND_DIRT_HEIGHT = 85;
 const GROUND_TEXTURE_KEY = 'ground-decor';
@@ -254,6 +256,63 @@ const UFO_DEFAULT_DEPARTURE_DURATION_MS = 1_400;
 const UFO_SOUND_VOLUME = 0.8;
 const UFO_DEPTH = 90;
 const UFO_BEAM_DEPTH = 80;
+const JULIO_BOSS_TEXTURE_KEYS = {
+  1: 'julio-boss-1',
+  2: 'julio-boss-2',
+  3: 'julio-boss-3',
+} as const;
+const JULIO_BOSS_ROCKET_TEXTURE_KEY = 'julio-boss-rocket';
+const JULIO_DODO_SHOT_TEXTURE_KEY = 'julio-dodo-shot';
+const JULIO_EXPLOSION_TEXTURE_PREFIX = 'julio-explosion';
+const JULIO_EXPLOSION_ANIMATION_KEY = 'julio-final-explosion';
+const JULIO_EXPLOSION_FRAME_COUNT = 12;
+const JULIO_EXPLOSION_FRAME_RATE = 20;
+const JULIO_EXPLOSION_DISPLAY_WIDTH = 235;
+const JULIO_BOSS_MUSIC_KEY = 'julio-boss-music';
+const JULIO_EXPLOSION_SOUND_KEY = 'julio-explosion';
+const JULIO_BOSS_TRIGGER_ALTITUDE = 5_000;
+const JULIO_BOSS_MAX_HEALTH = 10;
+const JULIO_BOSS_DISPLAY_WIDTH = 148;
+const JULIO_BOSS_TARGET_Y = 158;
+const JULIO_BOSS_DEPTH = 120;
+const JULIO_BOSS_ARRIVAL_DURATION_MS = 1_450;
+const JULIO_BOSS_HORIZONTAL_MARGIN = 76;
+const JULIO_BOSS_PHASE_3_FOLLOW_SPEED = 2.8;
+const JULIO_BOSS_PHASE_2_MOVE_SPEED = 2.2;
+const JULIO_BOSS_PHASE_1_MOVE_SPEED = 4.2;
+const JULIO_BOSS_PHASE_2_TARGET_INTERVAL_MS = 1_250;
+const JULIO_BOSS_PHASE_1_TARGET_INTERVAL_MS = 650;
+const JULIO_BOSS_ROCKET_SPEED = 330;
+const JULIO_BOSS_ROCKET_WIDTH = 64;
+const JULIO_BOSS_ROCKET_HITBOX_SCALE = 0.8;
+const JULIO_BOSS_HITBOX_SCALE = 0.8;
+const JULIO_BOSS_FIRST_SHOT_DELAY_MS = 1_300;
+const JULIO_BOSS_SHOT_INTERVALS_MS = [0, 1_050, 1_450, 1_900] as const;
+const JULIO_DODO_SHOT_SPEED = 620;
+const JULIO_DODO_SHOT_WIDTH = 22;
+const JULIO_DODO_SHOT_HITBOX_SCALE = 0.8;
+const JULIO_DODO_SHOT_COOLDOWN_MS = 900;
+const JULIO_AUTO_CLIMB_SPEED = 165;
+const JULIO_AUTO_HORIZONTAL_SPEED = 145;
+const JULIO_AUTO_HORIZONTAL_RESPONSE = 7;
+const JULIO_FIRE_BUTTON_X = GAME_WIDTH / 2;
+const JULIO_FIRE_BUTTON_Y = GAME_HEIGHT - 54;
+const JULIO_FIRE_BUTTON_RADIUS = 39;
+const JULIO_UI_DEPTH = 1_150;
+const JULIO_BOSS_MUSIC_VOLUME = 0.72;
+
+const getJulioBossPhase = (health: number): 1 | 2 | 3 => {
+  if (health >= 7) {
+    return 3;
+  }
+
+  if (health >= 4) {
+    return 2;
+  }
+
+  return 1;
+};
+const JULIO_EXPLOSION_VOLUME = 0.85;
 const FLOATING_ASTEROID_TEXTURES = [
   {
     key: 'space-floating-asteroid-stone-2',
@@ -319,6 +378,11 @@ const NEW_RECORD_BIRD_COUNT = 7;
 const NEW_RECORD_LEAF_COUNT = 24;
 const OBSTACLE_DEPTH = 6;
 const OBSTACLE_ALPHA = 0.92;
+const DANGER_OUTLINE_COLOR = 0xff3028;
+const DANGER_OUTLINE_OUTER_STRENGTH = 3.6;
+const DANGER_OUTLINE_INNER_STRENGTH = 0.8;
+const DANGER_OUTLINE_QUALITY = 4;
+const DANGER_OUTLINE_DISTANCE = 5;
 const BRANCH_EDGE_OVERHANG = 20;
 const MOSQUITO_CIRCLE_DURATION_MS = 1_800;
 const MOSQUITO_HITBOX_WIDTH_RATIO = 0.42;
@@ -377,8 +441,8 @@ const PLAYER_REGENERATION_DELAY_MS = 7_000;
 const PLAYER_SHIELD_RECHARGE_DELAY_MS = 10_000;
 const LAVA_START_DELAY_MS = 1_000;
 const LAVA_INITIAL_RISE_SPEED = 60;
-const LAVA_SPEED_GAIN_PER_100_METRES = 4;
-const LAVA_MAX_RISE_SPEED = 240;
+const LAVA_SPEED_GAIN_PER_100_METRES = 1;
+const LAVA_MAX_RISE_SPEED = 150;
 const LAVA_START_Y = GROUND_Y + GROUND_DIRT_HEIGHT;
 const LAVA_ALPHA = 1;
 const LAVA_DEPTH = 13;
@@ -591,6 +655,15 @@ interface WindStreak {
   age: number;
   lifetime: number;
   maxAlpha: number;
+}
+
+type JulioBossState = 'idle' | 'arriving' | 'active' | 'defeated';
+
+interface JulioProjectile {
+  sprite: Phaser.GameObjects.Image;
+  velocityX: number;
+  velocityY: number;
+  homing?: boolean;
 }
 
 const GROUND_FOREST_DECOR: readonly GroundForestDecor[] = [
@@ -1017,6 +1090,10 @@ const FEATHER_TEXTURES = [
 
 const WATERMELON_SCALE = 0.075;
 const WATERMELON_DEPTH = 4;
+const WATERMELON_HUD_TARGET_X = GAME_WIDTH - 48;
+const WATERMELON_HUD_TARGET_Y = 45;
+const WATERMELON_HUD_ICON_SCALE = 0.024;
+const WATERMELON_HUD_FLIGHT_DURATION_MS = 620;
 const WATERMELON_GLOW_TEXTURE_KEY = 'watermelon-attraction-glow';
 const WATERMELON_GLOW_SIZE = 112;
 const WATERMELON_ROTATION_DURATION_MIN_MS = 4_500;
@@ -1185,8 +1262,8 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
     id: 'midSky',
     label: 'CloudExit',
     minAltitude: 1_000,
-    maxAltitude: 1_200,
-    obstacleKinds: ['lightning'],
+    maxAltitude: 5_000,
+    obstacleKinds: ['stormCloud', 'lightning'],
     firstObstacleOffset: 45,
     spacingMin: 95,
     spacingMax: 135,
@@ -1195,8 +1272,8 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
   {
     id: 'stratosphere',
     label: 'UpperAtmosphere',
-    minAltitude: 1_200,
-    maxAltitude: 7_000,
+    minAltitude: 5_000,
+    maxAltitude: 6_000,
     obstacleKinds: [],
     firstObstacleOffset: 180,
     spacingMin: 240,
@@ -1206,10 +1283,10 @@ const ALTITUDE_LEVELS: readonly AltitudeLevelConfig[] = [
   {
     id: 'stratosphere',
     label: 'SpaceEdge',
-    minAltitude: 7_000,
+    minAltitude: 6_000,
     maxAltitude: 8_000,
     obstacleKinds: ['satellite'],
-    firstObstacleOffset: 180,
+    firstObstacleOffset: 0,
     spacingMin: 300,
     spacingMax: 480,
     sideMargin: 44,
@@ -1241,24 +1318,12 @@ const ZONE_TRANSITIONS: readonly ZoneTransitionConfig[] = [
     translationKey: 'transition.stormClouds',
   },
   {
-    altitude: 1_200,
+    altitude: 5_000,
     translationKey: 'transition.cloudEnd',
   },
   {
-    altitude: 1_800,
-    translationKey: 'transition.skyDarkens',
-  },
-  {
-    altitude: 3_000,
-    translationKey: 'transition.nightSky',
-  },
-  {
-    altitude: 3_500,
+    altitude: 6_000,
     translationKey: 'transition.firstStars',
-  },
-  {
-    altitude: 5_000,
-    translationKey: 'transition.deepSky',
   },
   {
     altitude: 7_000,
@@ -1578,6 +1643,22 @@ export class GameplayScene extends Phaser.Scene {
   private ufoBeam!: Phaser.GameObjects.Image;
   private ufoBeamGlow!: Phaser.GameObjects.Image;
   private reversedUfoDepartureSource?: AudioBufferSourceNode;
+  private julioBoss!: Phaser.GameObjects.Image;
+  private julioBossHealthBar!: Phaser.GameObjects.Graphics;
+  private julioFireButton!: Phaser.GameObjects.Container;
+  private julioBossState: JulioBossState = 'idle';
+  private julioBossHealth = JULIO_BOSS_MAX_HEALTH;
+  private julioBossTargetX = GAME_WIDTH / 2;
+  private julioBossTargetY = JULIO_BOSS_TARGET_Y;
+  private julioBossNextTargetAt = 0;
+  private julioBossNextShotAt = 0;
+  private julioBossHitFlashVersion = 0;
+  private julioLastDodoShotAt = Number.NEGATIVE_INFINITY;
+  private julioBossRockets: JulioProjectile[] = [];
+  private julioDodoShots: JulioProjectile[] = [];
+  private julioBossMusic?:
+    | Phaser.Sound.WebAudioSound
+    | Phaser.Sound.HTML5AudioSound;
 
   constructor() {
     super('GameplayScene');
@@ -1606,6 +1687,29 @@ export class GameplayScene extends Phaser.Scene {
     );
     this.load.image(UFO_TEXTURE_KEY, '/assets/Decors/Alien.webp');
     this.load.image(UFO_BEAM_TEXTURE_KEY, '/assets/Decors/rayon.webp');
+    this.load.image(JULIO_BOSS_TEXTURE_KEYS[1], '/assets/julio/1.webp');
+    this.load.image(JULIO_BOSS_TEXTURE_KEYS[2], '/assets/julio/2.webp');
+    this.load.image(JULIO_BOSS_TEXTURE_KEYS[3], '/assets/julio/3.webp');
+    this.load.image(
+      JULIO_BOSS_ROCKET_TEXTURE_KEY,
+      '/assets/julio/missile.webp',
+    );
+    this.load.image(
+      JULIO_DODO_SHOT_TEXTURE_KEY,
+      '/assets/julio/tireDodo.webp',
+    );
+    for (let index = 1; index <= JULIO_EXPLOSION_FRAME_COUNT; index += 1) {
+      const paddedIndex = String(index).padStart(2, '0');
+      this.load.image(
+        `${JULIO_EXPLOSION_TEXTURE_PREFIX}-${paddedIndex}`,
+        `/assets/julio/explosion/explosion_${paddedIndex}.webp`,
+      );
+    }
+    this.load.audio(JULIO_BOSS_MUSIC_KEY, '/assets/julio/bossmusic.mp3');
+    this.load.audio(
+      JULIO_EXPLOSION_SOUND_KEY,
+      '/assets/sounds/exploded.mp3',
+    );
     this.load.audio(
       ZONE_TRANSITION_SOUND_KEY,
       ZONE_TRANSITION_SOUND_PATH,
@@ -1780,6 +1884,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createLava();
     this.createLightningScreenFlash();
     this.createUfoEndingObjects();
+    this.createJulioBossObjects();
 
     this.leftWing = this.add.image(
       GAME_WIDTH / 2,
@@ -1975,16 +2080,27 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
-    const direction = this.consumeFlapDirection(time);
-    this.updateIdleFlightState(time);
+    this.maybeStartJulioBossFight(time);
+    const bossFightActive = this.isJulioBossFightActive();
+    const direction = bossFightActive
+      ? this.getHeldDirection()
+      : this.consumeFlapDirection(time);
+
+    if (!bossFightActive) {
+      this.updateIdleFlightState(time);
+    }
     this.updateMosquitoCircleMotions(time);
     this.updatePterodactylPatrols(time);
     this.updateSatelliteDrifts(time, deltaSeconds);
     this.updateAsteroidPassages(deltaSeconds);
     this.updateFloatingAsteroids(deltaSeconds);
     this.updateLightningFlashes(delta);
-    this.updateFlight(direction, deltaSeconds);
-    this.updateSkyWind(deltaSeconds);
+    if (bossFightActive) {
+      this.updateJulioAssistedFlight(direction, deltaSeconds, time);
+    } else {
+      this.updateFlight(direction, deltaSeconds);
+      this.updateSkyWind(deltaSeconds);
+    }
     this.updateHorizontalScreenBounds();
     this.updateGroundContact();
     this.updateWingBeats(direction, deltaSeconds);
@@ -1996,11 +2112,15 @@ export class GameplayScene extends Phaser.Scene {
     this.updateEnduranceTimers(time);
     this.updateOffscreenIndicator();
     this.updateAltitudeAndHud();
+    this.updateJulioBossFight(time, deltaSeconds);
     this.updateLava(time, deltaSeconds);
     this.updateFallState(time);
   }
 
   shutdown(): void {
+    if (this.isJulioBossFightActive()) {
+      emitBossFightEnded();
+    }
     this.unsubscribeAudioSettings?.();
     this.unsubscribeAudioSettings = undefined;
     this.unsubscribeAppLanguage?.();
@@ -2020,6 +2140,10 @@ export class GameplayScene extends Phaser.Scene {
     this.sound.stopByKey(UFO_ALIEN_CUE_SOUND_KEY);
     this.sound.stopByKey(UFO_ARRIVE_AND_STOP_SOUND_KEY);
     this.sound.stopByKey(UFO_KIDNAPPING_SOUND_KEY);
+    this.sound.stopByKey(JULIO_BOSS_MUSIC_KEY);
+    this.sound.stopByKey(JULIO_EXPLOSION_SOUND_KEY);
+    this.julioBossMusic?.destroy();
+    this.julioBossMusic = undefined;
     this.reversedUfoDepartureSource?.stop();
     this.reversedUfoDepartureSource = undefined;
     this.destroyFruitDetectorButton();
@@ -2547,6 +2671,9 @@ export class GameplayScene extends Phaser.Scene {
     this.skyWindSound?.setVolume(
       this.skyWindBaseVolume * this.audioSettings.wind,
     );
+    this.julioBossMusic?.setVolume(
+      JULIO_BOSS_MUSIC_VOLUME * this.audioSettings.music,
+    );
   }
 
   private startFlightSound(): void {
@@ -2595,6 +2722,17 @@ export class GameplayScene extends Phaser.Scene {
     this.ufoAlienCuePlayed = false;
     this.ufoKidnappingElapsedMs = 0;
     this.reversedUfoDepartureSource = undefined;
+    this.julioBossState = 'idle';
+    this.julioBossHealth = JULIO_BOSS_MAX_HEALTH;
+    this.julioBossTargetX = GAME_WIDTH / 2;
+    this.julioBossTargetY = JULIO_BOSS_TARGET_Y;
+    this.julioBossNextTargetAt = 0;
+    this.julioBossNextShotAt = 0;
+    this.julioBossHitFlashVersion = 0;
+    this.julioLastDodoShotAt = Number.NEGATIVE_INFINITY;
+    this.julioBossRockets = [];
+    this.julioDodoShots = [];
+    this.julioBossMusic = undefined;
     this.outOfScreenSince = null;
     this.lastWarningSecond = null;
     this.lastWarningReason = null;
@@ -4356,6 +4494,677 @@ export class GameplayScene extends Phaser.Scene {
       .setVisible(false);
   }
 
+  private createJulioBossObjects(): void {
+    if (!this.anims.exists(JULIO_EXPLOSION_ANIMATION_KEY)) {
+      this.anims.create({
+        key: JULIO_EXPLOSION_ANIMATION_KEY,
+        frames: Array.from(
+          { length: JULIO_EXPLOSION_FRAME_COUNT },
+          (_value, index) => ({
+            key: `${JULIO_EXPLOSION_TEXTURE_PREFIX}-${String(
+              index + 1,
+            ).padStart(2, '0')}`,
+          }),
+        ),
+        frameRate: JULIO_EXPLOSION_FRAME_RATE,
+        repeat: 0,
+      });
+    }
+
+    this.julioBoss = this.add
+      .image(
+        GAME_WIDTH + JULIO_BOSS_DISPLAY_WIDTH,
+        -JULIO_BOSS_DISPLAY_WIDTH,
+        JULIO_BOSS_TEXTURE_KEYS[3],
+      )
+      .setOrigin(0.5)
+      .setDisplaySize(
+        JULIO_BOSS_DISPLAY_WIDTH,
+        JULIO_BOSS_DISPLAY_WIDTH * 1.5,
+      )
+      .setScrollFactor(0)
+      .setDepth(JULIO_BOSS_DEPTH)
+      .setVisible(false);
+
+    this.julioBossHealthBar = this.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(JULIO_UI_DEPTH)
+      .setVisible(false);
+
+    const buttonBackground = this.add
+      .circle(0, 0, JULIO_FIRE_BUTTON_RADIUS, 0x17283a, 0.94)
+      .setStrokeStyle(5, 0xffc63d, 1);
+    const buttonInnerRing = this.add
+      .circle(0, 0, JULIO_FIRE_BUTTON_RADIUS - 7, 0x000000, 0)
+      .setStrokeStyle(2, 0xff5b35, 0.9);
+    const buttonIcon = this.add
+      .image(0, -1, JULIO_BOSS_ROCKET_TEXTURE_KEY)
+      .setDisplaySize(30, 45);
+
+    this.julioFireButton = this.add
+      .container(JULIO_FIRE_BUTTON_X, JULIO_FIRE_BUTTON_Y, [
+        buttonBackground,
+        buttonInnerRing,
+        buttonIcon,
+      ])
+      .setScrollFactor(0)
+      .setDepth(JULIO_UI_DEPTH)
+      .setSize(JULIO_FIRE_BUTTON_RADIUS * 2, JULIO_FIRE_BUTTON_RADIUS * 2)
+      .setInteractive(
+        new Phaser.Geom.Circle(0, 0, JULIO_FIRE_BUTTON_RADIUS),
+        Phaser.Geom.Circle.Contains,
+      )
+      .setVisible(false);
+
+    this.julioFireButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.fireJulioDodoShot();
+      },
+    );
+  }
+
+  private isJulioBossFightActive(): boolean {
+    return (
+      this.julioBossState === 'arriving' ||
+      this.julioBossState === 'active'
+    );
+  }
+
+  private maybeStartJulioBossFight(time: number): void {
+    if (
+      this.julioBossState !== 'idle' ||
+      this.currentAltitude < JULIO_BOSS_TRIGGER_ALTITUDE ||
+      this.ufoEndingState !== 'idle'
+    ) {
+      return;
+    }
+
+    this.julioBossState = 'arriving';
+    this.julioBossHealth = JULIO_BOSS_MAX_HEALTH;
+    this.julioBossTargetX = GAME_WIDTH - JULIO_BOSS_HORIZONTAL_MARGIN;
+    this.julioBossTargetY = JULIO_BOSS_TARGET_Y;
+    this.julioBossNextTargetAt = time;
+    this.julioBossNextShotAt = time + JULIO_BOSS_FIRST_SHOT_DELAY_MS;
+    this.julioLastDodoShotAt = Number.NEGATIVE_INFINITY;
+    this.heldPointerSides.clear();
+    this.isGrounded = false;
+    this.idleFlightState = 'active';
+    this.idleFlightPanicStartedAt = 0;
+    this.lastAcceptedFlapTime = time;
+    this.angularVelocity = 0;
+    this.startFlightSound();
+
+    this.julioBoss
+      .setTexture(JULIO_BOSS_TEXTURE_KEYS[3])
+      .setDisplaySize(
+        JULIO_BOSS_DISPLAY_WIDTH,
+        JULIO_BOSS_DISPLAY_WIDTH * 1.5,
+      )
+      .setPosition(GAME_WIDTH + JULIO_BOSS_DISPLAY_WIDTH, -120)
+      .setAlpha(1)
+      .setVisible(true);
+    this.julioBossHealthBar.setVisible(true);
+    this.julioFireButton.setVisible(true).setScale(0.2).setAlpha(1);
+    this.renderJulioBossHealthBar();
+
+    this.tweens.add({
+      targets: this.julioFireButton,
+      scale: 1,
+      duration: 360,
+      ease: 'Back.easeOut',
+    });
+    this.tweens.add({
+      targets: this.julioBoss,
+      x: this.julioBossTargetX,
+      y: this.julioBossTargetY,
+      duration: JULIO_BOSS_ARRIVAL_DURATION_MS,
+      ease: 'Cubic.easeOut',
+      onUpdate: () => this.renderJulioBossHealthBar(),
+      onComplete: () => {
+        if (this.julioBossState === 'arriving') {
+          this.julioBossState = 'active';
+          this.julioBossNextShotAt =
+            this.time.now + JULIO_BOSS_FIRST_SHOT_DELAY_MS;
+        }
+      },
+    });
+
+    this.julioBossMusic = this.sound.add(JULIO_BOSS_MUSIC_KEY, {
+      loop: true,
+      volume: JULIO_BOSS_MUSIC_VOLUME * this.audioSettings.music,
+    }) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
+    this.julioBossMusic.play();
+    emitBossFightStarted();
+  }
+
+  private updateJulioAssistedFlight(
+    direction: number,
+    deltaSeconds: number,
+    time: number,
+  ): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const horizontalDirection = direction === -1 || direction === 1 ? direction : 0;
+    const horizontalSmoothing =
+      1 - Math.exp(-JULIO_AUTO_HORIZONTAL_RESPONSE * deltaSeconds);
+    const verticalSmoothing = 1 - Math.exp(-5 * deltaSeconds);
+
+    body.setAcceleration(0, 0);
+    body.setMaxVelocity(JULIO_AUTO_HORIZONTAL_SPEED, MAX_VERTICAL_SPEED);
+    body.velocity.x = Phaser.Math.Linear(
+      body.velocity.x,
+      horizontalDirection * JULIO_AUTO_HORIZONTAL_SPEED,
+      horizontalSmoothing,
+    );
+    body.velocity.y = Phaser.Math.Linear(
+      body.velocity.y,
+      -JULIO_AUTO_CLIMB_SPEED,
+      verticalSmoothing,
+    );
+    this.angularVelocity = 0;
+    this.player.angle = Phaser.Math.Linear(
+      this.player.angle,
+      horizontalDirection * 11,
+      horizontalSmoothing,
+    );
+    this.lastAcceptedFlapTime = time;
+    this.idleFlightState = 'active';
+    this.idleFlightPanicStartedAt = 0;
+    this.emitMovementStartedOnce();
+  }
+
+  private updateJulioBossFight(time: number, deltaSeconds: number): void {
+    if (!this.isJulioBossFightActive()) {
+      return;
+    }
+
+    if (this.julioBossState === 'active') {
+      this.updateJulioBossMovement(time, deltaSeconds);
+
+      if (time >= this.julioBossNextShotAt) {
+        this.fireJulioBossRocket();
+        this.julioBossNextShotAt =
+          time +
+          JULIO_BOSS_SHOT_INTERVALS_MS[
+            getJulioBossPhase(this.julioBossHealth)
+          ];
+      }
+    }
+
+    this.updateJulioProjectiles(deltaSeconds);
+    this.renderJulioBossHealthBar();
+  }
+
+  private updateJulioBossMovement(time: number, deltaSeconds: number): void {
+    let responseSpeed = JULIO_BOSS_PHASE_3_FOLLOW_SPEED;
+    const phase = getJulioBossPhase(this.julioBossHealth);
+
+    if (phase === 3) {
+      this.julioBossTargetX = Phaser.Math.Clamp(
+        this.player.x,
+        JULIO_BOSS_HORIZONTAL_MARGIN,
+        GAME_WIDTH - JULIO_BOSS_HORIZONTAL_MARGIN,
+      );
+      this.julioBossTargetY = JULIO_BOSS_TARGET_Y;
+    } else {
+      const targetInterval =
+        phase === 2
+          ? JULIO_BOSS_PHASE_2_TARGET_INTERVAL_MS
+          : JULIO_BOSS_PHASE_1_TARGET_INTERVAL_MS;
+
+      if (time >= this.julioBossNextTargetAt) {
+        this.julioBossTargetX = Phaser.Math.Between(
+          JULIO_BOSS_HORIZONTAL_MARGIN,
+          GAME_WIDTH - JULIO_BOSS_HORIZONTAL_MARGIN,
+        );
+        this.julioBossTargetY = Phaser.Math.Between(120, 285);
+        this.julioBossNextTargetAt = time + targetInterval;
+      }
+
+      responseSpeed =
+        phase === 2
+          ? JULIO_BOSS_PHASE_2_MOVE_SPEED
+          : JULIO_BOSS_PHASE_1_MOVE_SPEED;
+    }
+
+    const smoothing = 1 - Math.exp(-responseSpeed * deltaSeconds);
+    this.julioBoss.setPosition(
+      Phaser.Math.Linear(this.julioBoss.x, this.julioBossTargetX, smoothing),
+      Phaser.Math.Linear(this.julioBoss.y, this.julioBossTargetY, smoothing),
+    );
+    this.julioBoss.setAngle(
+      Phaser.Math.Linear(
+        this.julioBoss.angle,
+        Phaser.Math.Clamp((this.julioBossTargetX - this.julioBoss.x) * 0.12, -8, 8),
+        smoothing,
+      ),
+    );
+  }
+
+  private fireJulioBossRocket(): void {
+    const spawnX = this.julioBoss.x;
+    const spawnY = this.julioBoss.y + this.julioBoss.displayHeight * 0.27;
+    const homing = getJulioBossPhase(this.julioBossHealth) === 2;
+    const rocket = this.add
+      .image(spawnX, spawnY, JULIO_BOSS_ROCKET_TEXTURE_KEY)
+      .setDisplaySize(JULIO_BOSS_ROCKET_WIDTH, JULIO_BOSS_ROCKET_WIDTH * 1.5)
+      .setScrollFactor(0)
+      .setDepth(JULIO_BOSS_DEPTH + 2)
+      .setRotation(Math.PI);
+
+    this.julioBossRockets.push({
+      sprite: rocket,
+      velocityX: 0,
+      velocityY: JULIO_BOSS_ROCKET_SPEED,
+      homing,
+    });
+  }
+
+  private fireJulioDodoShot(): void {
+    if (
+      this.julioBossState !== 'active' ||
+      this.gamePaused ||
+      this.gameOver ||
+      this.time.now - this.julioLastDodoShotAt < JULIO_DODO_SHOT_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    this.julioLastDodoShotAt = this.time.now;
+    const playerScreenY = this.player.y - this.cameras.main.scrollY;
+    const spawnX = this.player.x;
+    const spawnY = playerScreenY - 44;
+    const shot = this.add
+      .image(
+        spawnX,
+        spawnY,
+        JULIO_DODO_SHOT_TEXTURE_KEY,
+      )
+      .setDisplaySize(JULIO_DODO_SHOT_WIDTH, JULIO_DODO_SHOT_WIDTH * 3.75)
+      .setScrollFactor(0)
+      .setDepth(JULIO_BOSS_DEPTH + 3)
+      .setRotation(0);
+
+    this.julioDodoShots.push({
+      sprite: shot,
+      velocityX: 0,
+      velocityY: -JULIO_DODO_SHOT_SPEED,
+    });
+
+    this.tweens.add({
+      targets: this.julioFireButton,
+      scale: 0.86,
+      duration: 90,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  private updateJulioProjectiles(deltaSeconds: number): void {
+    const playerBounds = this.player.getBounds();
+    const playerScreenBounds = new Phaser.Geom.Rectangle(
+      playerBounds.x,
+      playerBounds.y - this.cameras.main.scrollY,
+      playerBounds.width,
+      playerBounds.height,
+    );
+    const bossPhase = getJulioBossPhase(this.julioBossHealth);
+
+    for (let index = this.julioBossRockets.length - 1; index >= 0; index -= 1) {
+      const projectile = this.julioBossRockets[index];
+      const { sprite } = projectile;
+
+      if (projectile.homing && bossPhase === 2) {
+        const angle = Phaser.Math.Angle.Between(
+          sprite.x,
+          sprite.y,
+          this.player.x,
+          playerScreenBounds.centerY,
+        );
+        projectile.velocityX = Math.cos(angle) * JULIO_BOSS_ROCKET_SPEED;
+        projectile.velocityY = Math.sin(angle) * JULIO_BOSS_ROCKET_SPEED;
+        sprite.setRotation(angle + Math.PI / 2);
+      } else if (projectile.homing) {
+        projectile.homing = false;
+        projectile.velocityX = 0;
+        projectile.velocityY = JULIO_BOSS_ROCKET_SPEED;
+        sprite.setRotation(Math.PI);
+      }
+
+      sprite.setPosition(
+        sprite.x + projectile.velocityX * deltaSeconds,
+        sprite.y + projectile.velocityY * deltaSeconds,
+      );
+
+      const rocketVisualBounds = sprite.getBounds();
+      const rocketBounds = new Phaser.Geom.Rectangle(
+        rocketVisualBounds.centerX -
+          (rocketVisualBounds.width * JULIO_BOSS_ROCKET_HITBOX_SCALE) / 2,
+        rocketVisualBounds.centerY -
+          (rocketVisualBounds.height * JULIO_BOSS_ROCKET_HITBOX_SCALE) / 2,
+        rocketVisualBounds.width * JULIO_BOSS_ROCKET_HITBOX_SCALE,
+        rocketVisualBounds.height * JULIO_BOSS_ROCKET_HITBOX_SCALE,
+      );
+
+      if (
+        Phaser.Geom.Intersects.RectangleToRectangle(
+          rocketBounds,
+          playerScreenBounds,
+        )
+      ) {
+        this.playJulioExplosion(sprite.x, sprite.y, 0.65);
+        sprite.destroy();
+        this.julioBossRockets.splice(index, 1);
+        void this.damagePlayer(1, 'obstacle');
+        continue;
+      }
+
+      if (
+        sprite.x < -80 ||
+        sprite.x > GAME_WIDTH + 80 ||
+        sprite.y < -100 ||
+        sprite.y > GAME_HEIGHT + 100
+      ) {
+        sprite.destroy();
+        this.julioBossRockets.splice(index, 1);
+      }
+    }
+
+    const bossVisualBounds = this.julioBoss.getBounds();
+    const bossBounds = new Phaser.Geom.Rectangle(
+      bossVisualBounds.centerX -
+        (bossVisualBounds.width * JULIO_BOSS_HITBOX_SCALE) / 2,
+      bossVisualBounds.centerY -
+        (bossVisualBounds.height * JULIO_BOSS_HITBOX_SCALE) / 2,
+      bossVisualBounds.width * JULIO_BOSS_HITBOX_SCALE,
+      bossVisualBounds.height * JULIO_BOSS_HITBOX_SCALE,
+    );
+
+    for (let index = this.julioDodoShots.length - 1; index >= 0; index -= 1) {
+      const projectile = this.julioDodoShots[index];
+      const { sprite } = projectile;
+
+      sprite.setPosition(
+        sprite.x + projectile.velocityX * deltaSeconds,
+        sprite.y + projectile.velocityY * deltaSeconds,
+      );
+
+      const shotVisualBounds = sprite.getBounds();
+      const shotBounds = new Phaser.Geom.Rectangle(
+        shotVisualBounds.centerX -
+          (shotVisualBounds.width * JULIO_DODO_SHOT_HITBOX_SCALE) / 2,
+        shotVisualBounds.centerY -
+          (shotVisualBounds.height * JULIO_DODO_SHOT_HITBOX_SCALE) / 2,
+        shotVisualBounds.width * JULIO_DODO_SHOT_HITBOX_SCALE,
+        shotVisualBounds.height * JULIO_DODO_SHOT_HITBOX_SCALE,
+      );
+
+      if (
+        this.julioBossState === 'active' &&
+        Phaser.Geom.Intersects.RectangleToRectangle(
+          shotBounds,
+          bossBounds,
+        )
+      ) {
+        this.playJulioExplosion(sprite.x, sprite.y, 0.8);
+        sprite.destroy();
+        this.julioDodoShots.splice(index, 1);
+        this.damageJulioBoss();
+        continue;
+      }
+
+      if (sprite.y < -100) {
+        sprite.destroy();
+        this.julioDodoShots.splice(index, 1);
+      }
+    }
+  }
+
+  private damageJulioBoss(): void {
+    if (this.julioBossState !== 'active') {
+      return;
+    }
+
+    this.julioBossHealth = Math.max(0, this.julioBossHealth - 1);
+    this.cameras.main.shake(150, 0.004);
+
+    if (this.julioBossHealth <= 0) {
+      this.defeatJulioBoss();
+      return;
+    }
+
+    const phase = getJulioBossPhase(this.julioBossHealth);
+    const textureKey = JULIO_BOSS_TEXTURE_KEYS[phase];
+    this.julioBoss
+      .setTexture(textureKey)
+      .setDisplaySize(
+        JULIO_BOSS_DISPLAY_WIDTH,
+        JULIO_BOSS_DISPLAY_WIDTH * 1.5,
+      );
+    this.julioBossNextTargetAt = this.time.now;
+    this.julioBossNextShotAt =
+      this.time.now + JULIO_BOSS_SHOT_INTERVALS_MS[phase];
+    this.renderJulioBossHealthBar();
+    this.flashJulioBossRed();
+  }
+
+  private flashJulioBossRed(): void {
+    const flashVersion = ++this.julioBossHitFlashVersion;
+
+    for (let step = 0; step < 6; step += 1) {
+      this.time.delayedCall(step * 65, () => {
+        if (
+          flashVersion !== this.julioBossHitFlashVersion ||
+          this.julioBossState !== 'active'
+        ) {
+          return;
+        }
+
+        if (step % 2 === 0) {
+          this.julioBoss.setTint(0xff241f).setTintFill();
+        } else {
+          this.julioBoss.clearTint();
+        }
+      });
+    }
+
+    this.time.delayedCall(6 * 65, () => {
+      if (
+        flashVersion === this.julioBossHitFlashVersion &&
+        this.julioBoss.active
+      ) {
+        this.julioBoss.clearTint();
+      }
+    });
+  }
+
+  private defeatJulioBoss(): void {
+    if (!this.isJulioBossFightActive()) {
+      return;
+    }
+
+    this.julioBossState = 'defeated';
+    this.julioBossHitFlashVersion += 1;
+    this.julioBossHealth = 0;
+    this.julioBossHealthBar.clear().setVisible(false);
+    this.julioFireButton.setVisible(false);
+    this.julioBoss.clearTint().setVisible(false);
+    this.playJulioFinalExplosion(this.julioBoss.x, this.julioBoss.y);
+    this.clearJulioProjectiles();
+    this.stopJulioBossMusic();
+    emitBossFightEnded();
+  }
+
+  private playJulioFinalExplosion(x: number, y: number): void {
+    this.sound.play(JULIO_EXPLOSION_SOUND_KEY, {
+      volume: JULIO_EXPLOSION_VOLUME * this.audioSettings.damage,
+    });
+
+    const explosion = this.add
+      .sprite(x, y, `${JULIO_EXPLOSION_TEXTURE_PREFIX}-01`)
+      .setDisplaySize(
+        JULIO_EXPLOSION_DISPLAY_WIDTH,
+        JULIO_EXPLOSION_DISPLAY_WIDTH,
+      )
+      .setScrollFactor(0)
+      .setDepth(JULIO_UI_DEPTH + 3);
+
+    explosion.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      explosion.destroy();
+    });
+    explosion.play(JULIO_EXPLOSION_ANIMATION_KEY);
+    this.cameras.main.shake(420, 0.01);
+  }
+
+  private cancelJulioBossFight(): void {
+    if (!this.isJulioBossFightActive()) {
+      return;
+    }
+
+    this.julioBossState = 'defeated';
+    this.julioBossHitFlashVersion += 1;
+    this.tweens.killTweensOf(this.julioBoss);
+    this.julioBoss.clearTint().setVisible(false);
+    this.julioBossHealthBar.clear().setVisible(false);
+    this.julioFireButton.setVisible(false);
+    this.clearJulioProjectiles();
+    this.stopJulioBossMusic();
+    emitBossFightEnded();
+  }
+
+  private stopJulioBossMusic(): void {
+    this.julioBossMusic?.stop();
+    this.julioBossMusic?.destroy();
+    this.julioBossMusic = undefined;
+    this.sound.stopByKey(JULIO_BOSS_MUSIC_KEY);
+  }
+
+  private clearJulioProjectiles(): void {
+    for (const projectile of [
+      ...this.julioBossRockets,
+      ...this.julioDodoShots,
+    ]) {
+      projectile.sprite.destroy();
+    }
+
+    this.julioBossRockets = [];
+    this.julioDodoShots = [];
+  }
+
+  private renderJulioBossHealthBar(): void {
+    if (!this.isJulioBossFightActive() || !this.julioBoss.visible) {
+      this.julioBossHealthBar.clear();
+      return;
+    }
+
+    const segmentWidth = 25;
+    const segmentHeight = 10;
+    const segmentGap = 3;
+    const totalWidth =
+      segmentWidth * JULIO_BOSS_MAX_HEALTH +
+      segmentGap * (JULIO_BOSS_MAX_HEALTH - 1);
+    const startX = Phaser.Math.Clamp(
+      this.julioBoss.x - totalWidth / 2,
+      10,
+      GAME_WIDTH - totalWidth - 10,
+    );
+    const y = Math.max(
+      12,
+      this.julioBoss.y - this.julioBoss.displayHeight / 2 - 17,
+    );
+
+    this.julioBossHealthBar.clear();
+    this.julioBossHealthBar.fillStyle(0x10151c, 0.9);
+    this.julioBossHealthBar.fillRoundedRect(
+      startX - 7,
+      y - 6,
+      totalWidth + 14,
+      segmentHeight + 12,
+      8,
+    );
+
+    for (let index = 0; index < JULIO_BOSS_MAX_HEALTH; index += 1) {
+      const x = startX + index * (segmentWidth + segmentGap);
+      const isAlive = index < this.julioBossHealth;
+      this.julioBossHealthBar.fillStyle(
+        isAlive ? 0xf33b32 : 0x4b2730,
+        isAlive ? 1 : 0.75,
+      );
+      this.julioBossHealthBar.fillRoundedRect(
+        x,
+        y,
+        segmentWidth,
+        segmentHeight,
+        3,
+      );
+      this.julioBossHealthBar.lineStyle(1.5, 0xffcf68, 0.95);
+      this.julioBossHealthBar.strokeRoundedRect(
+        x,
+        y,
+        segmentWidth,
+        segmentHeight,
+        3,
+      );
+    }
+  }
+
+  private playJulioExplosion(x: number, y: number, scale = 1): void {
+    this.sound.play(JULIO_EXPLOSION_SOUND_KEY, {
+      volume: JULIO_EXPLOSION_VOLUME * this.audioSettings.damage,
+    });
+
+    const flash = this.add
+      .circle(x, y, 17 * scale, 0xfff09a, 0.95)
+      .setScrollFactor(0)
+      .setDepth(JULIO_UI_DEPTH + 2)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    this.tweens.add({
+      targets: flash,
+      scale: 2.7,
+      alpha: 0,
+      duration: 240,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    const colors = [0xfff37a, 0xffa11f, 0xff3b20] as const;
+
+    for (let index = 0; index < 10; index += 1) {
+      const angle = (index / 10) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.2, 0.2);
+      const distance = Phaser.Math.Between(24, 55) * scale;
+      const particle = this.add
+        .circle(
+          x,
+          y,
+          Phaser.Math.Between(2, 5) * scale,
+          colors[index % colors.length],
+          0.95,
+        )
+        .setScrollFactor(0)
+        .setDepth(JULIO_UI_DEPTH + 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        scale: 0.2,
+        alpha: 0,
+        duration: Phaser.Math.Between(260, 430),
+        ease: 'Quad.easeOut',
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
   private playLightningScreenFlash(): void {
     this.tweens.killTweensOf(this.lightningScreenFlash);
     this.lightningScreenFlash
@@ -4464,6 +5273,10 @@ export class GameplayScene extends Phaser.Scene {
           .setData('levelLabel', level.label)
           .setData('kind', obstacleKind.id)
           .setData('altitude', Math.round(altitude));
+
+        if (obstacleKind.id !== 'lightning') {
+          this.addDangerOutline(obstacle);
+        }
 
         if (obstacleKind.id === 'stormCloud') {
           obstacle.setData('thunderPlayed', false);
@@ -4607,6 +5420,7 @@ export class GameplayScene extends Phaser.Scene {
             'altitude',
             Math.round((START_Y - positionY) / 10),
           );
+        this.addDangerOutline(asteroid);
 
         this.obstacleGroup.add(asteroid);
         this.floatingAsteroidGroup.add(asteroid);
@@ -4719,6 +5533,7 @@ export class GameplayScene extends Phaser.Scene {
       .setData('levelLabel', level.label)
       .setData('kind', obstacleKind.id)
       .setData('altitude', Math.round(altitude));
+    this.addDangerOutline(asteroid);
 
     asteroid.body.setAllowGravity(false);
     asteroid.body.setImmovable(true);
@@ -4748,12 +5563,31 @@ export class GameplayScene extends Phaser.Scene {
       .setData('levelLabel', level.label)
       .setData('kind', obstacleKind.id)
       .setData('altitude', Math.round(altitude));
+    this.addDangerOutline(mosquito);
 
     if (obstacleKind.animationKey) {
       mosquito.play(obstacleKind.animationKey);
     }
 
     this.registerMosquitoCircleMotion(mosquito, x, y);
+  }
+
+  private addDangerOutline(sprite: Phaser.GameObjects.Sprite): void {
+    sprite.enableFilters();
+
+    const glow = sprite.filters?.internal.addGlow(
+      DANGER_OUTLINE_COLOR,
+      DANGER_OUTLINE_OUTER_STRENGTH,
+      DANGER_OUTLINE_INNER_STRENGTH,
+      1,
+      false,
+      DANGER_OUTLINE_QUALITY,
+      DANGER_OUTLINE_DISTANCE,
+    );
+
+    // Laisse Phaser agrandir automatiquement la zone de rendu pour ne pas
+    // couper le contour aux limites transparentes du sprite.
+    glow?.setPaddingOverride(null);
   }
 
   private registerMosquitoCircleMotion(
@@ -5411,6 +6245,13 @@ export class GameplayScene extends Phaser.Scene {
     this.watermelonCollectStreak += 1;
     this.watermelons += collectedAmount;
     this.emitHud();
+    this.playWatermelonHudFlight(
+      collectedX,
+      collectedY,
+      collectedScaleX,
+      collectedScaleY,
+      collectedAngle,
+    );
 
     // Chaque pastèque récoltée alimente immédiatement le portefeuille persistant.
     void addWatermelons(collectedAmount).then((profile) => {
@@ -5426,6 +6267,37 @@ export class GameplayScene extends Phaser.Scene {
       collectedAmount,
     );
   };
+
+  private playWatermelonHudFlight(
+    worldX: number,
+    worldY: number,
+    scaleX: number,
+    scaleY: number,
+    angle: number,
+  ): void {
+    const flyingWatermelon = this.add
+      .image(
+        worldX,
+        worldY - this.cameras.main.scrollY,
+        WATERMELON_TEXTURE_KEY,
+      )
+      .setScale(scaleX, scaleY)
+      .setAngle(angle)
+      .setScrollFactor(0)
+      .setDepth(JULIO_UI_DEPTH + 20);
+
+    this.tweens.add({
+      targets: flyingWatermelon,
+      x: WATERMELON_HUD_TARGET_X,
+      y: WATERMELON_HUD_TARGET_Y,
+      scaleX: WATERMELON_HUD_ICON_SCALE,
+      scaleY: WATERMELON_HUD_ICON_SCALE,
+      angle: angle + 300,
+      duration: WATERMELON_HUD_FLIGHT_DURATION_MS,
+      ease: 'Cubic.easeIn',
+      onComplete: () => flyingWatermelon.destroy(),
+    });
+  }
 
   private playWatermelonCollectEffect(
     x: number,
@@ -5988,6 +6860,19 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    if (
+      this.isJulioBossFightActive() &&
+      Phaser.Math.Distance.Between(
+        pointer.x,
+        pointer.y,
+        JULIO_FIRE_BUTTON_X,
+        JULIO_FIRE_BUTTON_Y,
+      ) <= JULIO_FIRE_BUTTON_RADIUS + 8
+    ) {
+      this.fireJulioDodoShot();
+      return;
+    }
+
     this.heldPointerSides.set(pointer.id, this.getPointerSide(pointer));
   }
 
@@ -6033,6 +6918,10 @@ export class GameplayScene extends Phaser.Scene {
       return direction;
     };
 
+    return acceptDirection(this.getHeldDirection());
+  }
+
+  private getHeldDirection(): number {
     let leftHeld = false;
     let rightHeld = false;
 
@@ -6048,7 +6937,7 @@ export class GameplayScene extends Phaser.Scene {
     leftHeld ||= this.cursors.left.isDown || this.keyA.isDown;
     rightHeld ||= this.cursors.right.isDown || this.keyD.isDown;
 
-    return acceptDirection(this.getDirectionFromSides(leftHeld, rightHeld));
+    return this.getDirectionFromSides(leftHeld, rightHeld);
   }
 
   private updateIdleFlightState(time: number): void {
@@ -6744,7 +7633,11 @@ export class GameplayScene extends Phaser.Scene {
     const velocity = (this.player.body as Phaser.Physics.Arcade.Body).velocity;
     const speed = Math.max(
       0,
-      Math.round(Math.hypot(velocity.x, velocity.y) / PIXELS_PER_METRE_PER_SECOND),
+      Math.round(
+        (Math.hypot(velocity.x, velocity.y) /
+          PIXELS_PER_METRE_PER_SECOND) *
+          10,
+      ) / 10,
     );
 
     this.currentAltitude = altitude;
@@ -6837,6 +7730,7 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    this.cancelJulioBossFight();
     this.ufoEndingState = 'arriving';
     this.ufoArrivalCuePlayed = true;
     this.ufoAlienCuePlayed = true;
@@ -7550,6 +8444,7 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    this.cancelJulioBossFight();
     this.gameOver = true;
     this.deathReason = reason;
     this.heldPointerSides.clear();

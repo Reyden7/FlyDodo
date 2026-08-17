@@ -6,7 +6,7 @@ const sourceRoot = join(root, 'src');
 const publicRoot = join(root, 'public');
 const outputRoot = join(root, 'dist');
 const runtimeAssets = new Set();
-const assetPattern = /\/assets\/[^\"'`\r\n)]+?\.(?:webp|png|mp3|m4a|ttf)/g;
+const assetPattern = /\/assets\/[^\"'`\r\n]+?\.(?:webp|png|mp3|m4a|ttf)/g;
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -61,6 +61,11 @@ for (let index = 0; index < 20; index += 1) {
 }
 for (let index = 1; index <= 6; index += 1) {
   addAsset(`/assets/story/intro-panel-${index}.webp`);
+}
+for (let index = 1; index <= 12; index += 1) {
+  addAsset(
+    `/assets/julio/explosion/explosion_${String(index).padStart(2, '0')}.webp`,
+  );
 }
 for (const index of [0, 4, 5, 7, 8, 9, 11, 14, 31, 32, 33, 34, 35]) {
   addAsset(

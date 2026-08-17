@@ -144,6 +144,14 @@ export function emitMovementStarted(): void {
   gameEvents.dispatchEvent(new Event('flydodo:movement-started'));
 }
 
+export function emitBossFightStarted(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:boss-fight-started'));
+}
+
+export function emitBossFightEnded(): void {
+  gameEvents.dispatchEvent(new Event('flydodo:boss-fight-ended'));
+}
+
 export function requestRestart(startPaused = false): void {
   gameEvents.dispatchEvent(
     new CustomEvent<RestartRequestDetail>('flydodo:restart-request', {

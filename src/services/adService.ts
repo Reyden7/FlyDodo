@@ -2,16 +2,17 @@ import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 
 const ANDROID_TEST_INTERSTITIAL_ID =
   'ca-app-pub-3940256099942544/1033173712';
-const ANDROID_TEST_REWARDED_ID =
-  'ca-app-pub-3940256099942544/5224354917';
+const ANDROID_TEST_REWARDED_INTERSTITIAL_ID =
+  'ca-app-pub-3940256099942544/5354046379';
 
 const configuredInterstitialId =
   import.meta.env.VITE_ADMOB_ANDROID_INTERSTITIAL_ID?.trim();
 const configuredRewardedId =
-  import.meta.env.VITE_ADMOB_ANDROID_REWARDED_ID?.trim();
+  import.meta.env.VITE_ADMOB_ANDROID_REWARDED_INTERSTITIAL_ID?.trim();
 const interstitialAdId =
   configuredInterstitialId || ANDROID_TEST_INTERSTITIAL_ID;
-const rewardedAdId = configuredRewardedId || ANDROID_TEST_REWARDED_ID;
+const rewardedAdId =
+  configuredRewardedId || ANDROID_TEST_REWARDED_INTERSTITIAL_ID;
 const isTesting =
   import.meta.env.DEV ||
   !configuredInterstitialId ||
@@ -145,10 +146,10 @@ export async function showRewardedAd(): Promise<boolean> {
       return false;
     }
 
-    const { AdMob, RewardAdPluginEvents } = await import(
+    const { AdMob, RewardInterstitialAdPluginEvents } = await import(
       '@capacitor-community/admob'
     );
-    await AdMob.prepareRewardVideoAd({
+    await AdMob.prepareRewardInterstitialAd({
       adId: rewardedAdId,
       isTesting,
       immersiveMode: true,
@@ -174,13 +175,16 @@ export async function showRewardedAd(): Promise<boolean> {
       };
 
       void Promise.all([
-        AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
+        AdMob.addListener(RewardInterstitialAdPluginEvents.Rewarded, () => {
           rewardEarned = true;
         }),
-        AdMob.addListener(RewardAdPluginEvents.Dismissed, () =>
+        AdMob.addListener(RewardInterstitialAdPluginEvents.Dismissed, () =>
           finish(rewardEarned),
         ),
-        AdMob.addListener(RewardAdPluginEvents.FailedToShow, () => finish(false)),
+        AdMob.addListener(
+          RewardInterstitialAdPluginEvents.FailedToShow,
+          () => finish(false),
+        ),
       ])
         .then((handles) => {
           listenerHandles.push(...handles);
@@ -188,7 +192,7 @@ export async function showRewardedAd(): Promise<boolean> {
           // Sur Android, cette promesse se résout quand la récompense est
           // gagnée, avant que la publicité soit fermée. On mémorise donc le
           // gain, puis on attend obligatoirement l'événement Dismissed.
-          void AdMob.showRewardVideoAd()
+          void AdMob.showRewardInterstitialAd()
             .then(() => {
               rewardEarned = true;
             })
