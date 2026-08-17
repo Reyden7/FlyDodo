@@ -379,10 +379,8 @@ const NEW_RECORD_LEAF_COUNT = 24;
 const OBSTACLE_DEPTH = 6;
 const OBSTACLE_ALPHA = 0.92;
 const DANGER_OUTLINE_COLOR = 0xff3028;
-const DANGER_OUTLINE_OUTER_STRENGTH = 3.6;
-const DANGER_OUTLINE_INNER_STRENGTH = 0.8;
-const DANGER_OUTLINE_QUALITY = 4;
-const DANGER_OUTLINE_DISTANCE = 5;
+const DANGER_OUTLINE_PADDING = 8;
+const DANGER_OUTLINE_ALPHA = 0.9;
 const BRANCH_EDGE_OVERHANG = 20;
 const MOSQUITO_CIRCLE_DURATION_MS = 1_800;
 const MOSQUITO_HITBOX_WIDTH_RATIO = 0.42;
@@ -626,6 +624,11 @@ interface FloatingAsteroidMotion {
   zoneBottomY: number;
   collisionRadius: number;
   rotationSpeed: number;
+}
+
+interface DangerOutline {
+  source: Phaser.GameObjects.Sprite;
+  silhouette: Phaser.GameObjects.Sprite;
 }
 
 interface LightningFlashMotion {
@@ -1504,6 +1507,7 @@ export class GameplayScene extends Phaser.Scene {
   private satelliteDriftMotions: SatelliteDriftMotion[] = [];
   private asteroidPassageMotions: AsteroidPassageMotion[] = [];
   private floatingAsteroidMotions: FloatingAsteroidMotion[] = [];
+  private dangerOutlines: DangerOutline[] = [];
   private lightningFlashMotions: LightningFlashMotion[] = [];
   private stormCloudObstacles: Phaser.Physics.Arcade.Sprite[] = [];
   private lightningScreenFlash!: Phaser.GameObjects.Rectangle;
@@ -2094,6 +2098,7 @@ export class GameplayScene extends Phaser.Scene {
     this.updateSatelliteDrifts(time, deltaSeconds);
     this.updateAsteroidPassages(deltaSeconds);
     this.updateFloatingAsteroids(deltaSeconds);
+    this.updateDangerOutlines();
     this.updateLightningFlashes(delta);
     if (bossFightActive) {
       this.updateJulioAssistedFlight(direction, deltaSeconds, time);
@@ -2813,6 +2818,7 @@ export class GameplayScene extends Phaser.Scene {
     this.satelliteDriftMotions = [];
     this.asteroidPassageMotions = [];
     this.floatingAsteroidMotions = [];
+    this.dangerOutlines = [];
     this.lightningFlashMotions = [];
     this.stormCloudObstacles = [];
     this.lavaTopY = LAVA_START_Y;
@@ -5573,21 +5579,48 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private addDangerOutline(sprite: Phaser.GameObjects.Sprite): void {
-    sprite.enableFilters();
+    const silhouette = this.add
+      .sprite(sprite.x, sprite.y, sprite.texture.key, sprite.frame.name)
+      .setTint(DANGER_OUTLINE_COLOR)
+      .setTintMode(Phaser.TintModes.FILL)
+      .setDepth(sprite.depth - 0.05);
 
-    const glow = sprite.filters?.internal.addGlow(
-      DANGER_OUTLINE_COLOR,
-      DANGER_OUTLINE_OUTER_STRENGTH,
-      DANGER_OUTLINE_INNER_STRENGTH,
-      1,
-      false,
-      DANGER_OUTLINE_QUALITY,
-      DANGER_OUTLINE_DISTANCE,
-    );
+    const dangerOutline = { source: sprite, silhouette };
+    this.dangerOutlines.push(dangerOutline);
+    this.syncDangerOutline(dangerOutline);
+  }
 
-    // Laisse Phaser agrandir automatiquement la zone de rendu pour ne pas
-    // couper le contour aux limites transparentes du sprite.
-    glow?.setPaddingOverride(null);
+  private updateDangerOutlines(): void {
+    for (const dangerOutline of this.dangerOutlines) {
+      this.syncDangerOutline(dangerOutline);
+    }
+  }
+
+  private syncDangerOutline({ source, silhouette }: DangerOutline): void {
+    if (!source.active || !source.visible) {
+      silhouette.setVisible(false);
+      return;
+    }
+
+    if (silhouette.texture.key !== source.texture.key) {
+      silhouette.setTexture(source.texture.key, source.frame.name);
+    } else if (silhouette.frame.name !== source.frame.name) {
+      silhouette.setFrame(source.frame.name);
+    }
+
+    silhouette
+      .setVisible(true)
+      .setPosition(source.x, source.y)
+      .setOrigin(source.originX, source.originY)
+      .setDisplaySize(
+        source.displayWidth + DANGER_OUTLINE_PADDING * 2,
+        source.displayHeight + DANGER_OUTLINE_PADDING * 2,
+      )
+      .setRotation(source.rotation)
+      .setFlipX(source.flipX)
+      .setFlipY(source.flipY)
+      .setAlpha(Math.min(source.alpha, DANGER_OUTLINE_ALPHA))
+      .setDepth(source.depth - 0.05);
   }
 
   private registerMosquitoCircleMotion(
